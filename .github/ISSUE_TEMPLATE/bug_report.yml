@@ -1,0 +1,40 @@
+name: Bug report
+description: Something doesn't work as the README or docs describe
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Printer firmware
+      description: Shown on the printer screen or in the service's startup log.
+  - type: dropdown
+    id: host
+    attributes:
+      label: Where the service runs
+      options: [Linux PC, WSL2, Raspberry Pi, macOS, Docker, Other]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Service output around the problem. Remove your access token, ntfy topic, and anything else private first.
+      render: text
