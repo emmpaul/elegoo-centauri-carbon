@@ -74,6 +74,36 @@ more than a plain idle machine. The print start and file upload in
 | `print-complete.json` | `ev_cac2f3eb5eed331806ce07b8f047033146ab834f4fda66d806ede03308a40806` | the job finishes: `CurrentStatus` [1] / 13 to [0] / 9 |
 | `connect-idle.json` | `ev_ef7920b458d061eb14599de8b0ff3ee2dc996277c70484026820d21aa5cd893e` | idle with a file upload (2, then 8), idle (0), then a new job starts (1, `PrintInfo.Status` 18 then 1) |
 
+### Control capture (pause, resume, light)
+
+Live pass on 2026-11-13 during the owner's running job `9f0f4d7e` (the job
+that starts in `connect-idle.json`). It was recorded by a plain WebSocket
+client from this project (a scratch script, not committed). The client
+connected to `ws://192.0.2.10:3030/websocket`, sent only Cmd 0 and Cmd 1
+(Cmd 0 again after 60 s), and recorded every pushed frame for 81 s. It sent
+no control command. The owner pressed pause, then resume, then turned the
+chamber light off and on, from Elegoo's web UI in their own browser, which
+was a **separate** WebSocket connection to the printer. Stop was not pressed
+and stays *static-only*.
+
+| Fixture | Recorded by | Printer state during the capture |
+| --- | --- | --- |
+| `control-pause-resume-light.json` | this project's passive WebSocket recorder | printing (`CurrentStatus` [1], `PrintInfo.Status` 13); pause 13 → 5 → 6, resume 6 → 20 → 13, light `SecondLight` 1 → 0 → 1 |
+
+What this capture shows and what it cannot show:
+
+- *observed*: the printer's **status pushes** that follow each control
+  command (state transitions, light state), as seen by another client.
+- not seen: the browser's **request frames** (Cmd 129, 131, 403) and the
+  printer's **responses** to them. No response to those commands reached this
+  client, only its own Cmd 0/1 responses, so the
+  request payloads and the response format of the control commands stay
+  *static-only*. The client's own Cmd 0/1 responses in this capture have the
+  usual `{Ack: 0}` shape.
+
+This fixture also has `tMs`, the milliseconds since the socket opened, on
+each frame.
+
 Each fixture is `{source, frames: [{seq, direction, payload}]}`, with frames
 in receipt order and payloads parsed from JSON (the heartbeat stays the string
 `"ping"`). The fixtures hold the printer's real file names, task ids, and
@@ -164,8 +194,11 @@ subscribes per command id (*static-only*).
 
 Constant table at main@774974 (module `543`). "Call site" is where the UI
 builds and sends the command. Rows labelled *observed* were sent by the web
-UI and answered during the live captures; the control commands (129, 130,
-131, 403) are still *static-only* until the live control capture.
+UI and answered during the live captures. For the control commands, the
+**effect** of 129 (pause), 131 (resume), and 403 (light) is *observed* in the
+status pushes of `control-pause-resume-light.json`; their request frames and
+responses were sent on the owner's own connection and are *static-only*.
+130 (stop) was not exercised and is entirely *static-only*.
 
 | Cmd | Constant name | Payload | Call site | Notes | Label |
 | ---: | --- | --- | --- | --- | --- |
@@ -173,9 +206,9 @@ UI and answered during the live captures; the control commands (129, 130,
 | 1 | `GET_PRINTER_ATTR` | none | main@782894 | sent once on connect; answer is only `{Ack:0}`, and the attributes come as an `sdcp/attributes` push | *observed* (`connect-loading.json#5`, `#15`, `#17`) |
 | 64 | `SEND_PRINTER_DISCONNECT` | - | none | defined, never sent | *static-only* |
 | 128 | `SEND_PRINTER_START_PRINT` | `{Filename, StartLayer:0, Calibration_switch, PrintPlatformType, Tlp_Switch, slot_map}` | c25@33800 (`sendStartPrint`, c25@32772) | out of scope | *static-only* |
-| 129 | `SEND_PRINTER_SUSPEND_PRINT` | none | c25@322328 (`stop()`, c25@320381) | **pause**; sent when `PrintInfo.Status !== 6` | *static-only* |
-| 130 | `SEND_PRINTER_STOP_PRINT` | none | c25@323551 (`cease()`, c25@322462) | **stop**; the UI asks for no confirmation in code | *static-only* |
-| 131 | `SEND_PRINTER_RESTORE_PRINT` | none | c25@322085 (`stop()`) | **resume**; sent when `PrintInfo.Status === 6` | *static-only* |
+| 129 | `SEND_PRINTER_SUSPEND_PRINT` | none | c25@322328 (`stop()`, c25@320381) | **pause**; sent when `PrintInfo.Status !== 6`. Effect: `PrintInfo.Status` 13 → 5 (Pausing) → 6 (Paused) about 8 s later | effect *observed* (`control-pause-resume-light.json#11`, `#12`, `#16`); request and response *static-only* |
+| 130 | `SEND_PRINTER_STOP_PRINT` | none | c25@323551 (`cease()`, c25@322462) | **stop**; the UI asks for no confirmation in code; not exercised | *static-only* |
+| 131 | `SEND_PRINTER_RESTORE_PRINT` | none | c25@322085 (`stop()`) | **resume**; sent when `PrintInfo.Status === 6`. Effect: 6 → 20 (Preparing) → 13 (Printing) about 28 s later | effect *observed* (`control-pause-resume-light.json#16`, `#17`, `#26`); request and response *static-only* |
 | 134 | `GET_BLACKOUT_STATUS` | none | main@783040 | sent on connect; `Ack === 1` means an unfinished print after power loss (*static-only*); `Ack: 0` seen with no pending print | *observed* (`connect-loading.json#7`, `#22`) |
 | 135 | `SEND_BLACKOUT_ACTION` | `{action: 1 \| 0}` | main@779951 | 1 resume, 0 discard; only after a user dialog | *static-only* |
 | 192 | `SEND_PRINTER_EDIT_NAME` | - | none | defined, never sent | *static-only* |
@@ -193,14 +226,14 @@ UI and answered during the live captures; the control commands (129, 130,
 | 387 | `EDIT_PRINTER_TIME_LAPSE_STATUS` | - | none | defined, never sent | *static-only* |
 | 401 | `EDIT_PRINTER_AXIS_NUMBER` | jog | c25@326738 | out of scope | *static-only* |
 | 402 | `EDIT_PRINTER_AXIS_ZERO` | `{Axis}` | c25@324257 | out of scope; refused by the UI while printing | *static-only* |
-| 403 | `EDIT_PRINTER_STATUS_DATA` | partial status object, see below | c25@119657 (light), c25@118308 (fans), c25@320313 (speed), c25@334237 / c25@334960 (temps) | **light** goes through this command | *static-only* |
+| 403 | `EDIT_PRINTER_STATUS_DATA` | partial status object, see below | c25@119657 (light), c25@118308 (fans), c25@320313 (speed), c25@334237 / c25@334960 (temps) | **light** goes through this command. Effect: `LightStatus.SecondLight` 1 → 0 → 1 in the next status push | light effect *observed* (`control-pause-resume-light.json#27`, `#28`, `#30`); request and response, and the other 403 payloads, *static-only* |
 | 503 | `GET_FILE_COLOR_DATA` | - | none | defined, never sent | *static-only* |
 
 ### Cmd 403 payloads (`EDIT_PRINTER_STATUS_DATA`)
 
 | Purpose | `Data.Data` | Source | Label |
 | --- | --- | --- | --- |
-| Chamber light | `{LightStatus: <whole Status.LightStatus object>}` after the switch sets `LightStatus.SecondLight` to the new value | c25@122735 (switch), c25@119393 (`changeLight`) | *static-only* |
+| Chamber light | `{LightStatus: <whole Status.LightStatus object>}` after the switch sets `LightStatus.SecondLight` to the new value | c25@122735 (switch), c25@119393 (`changeLight`) | payload *static-only*; the printer applies it while printing (`SecondLight` 1 → 0 → 1, `RgbLight` unchanged) *observed* (`control-pause-resume-light.json#28`, `#30`) |
 | Fans | `{TargetFanSpeed: <whole Status.CurrentFanSpeed object>}` with `ModelFan`, `AuxiliaryFan`, `BoxFan` (0-100) | c25@118308, c25@123034 | *static-only* |
 | Print speed | `{PrintSpeedPct: 50 \| 100 \| 130 \| 160}` (`i18n:networkDeviceManager.control.speedList`) | c25@320313 | *static-only* |
 | Nozzle target | `{TempTargetNozzle: <number>}` | c25@334237 | *static-only* |
@@ -277,7 +310,7 @@ UI stores `msg.Status` as-is (main@782513).
 | `Status.TempOfBox` | chamber current | c25@286708; `connect-idle.json#8` | *observed* |
 | `Status.TempTargetBox` | present on the wire, always 0 in the captures; not read by the UI | `connect-idle.json#8` | *observed* |
 | `Status.CurrentFanSpeed.{ModelFan,AuxiliaryFan,BoxFan}` | fan percent | c25@123034; `connect-loading.json#11` | *observed* |
-| `Status.LightStatus.SecondLight` | chamber light state, number (1 = on in every capture) | c25@124019; `connect-loading.json#11` | *observed* |
+| `Status.LightStatus.SecondLight` | chamber light state, number: 1 on, 0 off; changes in the next push after a light command | c25@124019; `connect-loading.json#11`, `control-pause-resume-light.json#28`, `#30` | *observed* |
 | `Status.LightStatus.RgbLight` | `[r, g, b]`, `[0,0,0]` in every capture; not read by the UI | `connect-loading.json#11` | *observed* |
 | `Status.CurrenCoord` | toolhead coordinates as a `"x,y,z"` string (sic) | c25@272342; `connect-loading.json#11` | *observed* |
 | `Status.AmsConnectStatus` | AMS present (0 in every capture) | c25@29562; `connect-loading.json#11` | *observed* |
@@ -315,8 +348,8 @@ Status groups at c25@8626 (`STATUS_*` arrays), shown under machine state 0
 | ---: | --- | --- | --- |
 | 0 | Idle (`STATUS_WAIT`) | Preparing (`STATUS_LOADING`) | *observed* under 0, 2, 8, and 1 (`connect-idle.json#8`, `#27`, `#33`) |
 | 1 | Stopping (`STATUS_STOPING`) | Preparing (`STATUS_LOADING`) | *observed* under 1, right after a job starts (`connect-idle.json#38`) |
-| 5 | - | Pausing (`STATUS_SUSPENDING`) | *static-only* |
-| 6 | - | Paused (`STATUS_SUSPENDED`) | *static-only* |
+| 5 | - | Pausing (`STATUS_SUSPENDING`) | *observed* under 1, right after pause (`control-pause-resume-light.json#12`) |
+| 6 | - | Paused (`STATUS_SUSPENDED`) | *observed* under 1 (`control-pause-resume-light.json#16`) |
 | 7 | - | not labelled; controls disabled | *static-only* |
 | 8 | Stopped (`STATUS_STOPED`) | - | *static-only* |
 | 9 | Print Complete (`STATUS_COMPLETE`) | - | *observed* under 0 (`print-complete.json#24`) |
@@ -324,14 +357,22 @@ Status groups at c25@8626 (`STATUS_*` arrays), shown under machine state 0
 | 12 | - | Restoring (`STATUS_RECOVERY`); controls disabled | *static-only* |
 | 13 | - | Printing (`STATUS_PRINTING`) | *observed* (`connect-printing.json#9`) |
 | 14 | Stopped (`STATUS_STOPED`) | - | *static-only* |
-| 15, 16, 18, 19, 20, 21 | - | Preparing (`STATUS_LOADING`) | 16 and 20 *observed* under 10 and 1 (`connect-loading.json#11`, `#43`); 18 *observed* under 1 at job start (`connect-idle.json#34`); 15, 19, 21 *static-only* |
+| 15, 16, 18, 19, 20, 21 | - | Preparing (`STATUS_LOADING`) | 16 and 20 *observed* under 10 and 1 (`connect-loading.json#11`, `#43`), and under 1 right after resume (`control-pause-resume-light.json#17`); 18 *observed* under 1 at job start (`connect-idle.json#34`); 15, 19, 21 *static-only* |
 
 Codes 2, 3, 4, 11, and 17 are not referenced by the UI and were not seen.
 
 Observed sequences: job start `CurrentStatus` 0 → 1 with `PrintInfo.Status`
 0 → 18 → 1 (`connect-idle.json#32` to `#38`); job end 1/13 → 0/9
 (`print-complete.json#23`, `#24`); upload 2 → 8 → 0 (`connect-idle.json#8`,
-`#25`, `#27`).
+`#25`, `#27`); pause 1/13 → 1/5 → 1/6 and resume 1/6 → 1/20 → 1/13
+(`control-pause-resume-light.json#12`, `#16`, `#17`, `#26`). Stop (130) was
+not exercised, so the stopped codes 8 and 14 stay *static-only*.
+
+Status pushes are not strictly periodic: while paused the printer pushed
+nothing for 16.5 s (`control-pause-resume-light.json#16` to `#17`), and
+during the resume preparation nothing for 18 s until this client's Cmd 0
+(`#21` to `#24`); transitions come with bursts of pushes about 130 ms apart
+(`#17` to `#21`) (*observed*).
 
 ### Error codes
 
@@ -385,7 +426,11 @@ history list (from Cmd 320) and, when `CurrentStatus` includes 1 and
 
 ## Open points for the live pass
 
-- Response format of the control commands (129, 130, 131, 403); task 2.4.
+- Response format of the control commands (129, 130, 131, 403): not
+  visible to a second client, so it stays *static-only* (`{Ack}` assumed as
+  for the other commands) until this project's own client sends them and the
+  entries can be relabeled *tested* (task 8.1).
+- Stop (130) and the stopped codes 8 and 14: not exercised.
 - Meaning of `PrintInfo.Status` 7 and the codes not seen yet.
 - Whether `TaskId` is stable across reconnects (design open question, task
   2.5). The read-only captures saw the same `TaskId`

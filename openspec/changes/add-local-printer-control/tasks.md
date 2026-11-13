@@ -11,7 +11,7 @@
 - [x] 2.1 Download `http://192.168.0.96/` assets (`main.*.js`, `runtime.*.js`, `polyfills.*.js`) into their own empty scratch directory and record their hashes plus firmware V1.4.49 in `docs/sdcp-protocol.md`; verify the files and hashes are listed
 - [x] 2.2 Static pass: run REA web-bundle analysis and string search on `main.*.js` to extract the WebSocket URL/port, the message envelope, every `Cmd` id with its call site, and the state/error code tables; verify each entry in `docs/sdcp-protocol.md` cites its bundle location and is labeled *static-only*
 - [x] 2.3 Live pass, read-only: use REA browser capture on the printer web UI while it sits idle, to record WS frames for the connect, status, and attributes flow; save the frames as `test/fixtures/*.json`; verify the status fields documented in 2.2 appear in the fixtures and are relabeled *observed*
-- [ ] 2.4 Live pass during a deliberate small test print: capture frames for status during printing, pause, resume, stop, and the light toggle, driven from Elegoo's own web UI; save them as fixtures; verify each control command in the doc is labeled *observed* with its response format
+- [x] 2.4 Live pass during a deliberate small test print: capture frames for status during printing, pause, resume, stop, and the light toggle, driven from Elegoo's own web UI; save them as fixtures; verify each control command in the doc is labeled *observed* with its response format
 - [ ] 2.5 Record answers to the design open questions (stable `TaskId`? light controllable?) and the concurrent-client behavior; if the light can't be controlled, update the print-control spec to make light status-only; verify `openspec validate add-local-printer-control` passes
 
 ## 3. Printer connection

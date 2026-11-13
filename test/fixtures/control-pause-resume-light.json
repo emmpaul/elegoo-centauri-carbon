@@ -1,0 +1,1511 @@
+{
+  "source": {
+    "tool": "Node WebSocket recorder (this project's scratch script): connects, sends only Cmd 0 and Cmd 1 status requests (Cmd 0 again every 60 s), records every pushed frame; never sends a control command",
+    "captured": "2026-11-13",
+    "socket": "ws://192.0.2.10:3030/websocket",
+    "firmware": "V1.4.49",
+    "printerState": "printing job 9f0f4d7e (CurrentStatus [1], PrintInfo.Status 13); the owner pressed pause (13 -> 5 -> 6), resume (6 -> 20 -> 13), then turned the chamber light off and on (LightStatus.SecondLight 1 -> 0 -> 1) from Elegoo's web UI in their own browser; stop was not pressed",
+    "note": "Frames in receipt order; tMs is milliseconds since the socket opened. Every 'sent' frame came from this recorder (Cmd 0/1 only). The control commands were sent by the printer owner from Elegoo's web UI in their own browser on a separate connection; those request frames and their responses are not in this capture."
+  },
+  "frames": [
+    {
+      "seq": 1,
+      "direction": "sent",
+      "tMs": 43,
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 0,
+          "Data": {},
+          "RequestID": "bf816ed1d17f4b1caae91a827985136f",
+          "MainboardID": "",
+          "TimeStamp": 1794605832708,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "direction": "sent",
+      "tMs": 44,
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 1,
+          "Data": {},
+          "RequestID": "684f40969f4d4f3bb9a0280db1152c4f",
+          "MainboardID": "",
+          "TimeStamp": 1794605832708,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "direction": "recv",
+      "tMs": 173,
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 0,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "bf816ed1d17f4b1caae91a827985136f",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605838
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 4,
+      "direction": "recv",
+      "tMs": 244,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.86713002292015,
+          "TempOfNozzle": 209.7068268742221,
+          "TempOfBox": 30.58087657976079,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "105.98,125.09,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 226.24779340066016,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605838,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 5,
+      "direction": "recv",
+      "tMs": 326,
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 1,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "684f40969f4d4f3bb9a0280db1152c4f",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605838
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 6,
+      "direction": "recv",
+      "tMs": 468,
+      "payload": {
+        "Attributes": {
+          "Name": "Centauri Carbon",
+          "MachineName": "Centauri Carbon",
+          "BrandName": "ELEGOO",
+          "ProtocolVersion": "V3.0.0",
+          "FirmwareVersion": "V1.4.49",
+          "XYZsize": "218.88x128.88x220",
+          "MainboardIP": "192.0.2.10",
+          "MainboardMAC": "00:00:00:00:00:00",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "SDCPStatus": 0,
+          "MaximumCloudSDCPSercicesAllowed": 0,
+          "NumberOfCloudSDCPServicesConnected": 0,
+          "NumberOfVideoStreamConnected": 0,
+          "MaximumVideoStreamAllowed": 4,
+          "NetworkStatus": "wlan",
+          "UsbDiskStatus": 0,
+          "Capabilities": [
+            "FILE_TRANSFER",
+            "PRINT_CONTROL",
+            "VIDEO_STREAM"
+          ],
+          "SupportFileType": [
+            "gcode"
+          ],
+          "DevicesStatus": {
+            "SgStatus": 1,
+            "ZMotorStatus": 1,
+            "XMotorStatus": 1,
+            "YMotorStatus": 1
+          },
+          "CameraStatus": 1,
+          "RemainingMemory": 6424248320,
+          "TLPNoCapPos": 0,
+          "TLPStartCapPos": 0,
+          "TLPInterLayers": 0
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605839,
+        "Topic": "sdcp/attributes/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 7,
+      "direction": "recv",
+      "tMs": 1795,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.83260771611936,
+          "TempOfNozzle": 209.80954803493216,
+          "TempOfBox": 30.58087657976079,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "130.02,152.03,0.02",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 227.787602734752,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605840,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 8,
+      "direction": "recv",
+      "tMs": 4825,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.89659450057428,
+          "TempOfNozzle": 210.64871623887188,
+          "TempOfBox": 30.4469998346255,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "109.35,143.63,0.03",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 230.8356447769329,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605843,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 9,
+      "direction": "recv",
+      "tMs": 7868,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.78165898756764,
+          "TempOfNozzle": 210.3732489538388,
+          "TempOfBox": 30.51400859325673,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "126.58,106.15,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 233.87192894518375,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605846,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 10,
+      "direction": "recv",
+      "tMs": 11007,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.89176272930071,
+          "TempOfNozzle": 209.82886008963388,
+          "TempOfBox": 30.51400859325673,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "120.52,109.76,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 237.0108620710671,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605849,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 11,
+      "direction": "recv",
+      "tMs": 14039,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.87026226482689,
+          "TempOfNozzle": 210.12829058270975,
+          "TempOfBox": 30.54077264026699,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "114.33,111.11,0.05",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 240.0446909898892,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605852,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 12,
+      "direction": "recv",
+      "tMs": 16880,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.93319257522924,
+          "TempOfNozzle": 210.00486909823775,
+          "TempOfBox": 30.59423334755308,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "111.11,114.33,10.05",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 5,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 242.88305419962853,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605855,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 13,
+      "direction": "recv",
+      "tMs": 17112,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.93319257522924,
+          "TempOfNozzle": 209.93739951319915,
+          "TempOfBox": 30.59423334755308,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "171.11,114.33,9.98",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 5,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 243.1245934497565,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605855,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 14,
+      "direction": "recv",
+      "tMs": 20256,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.91769317272078,
+          "TempOfNozzle": 209.5782997838056,
+          "TempOfBox": 30.62093009932311,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,214.33,9.84",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 5,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 246.2628724919632,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605858,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 15,
+      "direction": "recv",
+      "tMs": 23298,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.90341098133975,
+          "TempOfNozzle": 209.999129026133,
+          "TempOfBox": 30.67425662679346,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 5,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 249.29812266118824,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605861,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 16,
+      "direction": "recv",
+      "tMs": 25041,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.95220023147786,
+          "TempOfNozzle": 210.31446055731547,
+          "TempOfBox": 30.62093009932311,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 6,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605863,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 17,
+      "direction": "recv",
+      "tMs": 41590,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.9467418075709,
+          "TempOfNozzle": 210.17169501399448,
+          "TempOfBox": 29.94668861774181,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605880,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 18,
+      "direction": "recv",
+      "tMs": 41720,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.9467418075709,
+          "TempOfNozzle": 210.17169501399448,
+          "TempOfBox": 29.94668861774181,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605880,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 19,
+      "direction": "recv",
+      "tMs": 41853,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.9235954005488,
+          "TempOfNozzle": 210.17169501399448,
+          "TempOfBox": 29.86480653612437,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 100,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605880,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 20,
+      "direction": "recv",
+      "tMs": 41991,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.9235954005488,
+          "TempOfNozzle": 210.1815131362251,
+          "TempOfBox": 29.86480653612437,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 100,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605880,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 21,
+      "direction": "recv",
+      "tMs": 42129,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.9235954005488,
+          "TempOfNozzle": 210.1815131362251,
+          "TempOfBox": 29.86480653612437,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 100,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605880,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 22,
+      "direction": "sent",
+      "tMs": 60051,
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 0,
+          "Data": {},
+          "RequestID": "fc548ed3451645cc901103c2b3e01220",
+          "MainboardID": "",
+          "TimeStamp": 1794605892715,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 23,
+      "direction": "recv",
+      "tMs": 60110,
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 0,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "fc548ed3451645cc901103c2b3e01220",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605898
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 24,
+      "direction": "recv",
+      "tMs": 60193,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.90955714993096,
+          "TempOfNozzle": 209.08925132161596,
+          "TempOfBox": 29.11811669270747,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "202.00,264.50,9.79",
+          "CurrentFanSpeed": {
+            "ModelFan": 100,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605898,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 25,
+      "direction": "recv",
+      "tMs": 65944,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.96847351632671,
+          "TempOfNozzle": 210.21454518928718,
+          "TempOfBox": 29.11811669270747,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "111.11,114.33,0.05",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 20,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 250.97220820374787,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605904,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 26,
+      "direction": "recv",
+      "tMs": 69699,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 60.0121648903445,
+          "TempOfNozzle": 210.12819567480025,
+          "TempOfBox": 29.14609136617036,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "108.56,118.24,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 251.02877528686076,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605908,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 27,
+      "direction": "recv",
+      "tMs": 69842,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.99804579955356,
+          "TempOfNozzle": 210.12819567480025,
+          "TempOfBox": 29.14609136617036,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "108.56,118.24,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 251.1881188703701,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605908,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 28,
+      "direction": "recv",
+      "tMs": 71884,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.98439722388715,
+          "TempOfNozzle": 210.8165154801385,
+          "TempOfBox": 29.22986549965639,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "107.01,122.07,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 0,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 253.2339077880606,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605910,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 29,
+      "direction": "recv",
+      "tMs": 72015,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.98439722388715,
+          "TempOfNozzle": 210.92187732475142,
+          "TempOfBox": 29.22986549965639,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "106.78,122.91,0.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 0,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 253.3718980383128,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605910,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 30,
+      "direction": "recv",
+      "tMs": 74558,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 60.01519732473241,
+          "TempOfNozzle": 210.91305748477296,
+          "TempOfBox": 29.20196571582408,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "126.66,150.85,0.02",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 255.90824074763805,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605913,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 31,
+      "direction": "recv",
+      "tMs": 75095,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 60.02201042872536,
+          "TempOfNozzle": 210.72550686091682,
+          "TempOfBox": 29.14609136617036,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "106.38,132.19,0.03",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 5,
+            "TotalLayer": 640,
+            "CurrentTicks": 256.4413290815428,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605913,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 32,
+      "direction": "recv",
+      "tMs": 76431,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 60.01273058703866,
+          "TempOfNozzle": 210.20422721440957,
+          "TempOfBox": 29.20196571582408,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "76.88,116.41,0.26",
+          "CurrentFanSpeed": {
+            "ModelFan": 85,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 6,
+            "TotalLayer": 640,
+            "CurrentTicks": 257.7780203735456,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605914,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 33,
+      "direction": "recv",
+      "tMs": 78174,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 59.99715038399828,
+          "TempOfNozzle": 209.3590579238369,
+          "TempOfBox": 29.27166858735222,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "187.71,118.75,0.16",
+          "CurrentFanSpeed": {
+            "ModelFan": 87,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 6,
+            "TotalLayer": 640,
+            "CurrentTicks": 259.5188043322414,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605916,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 34,
+      "direction": "recv",
+      "tMs": 81230,
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 60.01517231856887,
+          "TempOfNozzle": 209.60941355345236,
+          "TempOfBox": 29.28559055311683,
+          "TempTargetHotbed": 60,
+          "TempTargetNozzle": 210,
+          "TempTargetBox": 0,
+          "CurrenCoord": "147.69,114.81,0.22",
+          "CurrentFanSpeed": {
+            "ModelFan": 87,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 6,
+            "TotalLayer": 640,
+            "CurrentTicks": 262.5602082507685,
+            "TotalTicks": 12819,
+            "Filename": "test-print-5.gcode",
+            "TaskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
+            "PrintSpeedPct": 100,
+            "Progress": 0
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605919,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    }
+  ]
+}
