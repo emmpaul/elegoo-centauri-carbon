@@ -1,0 +1,312 @@
+import { strict as assert } from "node:assert";
+import { once } from "node:events";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import { createApiServer } from "../src/http-server.ts";
+import { type CommandSender, PrintControl } from "../src/print-control.ts";
+import { PrinterSession } from "../src/printer-session.ts";
+import { Cmd, CommandTimeoutError, type Logger, NotConnectedError, type StatusMessage } from "../src/sdcp-client.ts";
+import { type StatusSnapshot, StatusStore } from "../src/status-store.ts";
+import { FakePrinter, loadFixture } from "./support/fake-printer.ts";
+
+const quiet: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+const CONNECT_COMMANDS = [Cmd.GET_PRINTER_STATUS, Cmd.GET_PRINTER_ATTR];
+
+function statusPush(fixture: string, seq: number): StatusMessage {
+  const frame = loadFixture(fixture).frames.find((f) => f.seq === seq);
+  assert.ok(frame && typeof frame.payload === "object" && frame.payload !== null && "Status" in frame.payload);
+  return frame.payload as StatusMessage;
+}
+
+const PRINTING = statusPush("control-pause-resume-light.json", 11); // 1/13, light on
+const PAUSING = statusPush("control-pause-resume-light.json", 12); // 1/5
+
+function isCmd(cmd: number) {
+  return (frame: { payload: unknown }) => (frame.payload as { Data?: { Cmd?: number } }).Data?.Cmd === cmd;
+}
+
+async function listen(server: Server): Promise<string> {
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+async function closeServer(server: Server): Promise<void> {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}
+
+/** Reads `event: status` messages from an SSE response body. */
+class SseReader {
+  private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
+  private readonly decoder = new TextDecoder();
+  private buffer = "";
+
+  constructor(response: Response) {
+    assert.ok(response.body);
+    this.reader = response.body.getReader();
+  }
+
+  async next(): Promise<StatusSnapshot> {
+    for (;;) {
+      const end = this.buffer.indexOf("\n\n");
+      if (end !== -1) {
+        const block = this.buffer.slice(0, end);
+        this.buffer = this.buffer.slice(end + 2);
+        if (block.startsWith(":")) continue;
+        const lines = block.split("\n");
+        assert.ok(lines.includes("event: status"), `unexpected event block: ${block}`);
+        const data = lines.find((line) => line.startsWith("data: "));
+        assert.ok(data);
+        return JSON.parse(data.slice("data: ".length)) as StatusSnapshot;
+      }
+      const { value, done } = await this.reader.read();
+      assert.ok(!done, "stream ended");
+      this.buffer += this.decoder.decode(value, { stream: true });
+    }
+  }
+
+  async cancel(): Promise<void> {
+    await this.reader.cancel();
+  }
+}
+
+function postCommand(base: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {
+  return fetch(`${base}/api/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("HTTP API against the fake printer", () => {
+  let printer: FakePrinter;
+  let session: PrinterSession;
+  let store: StatusStore;
+  let server: Server;
+  let base: string;
+
+  async function start(token: string | null): Promise<void> {
+    printer = await FakePrinter.start();
+    session = new PrinterSession({ url: printer.url, logger: quiet });
+    store = new StatusStore();
+    store.attach(session);
+    server = createApiServer({ store, control: new PrintControl(session, store), token, logger: quiet });
+    base = await listen(server);
+    const attributesRequest = printer.nextFrame(isCmd(Cmd.GET_PRINTER_ATTR));
+    session.start();
+    await attributesRequest;
+    const change = once(store, "change");
+    printer.push(PRINTING);
+    await change;
+    assert.equal(store.snapshot.connection, "online");
+  }
+
+  /** Command ids the fake received after the connect requests, after a Cmd 0 round-trip. */
+  async function commandsSent(): Promise<number[]> {
+    await session.send(Cmd.GET_PRINTER_STATUS);
+    const received = printer.receivedCommands;
+    assert.deepEqual(received.slice(0, 2), CONNECT_COMMANDS);
+    return received.slice(2, -1);
+  }
+
+  afterEach(async () => {
+    await closeServer(server);
+    session.stop();
+    await printer.close();
+  });
+
+  describe("without a token", () => {
+    beforeEach(() => start(null));
+
+    it("GET /api/status returns the snapshot", async () => {
+      const response = await fetch(`${base}/api/status`);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("content-type") ?? "", /^application\/json/);
+      const snapshot = (await response.json()) as StatusSnapshot;
+      assert.equal(snapshot.connection, "online");
+      assert.equal(snapshot.printState.name, "printing");
+      assert.deepEqual(snapshot, store.snapshot);
+    });
+
+    it("GET /api/events sends the snapshot, then each update within 1 s", async () => {
+      const response = await fetch(`${base}/api/events`);
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get("content-type") ?? "", /^text\/event-stream/);
+      const events = new SseReader(response);
+      assert.equal((await events.next()).printState.name, "printing");
+
+      const started = performance.now();
+      printer.push(PAUSING);
+      const update = await events.next();
+      assert.ok(performance.now() - started < 1000, "update arrived within 1 s");
+      assert.equal(update.printState.name, "pausing");
+
+      const offline = events.next();
+      printer.dropClients();
+      assert.equal((await offline).connection, "offline");
+      await events.cancel();
+    });
+
+    it("stops listening to the store when an SSE client leaves", async () => {
+      const before = store.listenerCount("change");
+      const response = await fetch(`${base}/api/events`);
+      const events = new SseReader(response);
+      await events.next();
+      assert.equal(store.listenerCount("change"), before + 1);
+      await events.cancel();
+      for (let i = 0; i < 50 && store.listenerCount("change") > before; i++) await new Promise((r) => setTimeout(r, 10));
+      assert.equal(store.listenerCount("change"), before);
+    });
+
+    it("POST /api/command round-trips pause to the printer and reports acknowledged", async () => {
+      const response = await postCommand(base, { action: "pause" });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { action: "pause", outcome: "acknowledged" });
+      assert.deepEqual(await commandsSent(), [Cmd.SEND_PRINTER_SUSPEND_PRINT]);
+    });
+
+    it("POST /api/command round-trips stop with confirm and light with on", async () => {
+      assert.deepEqual(await (await postCommand(base, { action: "light", on: false })).json(), {
+        action: "light",
+        outcome: "acknowledged",
+      });
+      assert.deepEqual(await (await postCommand(base, { action: "stop", confirm: true })).json(), {
+        action: "stop",
+        outcome: "acknowledged",
+      });
+      assert.deepEqual(await commandsSent(), [Cmd.EDIT_PRINTER_STATUS_DATA, Cmd.SEND_PRINTER_STOP_PRINT]);
+    });
+
+    it("reports a failed command with the printer's code", async () => {
+      printer.replies.set(Cmd.SEND_PRINTER_SUSPEND_PRINT, 1);
+      const response = await postCommand(base, { action: "pause" });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { action: "pause", outcome: "failed", code: 1 });
+    });
+
+    it("answers 409 for a command the state does not allow, sending nothing", async () => {
+      const response = await postCommand(base, { action: "resume" });
+      assert.equal(response.status, 409);
+      assert.equal(((await response.json()) as { error: { code: string } }).error.code, "not-allowed");
+      assert.deepEqual(await commandsSent(), []);
+    });
+
+    it("answers 400 for stop without confirmation, sending nothing", async () => {
+      for (const body of [{ action: "stop" }, { action: "stop", confirm: "yes" }]) {
+        const response = await postCommand(base, body);
+        assert.equal(response.status, 400);
+        assert.equal(((await response.json()) as { error: { code: string } }).error.code, "confirmation-required");
+      }
+      assert.deepEqual(await commandsSent(), []);
+      assert.equal(store.snapshot.printState.name, "printing");
+    });
+
+    it("answers 400 for bad bodies, sending nothing", async () => {
+      const bad: [string, string][] = [
+        ["application/json", "{not json"],
+        ["application/json", "[]"],
+        ["application/json", '{"action":"jog"}'],
+        ["application/json", '{"action":"light"}'],
+        ["text/plain", '{"action":"pause"}'],
+        ["application/json", JSON.stringify({ action: "pause", pad: "x".repeat(5000) })],
+      ];
+      for (const [type, body] of bad) {
+        const response = await fetch(`${base}/api/command`, { method: "POST", headers: { "Content-Type": type }, body });
+        assert.equal(response.status, 400, body.slice(0, 40));
+        assert.equal(((await response.json()) as { error: { code: string } }).error.code, "bad-request");
+      }
+      assert.deepEqual(await commandsSent(), []);
+    });
+
+    it("answers 404 for unknown paths and 405 for wrong methods", async () => {
+      assert.equal((await fetch(`${base}/api/nope`)).status, 404);
+      const wrong = await fetch(`${base}/api/command`);
+      assert.equal(wrong.status, 405);
+      assert.equal(wrong.headers.get("allow"), "POST");
+      assert.equal((await fetch(`${base}/api/status`, { method: "POST" })).status, 405);
+    });
+  });
+
+  describe("with a token", () => {
+    const TOKEN = "s3cret-token";
+    beforeEach(() => start(TOKEN));
+
+    it("answers 401 on every route without the token, and sends nothing", async () => {
+      for (const [path, init] of [
+        ["/api/status", {}],
+        ["/api/events", {}],
+        ["/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"action":"pause"}' }],
+        ["/api/nope", {}],
+      ] as const) {
+        const response = await fetch(`${base}${path}`, init);
+        assert.equal(response.status, 401, path);
+        assert.match(response.headers.get("www-authenticate") ?? "", /^Bearer/);
+        assert.equal(((await response.json()) as { error: { code: string } }).error.code, "unauthorized");
+      }
+      assert.deepEqual(await commandsSent(), []);
+    });
+
+    it("answers 401 for a wrong token", async () => {
+      assert.equal((await fetch(`${base}/api/status`, { headers: { Authorization: "Bearer wrong" } })).status, 401);
+      assert.equal((await fetch(`${base}/api/status?token=wrong`)).status, 401);
+      assert.equal((await postCommand(base, { action: "pause" }, { Authorization: `Basic ${TOKEN}` })).status, 401);
+      assert.deepEqual(await commandsSent(), []);
+    });
+
+    it("accepts the token as a bearer header or a query parameter", async () => {
+      assert.equal((await fetch(`${base}/api/status`, { headers: { Authorization: `Bearer ${TOKEN}` } })).status, 200);
+      assert.equal((await fetch(`${base}/api/status?token=${TOKEN}`)).status, 200);
+      const events = await fetch(`${base}/api/events?token=${TOKEN}`);
+      assert.equal(events.status, 200);
+      await new SseReader(events).cancel();
+      const response = await postCommand(base, { action: "pause" }, { Authorization: `Bearer ${TOKEN}` });
+      assert.deepEqual(await response.json(), { action: "pause", outcome: "acknowledged" });
+      assert.deepEqual(await commandsSent(), [Cmd.SEND_PRINTER_SUSPEND_PRINT]);
+    });
+  });
+});
+
+describe("HTTP API command errors from the session", () => {
+  let server: Server;
+  let base: string;
+  let sender: CommandSender;
+
+  beforeEach(async () => {
+    const store = new StatusStore();
+    store.applyStatus(PRINTING);
+    store.setConnection("online");
+    sender = { send: () => Promise.reject(new Error("not set")) };
+    const control = new PrintControl({ send: (cmd, data) => sender.send(cmd, data) }, store);
+    server = createApiServer({ store, control, token: null, logger: quiet });
+    base = await listen(server);
+  });
+
+  afterEach(() => closeServer(server));
+
+  it("answers 503 when the session drops before the command is answered", async () => {
+    sender = { send: () => Promise.reject(new NotConnectedError("SDCP session closed before the response arrived")) };
+    const response = await postCommand(base, { action: "pause" });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), {
+      error: { code: "not-connected", message: "SDCP session closed before the response arrived" },
+    });
+    // The server keeps serving afterwards.
+    assert.equal((await fetch(`${base}/api/status`)).status, 200);
+  });
+
+  it("reports timeout with 200 when the printer does not answer", async () => {
+    sender = { send: (cmd) => Promise.reject(new CommandTimeoutError(cmd, 10_000)) };
+    const response = await postCommand(base, { action: "pause" });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { action: "pause", outcome: "timeout" });
+  });
+
+  it("answers 500 without details for an unexpected error", async () => {
+    sender = { send: () => Promise.reject(new Error("boom")) };
+    const response = await postCommand(base, { action: "pause" });
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: { code: "internal", message: "internal error" } });
+  });
+});

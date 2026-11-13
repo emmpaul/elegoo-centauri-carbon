@@ -1,0 +1,202 @@
+// HTTP API for the dashboard (design D3, D4): the status snapshot, a
+// Server-Sent Events stream of snapshot changes, and the control command
+// endpoint. When an access token is configured, every route requires it,
+// as a bearer header or, for clients that cannot set headers (EventSource,
+// <img>), as a `token` query parameter.
+import { createHash, timingSafeEqual } from "node:crypto";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { type CommandResult, ControlRejectedError } from "./print-control.ts";
+import { type Logger, NotConnectedError } from "./sdcp-client.ts";
+import type { StatusSnapshot } from "./status-store.ts";
+
+/** The status store as the server reads it. */
+export interface SnapshotSource {
+  readonly snapshot: StatusSnapshot;
+  on(event: "change", listener: (snapshot: StatusSnapshot) => void): unknown;
+  off(event: "change", listener: (snapshot: StatusSnapshot) => void): unknown;
+}
+
+/** The print control commands (a PrintControl). */
+export interface Controls {
+  pause(): Promise<CommandResult>;
+  resume(): Promise<CommandResult>;
+  stop(options: { confirm?: boolean }): Promise<CommandResult>;
+  setLight(on: boolean): Promise<CommandResult>;
+}
+
+export interface ApiServerOptions {
+  store: SnapshotSource;
+  control: Controls;
+  /** Access token; null means no token check. */
+  token: string | null;
+  logger?: Logger;
+  /** Interval of SSE keep-alive comments. 15 s by default. */
+  keepAliveMs?: number;
+}
+
+/** Largest accepted command body, in bytes. */
+const MAX_BODY_BYTES = 4096;
+
+/** Error codes in `{"error": {"code", "message"}}` bodies. */
+export type ApiErrorCode =
+  | "unauthorized"
+  | "not-found"
+  | "method-not-allowed"
+  | "bad-request"
+  | "confirmation-required"
+  | "not-allowed"
+  | "not-connected"
+  | "internal";
+
+class ApiError extends Error {
+  readonly status: number;
+  readonly code: ApiErrorCode;
+  constructor(status: number, code: ApiErrorCode, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | Promise<void>;
+
+/** Creates (but does not start) the API server. */
+export function createApiServer(options: ApiServerOptions): Server {
+  const logger = options.logger ?? console;
+  const keepAliveMs = options.keepAliveMs ?? 15_000;
+  const routes: Record<string, Partial<Record<string, Handler>>> = {
+    "/api/status": { GET: (_req, res) => sendJson(res, 200, options.store.snapshot) },
+    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, keepAliveMs) },
+    "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
+  };
+
+  return createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    void (async () => {
+      if (!authorized(req, url, options.token)) {
+        res.setHeader("WWW-Authenticate", 'Bearer realm="printer"');
+        throw new ApiError(401, "unauthorized", "missing or wrong access token");
+      }
+      const route = routes[url.pathname];
+      if (route === undefined) throw new ApiError(404, "not-found", `no route ${url.pathname}`);
+      const handler = route[req.method ?? "GET"];
+      if (handler === undefined) {
+        res.setHeader("Allow", Object.keys(route).join(", "));
+        throw new ApiError(405, "method-not-allowed", `${req.method} is not allowed on ${url.pathname}`);
+      }
+      await handler(req, res, url);
+    })().catch((error: unknown) => {
+      const apiError = toApiError(error);
+      if (apiError.status === 500) logger.error(`${req.method} ${url.pathname} failed: ${(error as Error)?.stack ?? error}`);
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      sendJson(res, apiError.status, { error: { code: apiError.code, message: apiError.message } });
+    });
+  });
+}
+
+/**
+ * Whether the request carries the configured token, as `Authorization:
+ * Bearer <token>` or `?token=<token>`. Always true without a token.
+ */
+export function authorized(req: IncomingMessage, url: URL, token: string | null): boolean {
+  if (token === null) return true;
+  const header = req.headers.authorization;
+  const bearer = header?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  return [bearer, url.searchParams.get("token") ?? undefined].some((given) => given !== undefined && sameToken(given, token));
+}
+
+/** Constant-time comparison (hashing first makes the lengths equal). */
+function sameToken(given: string, expected: string): boolean {
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(given), digest(expected));
+}
+
+/** Sends the current snapshot, then every change, as `status` events. */
+function streamEvents(req: IncomingMessage, res: ServerResponse, store: SnapshotSource, keepAliveMs: number): void {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+  const send = (snapshot: StatusSnapshot) => res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
+  send(store.snapshot);
+  store.on("change", send);
+  const keepAlive = setInterval(() => res.write(": keep-alive\n\n"), keepAliveMs);
+  keepAlive.unref();
+  req.socket.setTimeout(0);
+  res.on("close", () => {
+    clearInterval(keepAlive);
+    store.off("change", send);
+  });
+}
+
+/**
+ * Runs one control command from a JSON body: `{"action": "pause"}`,
+ * `{"action": "resume"}`, `{"action": "stop", "confirm": true}`, or
+ * `{"action": "light", "on": true|false}`. A sent command answers 200 with its
+ * result, whatever the outcome.
+ */
+async function runCommand(req: IncomingMessage, res: ServerResponse, control: Controls): Promise<void> {
+  const body = await readJson(req);
+  let result: Promise<CommandResult>;
+  switch (body.action) {
+    case "pause":
+      result = control.pause();
+      break;
+    case "resume":
+      result = control.resume();
+      break;
+    case "stop":
+      result = control.stop({ confirm: body.confirm === true });
+      break;
+    case "light":
+      if (typeof body.on !== "boolean") throw new ApiError(400, "bad-request", 'light needs "on": true or false');
+      result = control.setLight(body.on);
+      break;
+    default:
+      throw new ApiError(400, "bad-request", 'action must be one of "pause", "resume", "stop", "light"');
+  }
+  sendJson(res, 200, await result);
+}
+
+async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const type = req.headers["content-type"] ?? "";
+  if (!/^application\/json\b/i.test(type)) throw new ApiError(400, "bad-request", "body must be application/json");
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) throw new ApiError(400, "bad-request", `body is larger than ${MAX_BODY_BYTES} bytes`);
+    chunks.push(chunk);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new ApiError(400, "bad-request", "body is not valid JSON");
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ApiError(400, "bad-request", "body must be a JSON object");
+  }
+  return value as Record<string, unknown>;
+}
+
+function toApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error;
+  if (error instanceof ControlRejectedError) {
+    return error.reason === "confirmation-required"
+      ? new ApiError(400, "confirmation-required", error.message)
+      : new ApiError(409, "not-allowed", error.message);
+  }
+  if (error instanceof NotConnectedError) return new ApiError(503, "not-connected", error.message);
+  return new ApiError(500, "internal", "internal error");
+}
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  const text = JSON.stringify(body);
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(text) });
+  res.end(text);
+}
