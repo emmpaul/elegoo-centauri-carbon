@@ -8,9 +8,12 @@ import type { AddressInfo } from "node:net";
 
 export const FAKE_BOUNDARY = "fakeframe";
 
-/** A tiny stand-in JPEG part body (SOI ... EOI markers around a frame number). */
-export function fakeJpeg(n: number): Buffer {
-  return Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.from(`frame-${n}`), Buffer.from([0xff, 0xd9])]);
+/**
+ * A stand-in JPEG part body (SOI ... EOI markers around a frame number),
+ * padded with `padBytes` zero bytes.
+ */
+export function fakeJpeg(n: number, padBytes = 0): Buffer {
+  return Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.from(`frame-${n}`), Buffer.alloc(padBytes), Buffer.from([0xff, 0xd9])]);
 }
 
 export interface FakeMjpegOptions {
@@ -18,6 +21,8 @@ export interface FakeMjpegOptions {
   frameIntervalMs?: number;
   /** Status code to answer with instead of a stream. */
   status?: number;
+  /** Zero bytes added to each frame, for tests that need volume. 0 by default. */
+  framePadBytes?: number;
 }
 
 export class FakeMjpegSource {
@@ -28,12 +33,14 @@ export class FakeMjpegSource {
   status: number;
   private readonly server: Server;
   private readonly frameIntervalMs: number;
+  private readonly framePadBytes: number;
   private readonly closeListeners = new Set<() => void>();
 
   private constructor(server: Server, options: FakeMjpegOptions) {
     this.server = server;
     this.status = options.status ?? 200;
     this.frameIntervalMs = options.frameIntervalMs ?? 20;
+    this.framePadBytes = options.framePadBytes ?? 0;
     server.on("request", (req: IncomingMessage, res: ServerResponse) => this.serve(req, res));
   }
 
@@ -76,7 +83,7 @@ export class FakeMjpegSource {
     this.open.add(res);
     let n = 0;
     const timer = setInterval(() => {
-      const jpeg = fakeJpeg(n++);
+      const jpeg = fakeJpeg(n++, this.framePadBytes);
       res.write(`--${FAKE_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`);
       res.write(jpeg);
       res.write("\r\n");

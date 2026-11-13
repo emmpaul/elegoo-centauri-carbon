@@ -61,11 +61,14 @@ describe("CameraProxy with a fake MJPEG source", () => {
   let base: string;
   let prepared: number;
 
-  async function start(options: { token?: string | null; url?: string; beforeConnect?: () => Promise<unknown> } = {}): Promise<void> {
+  async function start(
+    options: { token?: string | null; url?: string; beforeConnect?: () => Promise<unknown>; maxBacklogBytes?: number; logger?: Logger } = {},
+  ): Promise<void> {
     prepared = 0;
     proxy = new CameraProxy({
       url: options.url ?? source.url,
-      logger: quiet,
+      logger: options.logger ?? quiet,
+      maxBacklogBytes: options.maxBacklogBytes,
       beforeConnect:
         options.beforeConnect ??
         (async () => {
@@ -178,6 +181,37 @@ describe("CameraProxy with a fake MJPEG source", () => {
     for (const res of source.open) res.end();
     await once(viewer.response, "end");
     assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("drops a viewer that stops reading once its backlog passes the cap, and keeps the others", async () => {
+    await source.close();
+    source = await FakeMjpegSource.start({ frameIntervalMs: 1, framePadBytes: 32 * 1024 });
+    const warnings: string[] = [];
+    await start({ maxBacklogBytes: 256 * 1024, logger: { ...quiet, warn: (message: string) => warnings.push(message) } });
+
+    const slow = await Viewer.open(`${base}/camera`);
+    await slow.waitForParts(1);
+    slow.response.pause(); // never reads again, so the kernel buffers fill and the proxy backlog grows
+    const slowClosed = new Promise((resolve) => slow.response.on("close", resolve)); // closes with an "aborted" error
+
+    // A viewer that keeps reading, counting bytes only.
+    const fast = get(`${base}/camera`);
+    fast.on("error", () => {});
+    const [fastResponse] = (await once(fast, "response")) as [IncomingMessage];
+    let fastBytes = 0;
+    fastResponse.on("data", (chunk: Buffer) => (fastBytes += chunk.length));
+
+    for (let i = 0; i < 2000 && proxy.viewerCount > 1; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(proxy.viewerCount, 1, "the slow viewer was dropped");
+    assert.ok(warnings.some((w) => /cannot keep up/.test(w)), "the drop is logged");
+    slow.response.resume();
+    await slowClosed;
+
+    const before = fastBytes;
+    await until(() => fastBytes > before, "frames for the reading viewer after the drop");
+    assert.equal(proxy.upstreamConnections, 1, "the upstream stays open for the reading viewer");
+    fast.destroy();
+    await source.waitForNoStreams();
   });
 
   it("requires the token, which a query parameter can carry for <img>", async () => {
