@@ -48,7 +48,7 @@
 ## 8. End-to-end on the real printer
 
 - [ ] 8.1 Run the service against 192.168.0.96 during a small test print; verify the dashboard on a phone shows live status and camera, pause/resume work, and a "print finished" notification arrives exactly once
-- [ ] 8.2 Write `README.md` (requirements including Node 26 and installing pnpm, config, running on a PC/WSL or Raspberry Pi, the WSL discovery caveat, the security note about not exposing the service to the internet); verify a fresh clone works by following the README
+- [x] 8.2 Write `README.md` (requirements including Node 26 and installing pnpm, config, running on a PC/WSL or Raspberry Pi, the WSL discovery caveat, the security note about not exposing the service to the internet); verify a fresh clone works by following the README
 
 ## Workflow follow-up
 
