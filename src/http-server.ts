@@ -1,6 +1,6 @@
-// HTTP API for the dashboard (design D3, D4): the status snapshot, a
-// Server-Sent Events stream of snapshot changes, and the control command
-// endpoint. When an access token is configured, every route requires it,
+// HTTP API for the dashboard (design D3, D4, D5): the status snapshot, a
+// Server-Sent Events stream of snapshot changes, the control command
+// endpoint, and the camera proxy. When an access token is configured, every route requires it,
 // as a bearer header or, for clients that cannot set headers (EventSource,
 // <img>), as a `token` query parameter.
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -29,6 +29,8 @@ export interface ApiServerOptions {
   control: Controls;
   /** Access token; null means no token check. */
   token: string | null;
+  /** Serves `GET /camera` (a CameraProxy); without it the route does not exist. */
+  camera?: { handle(req: IncomingMessage, res: ServerResponse): void };
   logger?: Logger;
   /** Interval of SSE keep-alive comments. 15 s by default. */
   keepAliveMs?: number;
@@ -69,6 +71,8 @@ export function createApiServer(options: ApiServerOptions): Server {
     "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, keepAliveMs) },
     "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
   };
+  const camera = options.camera;
+  if (camera !== undefined) routes["/camera"] = { GET: (req, res) => camera.handle(req, res) };
 
   return createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
