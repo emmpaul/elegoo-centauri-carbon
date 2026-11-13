@@ -115,6 +115,25 @@ MAC by `00:00:00:00:00:00`, and every print file name (in `Filename`,
 `TaskName`, `TimeLapseVideoUrl`, and the file lists) by `test-print-<n>.gcode`,
 with the same original name mapped to the same placeholder in every fixture.
 
+### Discovery capture
+
+Live probe, read-only, on 2026-11-13 (task 3.1). A scratch script from this
+project (not committed) sent the plain-text datagram `M99999` once to
+`192.0.2.10:3000` (unicast) and recorded the first reply, which came back from
+the same address with source port 3000.
+
+| Fixture | Recorded by | Printer state during the capture |
+| --- | --- | --- |
+| `discovery-reply.json` | this project's UDP probe | not read; the reply carries no state |
+
+*observed* (`discovery-reply.json#2`): the reply is one JSON datagram
+`{Id, Data: {Name, MachineName, BrandName, MainboardIP, MainboardID,
+ProtocolVersion, FirmwareVersion}}`, with `ProtocolVersion` `V3.0.0` and
+`FirmwareVersion` `V1.4.49`. It has no `Topic`, unlike the WebSocket messages.
+The fixture uses the same frame schema as the others (`#1` is the probe as
+sent, a string). Redaction as above: `MainboardIP` is `192.0.2.10`; the reply
+has no MAC and no file names. Broadcast discovery was not tried.
+
 ## Transport
 
 | Item | Value | Label | Source |

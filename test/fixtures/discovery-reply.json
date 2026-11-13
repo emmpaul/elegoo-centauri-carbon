@@ -1,0 +1,33 @@
+{
+  "source": {
+    "tool": "Node UDP probe (this project's scratch script): sends the text M99999 once to 192.0.2.10:3000 and records the first reply; read-only",
+    "captured": "2026-11-13",
+    "socket": "udp://192.0.2.10:3000",
+    "firmware": "V1.4.49",
+    "printerState": "not read; discovery replies do not carry state",
+    "note": "Frame 1 is the probe as sent (a plain-text datagram, not JSON). Frame 2 is the reply datagram, parsed from JSON; the reply came from the probed address, source port 3000. LAN IP redacted to 192.0.2.10; the reply has no MAC and no file names."
+  },
+  "frames": [
+    {
+      "seq": 1,
+      "direction": "sent",
+      "payload": "M99999"
+    },
+    {
+      "seq": 2,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Name": "Centauri Carbon",
+          "MachineName": "Centauri Carbon",
+          "BrandName": "ELEGOO",
+          "MainboardIP": "192.0.2.10",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "ProtocolVersion": "V3.0.0",
+          "FirmwareVersion": "V1.4.49"
+        }
+      }
+    }
+  ]
+}
