@@ -4,7 +4,7 @@
 
 - [x] 1.1 Install Node 26 via nvm and add `.nvmrc` (`26`), then install pnpm (standalone installer, since Node 26 ships no Corepack); verify `node --version` prints v26.x and `pnpm --version` prints 10.x in the repo directory
 - [x] 1.2 Create `package.json` (type: module, engines node >=26, `packageManager` pinned to an exact `pnpm@10.x` version), `tsconfig.json` (noEmit, strict, erasable syntax only), `.gitignore` (node_modules, config.json, scratch captures), and the scripts `start`, `test` (`node --test`), and `typecheck` (`tsc --noEmit`); run `pnpm install` and commit `pnpm-lock.yaml`; verify `pnpm typecheck` and `pnpm test` both run cleanly on an empty `src/`
-- [ ] 1.3 Add `config.example.json` with the D7 settings (printerIp 192.168.0.96, listen address, token, ntfy url/topic, enabled events); verify a config loader unit test covers file values, env overrides, and defaults
+- [x] 1.3 Add `config.example.json` with the D7 settings (printerIp 192.168.0.96, listen address, token, ntfy url/topic, enabled events); verify a config loader unit test covers file values, env overrides, and defaults
 
 ## 2. Protocol mapping with REA (phase A)
 

@@ -1,0 +1,21 @@
+{
+  "printerIp": "192.168.0.96",
+  "listen": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "token": null,
+  "ntfy": {
+    "url": "https://ntfy.sh",
+    "topic": "change-me-to-a-hard-to-guess-topic"
+  },
+  "events": {
+    "started": true,
+    "finished": true,
+    "failed": true,
+    "paused": true,
+    "stopped": true,
+    "offline": true,
+    "online": true
+  }
+}
