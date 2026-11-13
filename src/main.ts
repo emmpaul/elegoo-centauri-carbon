@@ -1,12 +1,18 @@
 // Service entry point: loads the config, finds the printer, and starts the
 // service until SIGINT or SIGTERM.
-import { loadConfig } from "./config.ts";
+import { listenAuthError, loadConfig } from "./config.ts";
 import { resolvePrinterAddress } from "./discovery.ts";
 import { notifierFromConfig } from "./notifier.ts";
 import { sdcpUrl } from "./sdcp-client.ts";
 import { cameraUrl, startService } from "./service.ts";
 
 const config = loadConfig();
+// Refuse before discovery, so an exposed start without a token never contacts the printer.
+const refusal = listenAuthError(config.listen, config.token);
+if (refusal !== null) {
+  console.error(refusal);
+  process.exit(1);
+}
 const host = await resolvePrinterAddress({ printerIp: config.printerIp });
 const service = await startService({
   printerUrl: sdcpUrl(host),
