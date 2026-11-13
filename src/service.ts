@@ -8,6 +8,7 @@ import { CameraProxy } from "./camera-proxy.ts";
 import { dashboardFiles } from "./dashboard-files.ts";
 import { EventDetector, type PrintEvent } from "./event-detector.ts";
 import { createApiServer } from "./http-server.ts";
+import type { Notifier } from "./notifier.ts";
 import { PrintControl } from "./print-control.ts";
 import { PrinterSession } from "./printer-session.ts";
 import { Cmd, type Logger } from "./sdcp-client.ts";
@@ -23,6 +24,8 @@ export interface ServiceOptions {
   logger?: Logger;
   /** Unreachable time before the "offline" event. 2 minutes by default. */
   offlineAfterMs?: number;
+  /** Push channel for events; none means events are only logged. */
+  notifier?: Notifier | null;
 }
 
 export interface Service {
@@ -56,7 +59,12 @@ export async function startService(options: ServiceOptions): Promise<Service> {
       return taskErrorCode(response, taskId) ?? null;
     },
   });
-  detector.on("event", (event) => logger.info(`event: ${describeEvent(event)}`));
+  const notifier = options.notifier ?? null;
+  detector.on("event", (event) => {
+    logger.info(`event: ${describeEvent(event)}`);
+    // Delivery runs on its own: its retries and failures never wait on or touch the session.
+    if (notifier !== null) void notifier.notify(event).catch((error: Error) => logger.error(`notification failed: ${error.message}`));
+  });
   detector.attach(store);
   const control = new PrintControl(session, store);
   const camera = new CameraProxy({
