@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import type { Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -349,4 +349,90 @@ describe("HTTP API on malformed requests", () => {
       assert.equal((await fetch(`${base}/api/status`, { headers })).status, 200);
     });
   }
+});
+
+/** A store whose snapshot the test sets and announces. */
+class FakeStore extends EventEmitter {
+  snapshot = { connection: "online", pad: "" } as unknown as StatusSnapshot;
+
+  publish(snapshot: StatusSnapshot): void {
+    this.snapshot = snapshot;
+    this.emit("change", snapshot);
+  }
+}
+
+describe("HTTP API event stream limits", () => {
+  let server: Server;
+  let base: string;
+  let store: FakeStore;
+  let warnings: string[];
+
+  async function start(limits: { maxEventBacklogBytes?: number; maxEventClients?: number }): Promise<void> {
+    store = new FakeStore();
+    warnings = [];
+    const logger: Logger = { ...quiet, warn: (message: string) => warnings.push(message) };
+    server = createApiServer({ store, control: {} as never, token: null, logger, ...limits });
+    base = await listen(server);
+  }
+
+  afterEach(() => closeServer(server));
+
+  async function until(condition: () => boolean, what: string): Promise<void> {
+    for (let i = 0; i < 400; i++) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.fail(`timed out waiting for ${what}`);
+  }
+
+  it("drops a client that stops reading once its backlog passes the cap, and keeps serving", async () => {
+    await start({ maxEventBacklogBytes: 256 * 1024 });
+    const { port } = new URL(base);
+    const slow = connect(Number(port), "127.0.0.1");
+    await once(slow, "connect");
+    slow.write("GET /api/events HTTP/1.1\r\nHost: x\r\n\r\n");
+    await until(() => store.listenerCount("change") === 1, "the slow client to subscribe");
+    slow.pause(); // never reads again, so the kernel buffers fill and the server backlog grows
+    const closed = once(slow, "close");
+
+    const pad = "x".repeat(64 * 1024);
+    let published = 0;
+    while (store.listenerCount("change") > 0) {
+      assert.ok(published < 2000, "the slow client was never dropped");
+      store.publish({ connection: "online", pad: `${published++}${pad}` } as unknown as StatusSnapshot);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    slow.resume();
+    await closed;
+    assert.ok(warnings.some((w) => /cannot keep up/.test(w)), "the drop is logged");
+
+    const response = await fetch(`${base}/api/events`);
+    assert.equal(response.status, 200);
+    const events = new SseReader(response);
+    store.publish({ connection: "offline" } as unknown as StatusSnapshot);
+    await events.next();
+    await events.cancel();
+  });
+
+  it("answers 503 past the client cap and admits a client again when one leaves", async () => {
+    await start({ maxEventClients: 2 });
+    const first = new SseReader(await fetch(`${base}/api/events`));
+    const second = new SseReader(await fetch(`${base}/api/events`));
+    await first.next();
+    await second.next();
+
+    const refused = await fetch(`${base}/api/events`);
+    assert.equal(refused.status, 503);
+    assert.equal(((await refused.json()) as { error: { code: string } }).error.code, "too-many-clients");
+    assert.equal(store.listenerCount("change"), 2);
+
+    await first.cancel();
+    await until(() => store.listenerCount("change") === 1, "the first client to leave");
+    const third = await fetch(`${base}/api/events`);
+    assert.equal(third.status, 200);
+    const thirdEvents = new SseReader(third);
+    await thirdEvents.next();
+    await second.cancel();
+    await thirdEvents.cancel();
+  });
 });

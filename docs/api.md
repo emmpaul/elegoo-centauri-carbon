@@ -88,7 +88,9 @@ Any value can be `null` when the printer hasn't reported it.
 `GET /api/events` is a Server-Sent Events stream. It sends the current snapshot
 at once, then a new one each time the snapshot changes. Each message has the
 event name `status` and the snapshot as JSON in `data`. A comment line
-(`: keep-alive`) is sent every 15 seconds.
+(`: keep-alive`) is sent every 15 seconds. At most 32 streams are served at
+once; another answers `503` with `too-many-clients`. A client that stops
+reading is disconnected once about 1 MiB is waiting to be sent to it.
 
 ```sh
 curl -s -N --max-time 3 "$BASE/api/events?token=$TOKEN"
@@ -196,6 +198,7 @@ Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 | 409 | `not-allowed` | The command doesn't fit the current print state, or the printer isn't online |
 | 502 | `camera-unavailable` | The camera can't be reached |
 | 503 | `not-connected` | The printer session closed before the command was answered |
+| 503 | `too-many-clients` | 32 event streams are already open |
 | 500 | `internal` | Anything else (details go to the service log) |
 
 ## Trying it without the printer

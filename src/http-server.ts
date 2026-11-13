@@ -34,6 +34,10 @@ export interface ApiServerOptions {
   logger?: Logger;
   /** Interval of SSE keep-alive comments. 15 s by default. */
   keepAliveMs?: number;
+  /** An SSE client whose unsent backlog grows past this many bytes is dropped. 1 MiB by default. */
+  maxEventBacklogBytes?: number;
+  /** SSE clients served at once; more answer 503. 32 by default. */
+  maxEventClients?: number;
 }
 
 /** Largest accepted command body, in bytes. */
@@ -48,6 +52,7 @@ export type ApiErrorCode =
   | "confirmation-required"
   | "not-allowed"
   | "not-connected"
+  | "too-many-clients"
   | "internal";
 
 class ApiError extends Error {
@@ -65,10 +70,15 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 /** Creates (but does not start) the API server. */
 export function createApiServer(options: ApiServerOptions): Server {
   const logger = options.logger ?? console;
-  const keepAliveMs = options.keepAliveMs ?? 15_000;
+  const events: EventStreamLimits = {
+    keepAliveMs: options.keepAliveMs ?? 15_000,
+    maxBacklogBytes: options.maxEventBacklogBytes ?? 1024 * 1024,
+    maxClients: options.maxEventClients ?? 32,
+    clients: 0,
+  };
   const routes: Record<string, Partial<Record<string, Handler>>> = {
     "/api/status": { GET: (_req, res) => sendJson(res, 200, options.store.snapshot) },
-    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, keepAliveMs) },
+    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, events, logger) },
     "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
   };
   const camera = options.camera;
@@ -136,23 +146,48 @@ function sameToken(given: string, expected: string): boolean {
   return timingSafeEqual(digest(given), digest(expected));
 }
 
-/** Sends the current snapshot, then every change, as `status` events. */
-function streamEvents(req: IncomingMessage, res: ServerResponse, store: SnapshotSource, keepAliveMs: number): void {
+interface EventStreamLimits {
+  keepAliveMs: number;
+  maxBacklogBytes: number;
+  maxClients: number;
+  /** SSE clients currently connected. */
+  clients: number;
+}
+
+/**
+ * Sends the current snapshot, then every change, as `status` events. A client
+ * that does not read is dropped once its backlog passes the limit, so it
+ * cannot grow server memory without bound.
+ */
+function streamEvents(req: IncomingMessage, res: ServerResponse, store: SnapshotSource, limits: EventStreamLimits, logger: Logger): void {
+  if (limits.clients >= limits.maxClients) {
+    throw new ApiError(503, "too-many-clients", `at most ${limits.maxClients} event streams at once`);
+  }
+  limits.clients++;
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
   });
-  const send = (snapshot: StatusSnapshot) => res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
-  send(store.snapshot);
-  store.on("change", send);
-  const keepAlive = setInterval(() => res.write(": keep-alive\n\n"), keepAliveMs);
+  const write = (text: string) => {
+    if (res.destroyed) return;
+    res.write(text);
+    if (res.writableLength > limits.maxBacklogBytes) {
+      logger.warn("events: dropping a client that cannot keep up");
+      res.destroy();
+    }
+  };
+  const send = (snapshot: StatusSnapshot) => write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
+  const keepAlive = setInterval(() => write(": keep-alive\n\n"), limits.keepAliveMs);
   keepAlive.unref();
   req.socket.setTimeout(0);
   res.on("close", () => {
+    limits.clients--;
     clearInterval(keepAlive);
     store.off("change", send);
   });
+  store.on("change", send);
+  send(store.snapshot);
 }
 
 /**
