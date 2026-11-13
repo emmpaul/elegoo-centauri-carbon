@@ -17,7 +17,7 @@
 ## 3. Printer connection
 
 - [x] 3.1 Implement UDP discovery plus the configured-IP override; verify unit tests parse a recorded discovery reply and that the configured IP skips discovery
-- [ ] 3.2 Build a test-only fake SDCP printer (`ws` dev dependency) that replays fixtures and records received frames; verify a smoke test connects to it
+- [x] 3.2 Build a test-only fake SDCP printer (`ws` dev dependency) that replays fixtures and records received frames; verify a smoke test connects to it
 - [ ] 3.3 Implement the SDCP client: envelope building, request/response correlation by RequestID, the command allow-list from the protocol doc, and the protocol version warning; verify tests show undocumented command ids are refused and an unknown version logs a warning
 - [ ] 3.4 Implement reconnect with back-off capped at 60 s, plus the idle status poll after 30 s; verify fake-printer tests cover drop → offline → reconnect → online, and the poll after silence (using mock timers)
 - [ ] 3.5 Implement the status store that normalizes raw codes into named states (unknown codes keep the raw value); verify fixture-driven tests produce the expected snapshots for idle, printing, paused, completed, and error
