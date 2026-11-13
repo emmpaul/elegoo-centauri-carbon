@@ -106,8 +106,12 @@ each frame.
 
 Each fixture is `{source, frames: [{seq, direction, payload}]}`, with frames
 in receipt order and payloads parsed from JSON (the heartbeat stays the string
-`"ping"`). The fixtures hold the printer's real file names, task ids, and
-MAC address.
+`"ping"`). The fixtures keep the printer's real task ids and mainboard id,
+but device and owner details are redacted, here and in this document: the
+printer's LAN IP is replaced by the documentation address `192.0.2.10`, its
+MAC by `00:00:00:00:00:00`, and every print file name (in `Filename`,
+`TaskName`, `TimeLapseVideoUrl`, and the file lists) by `test-print-<n>.gcode`,
+with the same original name mapped to the same placeholder in every fixture.
 
 ## Transport
 
