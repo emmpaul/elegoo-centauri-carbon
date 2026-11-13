@@ -1,6 +1,7 @@
 # Elegoo Centauri Carbon local control
 
 [![CI](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/emmpaul/elegoo-centauri-carbon/ci.yml?branch=main&label=tests&logo=github)](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml?query=branch%3Amain)
 ![Node 26](https://img.shields.io/badge/node-26-339933?logo=nodedotjs&logoColor=white)
 ![pnpm 10](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
