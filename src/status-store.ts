@@ -243,13 +243,9 @@ export class StatusStore extends EventEmitter<StoreEvents> {
    * and other tasks' entries are ignored.
    */
   applyTaskDetail(response: SdcpResponse): void {
-    if (response.Data.Cmd !== 321 || this.jobId === null) return;
-    const list = response.Data.Data.HistoryDetailList;
-    if (!Array.isArray(list)) return;
-    const entry = list.find((item): item is Record<string, unknown> => isObject(item) && item.TaskId === this.jobId);
-    if (!entry) return;
-    const errorCode = num(entry.ErrorStatusReason);
-    if (errorCode === this.current.errorCode) return;
+    if (this.jobId === null) return;
+    const errorCode = taskErrorCode(response, this.jobId);
+    if (errorCode === undefined || errorCode === this.current.errorCode) return;
     this.current = { ...this.current, errorCode };
     this.emit("change", this.snapshot);
   }
@@ -259,6 +255,20 @@ export class StatusStore extends EventEmitter<StoreEvents> {
     this.current = { ...this.current, connection };
     this.emit("change", this.snapshot);
   }
+}
+
+/**
+ * Reads `ErrorStatusReason` of task `taskId` from a Cmd 321 (task detail)
+ * answer: the raw code (0 means no error), null when the entry has no numeric
+ * code, or undefined when the answer is not a Cmd 321 answer or has no entry
+ * for that task.
+ */
+export function taskErrorCode(response: SdcpResponse, taskId: string): number | null | undefined {
+  if (response.Data.Cmd !== 321) return undefined;
+  const list = response.Data.Data.HistoryDetailList;
+  if (!Array.isArray(list)) return undefined;
+  const entry = list.find((item): item is Record<string, unknown> => isObject(item) && item.TaskId === taskId);
+  return entry ? num(entry.ErrorStatusReason) : undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

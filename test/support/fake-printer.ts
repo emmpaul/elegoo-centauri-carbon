@@ -35,9 +35,10 @@ export interface ReceivedFrame {
 
 /**
  * How the fake answers a request with command id `cmd`: an `Ack` value to
- * respond with, or `"silent"` to send no response.
+ * respond with, `"silent"` to send no response, or a function that builds the
+ * response's `Data.Data` from the request's `Data.Data`.
  */
-export type Reply = number | "silent";
+export type Reply = number | "silent" | ((data: Record<string, unknown>) => Record<string, unknown>);
 
 export interface FakePrinterOptions {
   /** Per-command reply; commands not listed are answered with `Ack: 0`. */
@@ -169,13 +170,14 @@ export class FakePrinter {
     if (cmd === undefined || this.silent) return;
     const reply = this.replies.get(cmd) ?? 0;
     if (reply === "silent") return;
-    const request = (payload as { Data: { RequestID?: unknown } }).Data;
+    const request = (payload as { Data: { RequestID?: unknown; Data?: unknown } }).Data;
+    const requestData = typeof request.Data === "object" && request.Data !== null ? (request.Data as Record<string, unknown>) : {};
     socket.send(
       JSON.stringify({
         Id: RESPONSE_ID,
         Data: {
           Cmd: cmd,
-          Data: { Ack: reply },
+          Data: typeof reply === "function" ? reply(requestData) : { Ack: reply },
           RequestID: typeof request.RequestID === "string" ? request.RequestID : "",
           MainboardID: FIXTURE_MAINBOARD_ID,
           TimeStamp: Math.floor(Date.now() / 1000),

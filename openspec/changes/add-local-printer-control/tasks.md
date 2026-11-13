@@ -41,7 +41,7 @@
 
 ## 7. Notifications
 
-- [ ] 7.1 Implement the event detector over snapshot changes (started, finished, failed, paused, stopped, offline after 2 min, online), with dedupe by job + event type; verify tests replay fixture sequences, including a reconnect during the completed state (no duplicate) and a 90 s blip (no offline alert)
+- [x] 7.1 Implement the event detector over snapshot changes (started, finished, failed, paused, stopped, offline after 2 min, online), with dedupe by job + event type; verify tests replay fixture sequences, including a reconnect during the completed state (no duplicate) and a 90 s blip (no offline alert)
 - [ ] 7.2 Implement the ntfy channel behind a notifier interface: per-event toggles, 3 retries with back-off, failures logged without touching the printer session; verify tests use a fake ntfy endpoint, including the unreachable case
 - [ ] 7.3 Document notification setup (ntfy app, topic choice, self-hosting) in `docs/notifications.md`; verify following it delivers a test notification to a phone
 
