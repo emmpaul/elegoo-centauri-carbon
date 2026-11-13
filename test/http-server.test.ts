@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { once } from "node:events";
 import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { createApiServer } from "../src/http-server.ts";
 import { type CommandSender, PrintControl } from "../src/print-control.ts";
@@ -309,4 +309,44 @@ describe("HTTP API command errors from the session", () => {
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: { code: "internal", message: "internal error" } });
   });
+});
+
+/** Sends `head` as raw bytes and returns the whole response text. */
+async function rawRequest(base: string, head: string): Promise<string> {
+  const { hostname, port } = new URL(base);
+  const socket = connect(Number(port), hostname);
+  await once(socket, "connect");
+  socket.end(head);
+  let text = "";
+  socket.setEncoding("latin1");
+  for await (const chunk of socket) text += chunk;
+  return text;
+}
+
+describe("HTTP API on malformed requests", () => {
+  let server: Server;
+  let base: string;
+
+  async function start(token: string | null): Promise<void> {
+    const store = new StatusStore();
+    store.applyStatus(PRINTING);
+    const control = new PrintControl({ send: () => Promise.reject(new Error("no printer")) }, store);
+    server = createApiServer({ store, control, token, logger: quiet });
+    base = await listen(server);
+  }
+
+  afterEach(() => closeServer(server));
+
+  for (const token of [null, "s3cret-token"]) {
+    it(`answers 400 for a request-target that is not a URL and keeps serving (token ${token ? "set" : "unset"})`, async () => {
+      await start(token);
+      for (const target of ["http://[", "http://[::1/x", "//[/api/status"]) {
+        const response = await rawRequest(base, `GET ${target} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n`);
+        assert.match(response, /^HTTP\/1\.1 400 /, target);
+        assert.match(response, /"code":"bad-request"/, target);
+      }
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      assert.equal((await fetch(`${base}/api/status`, { headers })).status, 200);
+    });
+  }
 });

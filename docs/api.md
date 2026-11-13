@@ -188,7 +188,7 @@ Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 
 | Status | `code` | When |
 | --- | --- | --- |
-| 400 | `bad-request` | Body isn't a JSON object, the action is unknown, `on` is missing for the light, or the body is over 4 KiB |
+| 400 | `bad-request` | The request target isn't a valid URL, the body isn't a JSON object, the action is unknown, `on` is missing for the light, or the body is over 4 KiB |
 | 400 | `confirmation-required` | Stop without `"confirm": true` |
 | 401 | `unauthorized` | Missing or wrong token |
 | 404 | `not-found` | Unknown path |

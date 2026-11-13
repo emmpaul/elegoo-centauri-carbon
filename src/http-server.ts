@@ -75,8 +75,13 @@ export function createApiServer(options: ApiServerOptions): Server {
   if (camera !== undefined) routes["/camera"] = { GET: (req, res) => camera.handle(req, res) };
 
   return createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
+    // Everything runs inside the async function, so a synchronous throw
+    // (even from parsing a malformed request-target) becomes an error answer
+    // instead of an uncaught exception that ends the process.
+    let path = "-";
     void (async () => {
+      const url = parseTarget(req.url);
+      path = url.pathname;
       if (!authorized(req, url, options.token)) {
         res.setHeader("WWW-Authenticate", 'Bearer realm="printer"');
         throw new ApiError(401, "unauthorized", "missing or wrong access token");
@@ -90,15 +95,28 @@ export function createApiServer(options: ApiServerOptions): Server {
       }
       await handler(req, res, url);
     })().catch((error: unknown) => {
-      const apiError = toApiError(error);
-      if (apiError.status === 500) logger.error(`${req.method} ${url.pathname} failed: ${(error as Error)?.stack ?? error}`);
-      if (res.headersSent) {
+      try {
+        const apiError = toApiError(error);
+        if (apiError.status === 500) logger.error(`${req.method} ${path} failed: ${(error as Error)?.stack ?? error}`);
+        if (res.headersSent) {
+          res.destroy();
+          return;
+        }
+        sendJson(res, apiError.status, { error: { code: apiError.code, message: apiError.message } });
+      } catch {
         res.destroy();
-        return;
       }
-      sendJson(res, apiError.status, { error: { code: apiError.code, message: apiError.message } });
     });
   });
+}
+
+/** The request-target as a URL; a target that is not one answers 400. */
+function parseTarget(target: string | undefined): URL {
+  try {
+    return new URL(target ?? "/", "http://localhost");
+  } catch {
+    throw new ApiError(400, "bad-request", "request target is not a valid URL");
+  }
 }
 
 /**
