@@ -432,12 +432,39 @@ history list (from Cmd 320) and, when `CurrentStatus` includes 1 and
 
 ## Open points for the live pass
 
-- Response format of the control commands (129, 130, 131, 403): not
-  visible to a second client, so it stays *static-only* (`{Ack}` assumed as
-  for the other commands) until this project's own client sends them and the
-  entries can be relabeled *tested* (task 8.1).
-- Stop (130) and the stopped codes 8 and 14: not exercised.
-- Meaning of `PrintInfo.Status` 7 and the codes not seen yet.
+Task 2.4 is accepted with the gaps below. This section is the single record of
+what the live pass did and did not confirm for the control commands; the
+per-command rows above carry the same labels.
+
+| Cmd | Action | Request frame | Response frame | Effect on status pushes |
+| --- | --- | --- | --- | --- |
+| 129 | pause | *static-only* (c25@322328) | *static-only* | *observed*: `PrintInfo.Status` 13 → 5 → 6 (`control-pause-resume-light.json#11`, `#12`, `#16`) |
+| 130 | stop | *static-only* (c25@323551) | *static-only* | **not captured**: stop was never pressed |
+| 131 | resume | *static-only* (c25@322085) | *static-only* | *observed*: `PrintInfo.Status` 6 → 20 → 13 (`control-pause-resume-light.json#16`, `#17`, `#26`) |
+| 403 | light | *static-only* (c25@119393) | *static-only* | *observed*: `LightStatus.SecondLight` 1 → 0 → 1 (`control-pause-resume-light.json#28`, `#30`) |
+
+- **Request frames and responses of 129, 130, 131, and 403 were not seen.**
+  The browser that sent them used its own connection, and the printer sends
+  responses only to the requesting connection (see Concurrent clients), so the
+  recorder saw only the state changes. The `{Ack}` response shape is assumed
+  from the other commands (`Ack: 0` success; Cmd 131 `Ack: 2` blocked, from the
+  bundle) and is **unconfirmed** for the control commands.
+- **Stop (130) was not captured at all**, so neither its effect nor the
+  stopped print-state codes 8 and 14 (`STATUS_STOPED`) were seen on the wire.
+  They stay *static-only*.
+- **Task 8.1 confirms them.** When this project's own client first sends pause,
+  resume, light, and stop to the printer during the 8.1 test print, record the
+  response frames and the stop transition, and relabel these entries *tested*
+  (stop included, so that 8 or 14 is seen).
+- **Later tasks must treat the control response format as unconfirmed.**
+  Result reporting (task 4.2) relies only on what is common to every observed
+  response: correlate by `Data.RequestID`, read `Data.Data.Ack` (0 is
+  acknowledged, any other value is failed with that code), and report a timeout
+  when no response arrives within 10 s. It must not depend on any other
+  response field, and its fake-printer tests are built on this assumed shape,
+  not on a recorded control response. The stopped event (task 7.1) likewise
+  rests on the *static-only* codes 8 and 14 until 8.1.
+- Meaning of `PrintInfo.Status` 7 and the other codes not seen yet.
 - Whether `TaskId` is stable: answered below.
 
 ## Answers to the design open questions
