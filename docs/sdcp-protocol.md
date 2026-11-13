@@ -406,6 +406,10 @@ during the resume preparation nothing for 18 s until this client's Cmd 0
   (`i18n:networkDeviceManager.control.errorStatusReason.45`, main@777696).
   No other error code table ships with the web UI. *observed*: `0` on
   completed and running jobs (`print-complete.json#28`).
+  The status store (`src/status-store.ts`) takes this field, raw, as the
+  snapshot's `errorCode` for the current or last job. That mapping is
+  *static-only* until a live error is recorded: no non-zero value has been
+  seen, and the test for it uses a synthetic Cmd 321 answer.
 - *static-only*: `sdcp/error` messages are routed (main@784969) but no handler reads them;
   none were seen during the live pass.
 
