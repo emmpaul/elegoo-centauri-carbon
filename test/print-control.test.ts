@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { once } from "node:events";
-import { afterEach, beforeEach, describe, it } from "node:test";
-import { ControlRejectedError, isAllowed, PrintControl } from "../src/print-control.ts";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import { type CommandResult, ControlRejectedError, isAllowed, PrintControl } from "../src/print-control.ts";
 import { PrinterSession } from "../src/printer-session.ts";
 import { Cmd, type Logger } from "../src/sdcp-client.ts";
 import { emptySnapshot, type StatusSnapshot, StatusStore } from "../src/status-store.ts";
@@ -25,6 +25,11 @@ const LIGHT_OFF = ["control-pause-resume-light.json", 28] as const; // SecondLig
 const IDLE = ["connect-idle.json", 27] as const; // 0/0
 const COMPLETED = ["print-complete.json", 24] as const; // 0/9
 
+/** Lets pending I/O callbacks (socket events) run while timers are mocked. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 function isCmd(cmd: number) {
   return (frame: { payload: unknown }) => (frame.payload as { Data?: { Cmd?: number } }).Data?.Cmd === cmd;
 }
@@ -36,6 +41,8 @@ describe("PrintControl against the fake printer", () => {
   let control: PrintControl;
 
   beforeEach(async () => {
+    // Mocked so the 10 s response timeout can be driven; socket I/O stays real.
+    mock.timers.enable({ apis: ["setTimeout"] });
     printer = await FakePrinter.start();
     session = new PrinterSession({ url: printer.url, logger: quiet });
     store = new StatusStore();
@@ -46,6 +53,9 @@ describe("PrintControl against the fake printer", () => {
   afterEach(async () => {
     session.stop();
     await printer.close();
+    // Let closed sockets fail pending requests before the mocked clock goes away.
+    await settle();
+    mock.timers.reset();
   });
 
   /** Pushes a recorded status and waits until the store has applied it. */
@@ -82,8 +92,7 @@ describe("PrintControl against the fake printer", () => {
 
   it("pauses a running print, and the snapshot shows it pausing", async () => {
     await goOnline(PRINTING);
-    const response = await control.pause();
-    assert.equal(response.Data.Cmd, Cmd.SEND_PRINTER_SUSPEND_PRINT);
+    assert.deepEqual(await control.pause(), { action: "pause", outcome: "acknowledged" });
     assert.deepEqual(await commandsSent(), [Cmd.SEND_PRINTER_SUSPEND_PRINT]);
     assert.equal((await pushStatus(PAUSING)).printState.name, "pausing");
   });
@@ -165,6 +174,44 @@ describe("PrintControl against the fake printer", () => {
     await assertRejected(control.stop({ confirm: true }), "not-allowed");
     await assertRejected(control.setLight(false), "not-allowed");
     assert.deepEqual(printer.receivedCommands, CONNECT_COMMANDS);
+  });
+
+  it("reports acknowledged when the printer answers Ack 0", async () => {
+    await goOnline(PRINTING);
+    const results: CommandResult[] = [await control.setLight(false), await control.stop({ confirm: true })];
+    assert.deepEqual(results, [
+      { action: "light", outcome: "acknowledged" },
+      { action: "stop", outcome: "acknowledged" },
+    ]);
+  });
+
+  it("reports failed with the printer's code when Ack is not 0", async () => {
+    printer.replies.set(Cmd.SEND_PRINTER_SUSPEND_PRINT, 1);
+    printer.replies.set(Cmd.EDIT_PRINTER_STATUS_DATA, 3);
+    await goOnline(PRINTING);
+    assert.deepEqual(await control.pause(), { action: "pause", outcome: "failed", code: 1 });
+    assert.deepEqual(await control.setLight(false), { action: "light", outcome: "failed", code: 3 });
+    await pushStatus(PAUSED);
+    printer.replies.set(Cmd.SEND_PRINTER_RESTORE_PRINT, 2);
+    assert.deepEqual(await control.resume(), { action: "resume", outcome: "failed", code: 2 });
+  });
+
+  it("reports timeout when no response arrives within 10 s, and not before", async () => {
+    printer.replies.set(Cmd.SEND_PRINTER_SUSPEND_PRINT, "silent");
+    await goOnline(PRINTING);
+    await settle(); // the connect responses land before the clock moves
+    const sent = printer.nextFrame(isCmd(Cmd.SEND_PRINTER_SUSPEND_PRINT));
+    let result: CommandResult | undefined;
+    const pending = control.pause().then((r) => (result = r));
+    await sent;
+
+    mock.timers.tick(9_999);
+    await settle();
+    assert.equal(result, undefined, "still waiting at 9.999 s");
+
+    mock.timers.tick(1);
+    await pending;
+    assert.deepEqual(result, { action: "pause", outcome: "timeout" });
   });
 
   it("rejects the light before any status has arrived and sends nothing", async () => {

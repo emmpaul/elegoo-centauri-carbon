@@ -25,7 +25,7 @@
 ## 4. Print control
 
 - [x] 4.1 Implement pause, resume, stop, and light commands, with the state checks and the stop confirmation flag; verify tests show disallowed commands send nothing to the fake printer
-- [ ] 4.2 Implement result reporting (acknowledged / failed with code / timeout after 10 s); verify tests cover all three outcomes against the fake printer
+- [x] 4.2 Implement result reporting (acknowledged / failed with code / timeout after 10 s); verify tests cover all three outcomes against the fake printer
 
 ## 5. HTTP API and camera
 
