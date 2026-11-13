@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node src/main.ts",
     "start:fake": "node scripts/run-fake-service.ts",
+    "notify:test": "node scripts/send-test-notification.ts",
     "test": "node --test",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web && tsc --noEmit -p web/tsconfig.sw.json"
   },
