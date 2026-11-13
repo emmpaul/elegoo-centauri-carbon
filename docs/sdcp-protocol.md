@@ -432,8 +432,63 @@ history list (from Cmd 320) and, when `CurrentStatus` includes 1 and
   entries can be relabeled *tested* (task 8.1).
 - Stop (130) and the stopped codes 8 and 14: not exercised.
 - Meaning of `PrintInfo.Status` 7 and the codes not seen yet.
-- Whether `TaskId` is stable across reconnects (design open question, task
-  2.5). The read-only captures saw the same `TaskId`
-  `c735768d-8d67-4ae2-8d07-05c0c05c4aa2` in the status and in Cmd 321 over
-  three separate connections during one job, and `TaskId` is `""` in the
-  completion push itself (`print-complete.json#24`).
+- Whether `TaskId` is stable: answered below.
+
+## Answers to the design open questions
+
+### Is `TaskId` a stable job id?
+
+**Yes, while the job runs** (*observed*). The same `TaskId` was seen:
+
+- `c735768d-8d67-4ae2-8d07-05c0c05c4aa2` in the status push and in the Cmd
+  321 answer over three separate connections during one job
+  (`connect-loading.json`, `connect-printing.json`, `print-complete.json`);
+- `9f0f4d7e-826e-45df-998e-ea24f6815410` from the job start in
+  `connect-idle.json#38`, again on a later connection in
+  `control-pause-resume-light.json#4`, and unchanged through pause and resume
+  (`#12` to `#34`).
+
+Caveat: `TaskId` is `""` from the completion push on (`print-complete.json#24`)
+and while idle, so the completed, stopped, and failed events cannot read it
+from the push that reports them. The event detector keeps the last non-empty
+`TaskId` it saw for the job and uses that as the dedupe key; the D4 fallback
+(file name + start time) is only needed when the service connects after the job
+has already ended. No spec change.
+
+### Can the chamber light be controlled through SDCP?
+
+**Yes** (*observed* effect). The owner turned the light off and on from
+Elegoo's web UI during a running print; the next status pushes showed
+`LightStatus.SecondLight` 1 → 0 → 1 (`control-pause-resume-light.json#28`,
+`#30`). The UI sends this as Cmd 403 with `{LightStatus: {SecondLight, RgbLight}}`
+(c25@119393). That request payload and its response are *static-only*, because
+they travel on the sender's own connection; this project's client confirms them
+when it first sends the command (task 8.1). The print-control light requirement
+stays as it is; no spec change.
+
+### Concurrent clients
+
+*observed* behavior with more than one client connected to port 3030:
+
+- **Several SDCP WebSocket clients can connect at once.** The control capture
+  ran this project's recorder alongside the owner's browser on Elegoo's web UI,
+  and the read-only captures ran a headless browser while another client
+  uploaded a file and started a job (`connect-idle.json#8`, `#32`). Neither
+  connection was refused or dropped. `MaximumCloudSDCPSercicesAllowed` is `0`
+  and `MaximumVideoStreamAllowed` is `4` in the attributes; no limit on local
+  SDCP clients is advertised, and only two at once were tried.
+- **Status pushes are broadcast to every client.** The recorder received the
+  state changes caused by the other client's pause, resume, and light commands
+  (`control-pause-resume-light.json#12`, `#17`, `#28`).
+- **Responses go only to the requesting connection.** The recorder received
+  responses to its own Cmd 0 and Cmd 1 (`#3`, `#5`, `#23`) and none for the
+  other client's Cmd 129, 131, and 403. A client therefore cannot learn another
+  client's command result; it sees only the resulting state change.
+- **No attributes push followed the other client's actions** in the control
+  capture, so whether attribute pushes after a change (for example after Cmd
+  386) reach every client or only the requester is not settled.
+
+Consequences for this project: the service's commands and those sent from
+Elegoo's UI or the slicer coexist, and the status store sees every client's
+effect. The "acknowledged" result in the command-result requirement comes from
+the response on the service's own connection, correlated by `RequestID`.
