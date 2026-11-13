@@ -10,7 +10,7 @@
 ## 2. Fake printer on the real ports
 
 - [x] 2.1 Give `FakePrinter.start` (`test/support/fake-printer.ts`) and `FakeMjpegSource.start` (`test/support/fake-mjpeg.ts`) optional `host` and `port` options, defaults unchanged; verify `pnpm test` passes unchanged.
-- [ ] 2.2 Move the print simulation out of `scripts/run-fake-service.ts` into a shared module under `scripts/`, and add `scripts/run-fake-printer.ts` that starts only the fake printer on `FAKE_HOST` (default `127.0.0.1`) port 3030 and the fake camera on port 3031 (header comment lists its env, like `run-fake-service.ts`); verify `pnpm start:fake` still serves `/api/status`, and with `node scripts/run-fake-printer.ts` running, `PRINTER_IP=127.0.0.1 LISTEN_HOST=127.0.0.1 LISTEN_PORT=18080 CONFIG_PATH=/nonexistent pnpm start` serves `/api/status` with a printing state; `pnpm typecheck` passes.
+- [x] 2.2 Move the print simulation out of `scripts/run-fake-service.ts` into a shared module under `scripts/`, and add `scripts/run-fake-printer.ts` that starts only the fake printer on `FAKE_HOST` (default `127.0.0.1`) port 3030 and the fake camera on port 3031 (header comment lists its env, like `run-fake-service.ts`); verify `pnpm start:fake` still serves `/api/status`, and with `node scripts/run-fake-printer.ts` running, `PRINTER_IP=127.0.0.1 LISTEN_HOST=127.0.0.1 LISTEN_PORT=18080 CONFIG_PATH=/nonexistent pnpm start` serves `/api/status` with a printing state; `pnpm typecheck` passes.
 
 ## 3. Container image
 
