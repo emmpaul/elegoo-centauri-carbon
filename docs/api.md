@@ -181,7 +181,8 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 
 The service keeps a single connection to the printer's camera, opened with the
 first viewer and closed when the last one leaves. When the camera can't be
-reached, the answer is `502` with `{"error":{"code":"camera-unavailable",...}}`.
+reached, or doesn't answer within 10 seconds, the answer is `502` with
+`{"error":{"code":"camera-unavailable",...}}`.
 
 ```sh
 curl -s --max-time 2 -o camera.mjpeg "$BASE/camera?token=$TOKEN"; head -c 120 camera.mjpeg
@@ -199,7 +200,7 @@ Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 | 404 | `not-found` | Unknown path |
 | 405 | `method-not-allowed` | Wrong method; the `Allow` header lists the right one |
 | 409 | `not-allowed` | The command doesn't fit the current print state, or the printer isn't online |
-| 502 | `camera-unavailable` | The camera can't be reached |
+| 502 | `camera-unavailable` | The camera can't be reached or doesn't answer within 10 seconds |
 | 503 | `not-connected` | The printer session closed before the command was answered |
 | 503 | `too-many-clients` | 32 event streams are already open |
 | 500 | `internal` | Anything else (details go to the service log) |

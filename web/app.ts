@@ -319,22 +319,26 @@ function showFrame(frame: Uint8Array): void {
 }
 
 /**
- * Reads /camera and shows each frame. Resolves when the stream ends or
- * stalls, and rejects when it can't be opened; either way the camera is
- * unavailable until a retry.
+ * Reads /camera and shows each frame. Resolves when the stream ends, and
+ * rejects when it can't be opened or sends no frame for CAMERA_STALL_MS
+ * (counted from the request, so a camera that never answers fails too);
+ * either way the camera is unavailable until a retry.
  */
 async function readCamera(signal: AbortSignal): Promise<void> {
-  const response = await apiFetch("/camera", { signal, cache: "no-store" });
-  if (!response.ok || response.body === null) throw new Error(`camera answered HTTP ${response.status}`);
-  const parser = new MjpegParser(delimiterOf(response.headers.get("content-type")));
-  const reader = response.body.getReader();
+  const stalled = new AbortController();
+  const stop = () => stalled.abort();
+  signal.addEventListener("abort", stop, { once: true });
   let stall: ReturnType<typeof setTimeout> | undefined;
   const armStall = () => {
     clearTimeout(stall);
-    stall = setTimeout(() => void reader.cancel(), CAMERA_STALL_MS);
+    stall = setTimeout(stop, CAMERA_STALL_MS);
   };
   armStall();
   try {
+    const response = await apiFetch("/camera", { signal: stalled.signal, cache: "no-store" });
+    if (!response.ok || response.body === null) throw new Error(`camera answered HTTP ${response.status}`);
+    const parser = new MjpegParser(delimiterOf(response.headers.get("content-type")));
+    const reader = response.body.getReader();
     for (;;) {
       const { value, done } = await reader.read();
       if (done) return;
@@ -347,6 +351,7 @@ async function readCamera(signal: AbortSignal): Promise<void> {
     }
   } finally {
     clearTimeout(stall);
+    signal.removeEventListener("abort", stop);
   }
 }
 
