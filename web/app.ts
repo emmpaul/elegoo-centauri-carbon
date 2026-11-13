@@ -452,6 +452,16 @@ async function connect(): Promise<void> {
   });
 }
 
+/**
+ * Registers the service worker that makes the page installable. Browsers
+ * allow it only in a secure context (HTTPS, or localhost); elsewhere the
+ * page works the same without it.
+ */
+function registerServiceWorker(): void {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("/sw.js").catch((error: unknown) => console.warn("service worker not registered:", error));
+}
+
 function start(): void {
   adoptTokenFromUrl();
   view("token").addEventListener("submit", (event) => {
@@ -464,6 +474,7 @@ function start(): void {
   });
   setUpControls();
   setUpCamera();
+  registerServiceWorker();
   // Keeps the "… ago" texts current between updates.
   setInterval(render, 1000);
   void connect();

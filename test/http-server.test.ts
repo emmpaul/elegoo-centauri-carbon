@@ -471,6 +471,23 @@ describe("HTTP API dashboard files", () => {
       assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b/, `${path}: types are stripped`);
     }
 
+    const worker = await fetch(`${base}/sw.js`);
+    assert.equal(worker.status, 200);
+    assert.match(worker.headers.get("content-type") ?? "", /^text\/javascript/);
+    assert.doesNotMatch(await worker.text(), /^\s*(import|export)\b/m, "the service worker is a classic script");
+
+    const manifest = await fetch(`${base}/manifest.webmanifest`);
+    assert.equal(manifest.status, 200);
+    assert.match(manifest.headers.get("content-type") ?? "", /^application\/manifest\+json/);
+    const { icons, start_url, display } = (await manifest.json()) as { icons: { src: string; type: string }[]; start_url: string; display: string };
+    assert.equal(start_url, "/");
+    assert.equal(display, "standalone");
+    for (const icon of icons) {
+      const response = await fetch(`${base}${icon.src}`);
+      assert.equal(response.status, 200, icon.src);
+      assert.equal(response.headers.get("content-type"), icon.type, icon.src);
+    }
+
     const styles = await fetch(`${base}/style.css`);
     assert.equal(styles.status, 200);
     assert.match(styles.headers.get("content-type") ?? "", /^text\/css/);

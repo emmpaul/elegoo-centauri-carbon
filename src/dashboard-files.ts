@@ -22,6 +22,13 @@ const FILES: Record<string, PublicFile> = {
   "/app.js": { source: "app.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/mjpeg.js": { source: "mjpeg.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/style.css": { source: "style.css", type: "text/css; charset=utf-8" },
+  "/sw.js": { source: "sw.ts", type: "text/javascript; charset=utf-8", typescript: true },
+  "/manifest.webmanifest": { source: "manifest.webmanifest", type: "application/manifest+json; charset=utf-8" },
+  "/icons/icon.svg": { source: "icons/icon.svg", type: "image/svg+xml" },
+  "/icons/icon-192.png": { source: "icons/icon-192.png", type: "image/png" },
+  "/icons/icon-512.png": { source: "icons/icon-512.png", type: "image/png" },
+  "/icons/icon-maskable-512.png": { source: "icons/icon-maskable-512.png", type: "image/png" },
+  "/icons/apple-touch-icon.png": { source: "icons/apple-touch-icon.png", type: "image/png" },
   // The control rules the command layer enforces, so the page enables the same buttons.
   "/src/control-rules.ts": { source: "../src/control-rules.ts", type: "text/javascript; charset=utf-8", typescript: true },
 };

@@ -215,10 +215,20 @@ rules `POST /api/command` applies (`src/control-rules.ts`); stop asks for
 confirmation first, and a failed or timed-out command is shown under the
 buttons.
 
-Its files are `/`, `/app.js`, `/mjpeg.js`, `/src/control-rules.ts`, and
-`/style.css`. The scripts are the TypeScript sources in `web/` (and
+Its files are `/`, `/app.js`, `/mjpeg.js`, `/src/control-rules.ts`,
+`/style.css`, `/sw.js` (the service worker), `/manifest.webmanifest`, and the
+icons under `/icons/`. The scripts are the TypeScript sources in `web/` (and
 `src/control-rules.ts`) with their types stripped when served. They are
 served without the token.
+
+The page works at phone width (360 px) and can be installed as a web app.
+Browsers install a web app, and run its service worker, only from a secure
+origin: HTTPS, or `localhost`/`127.0.0.1` on the same machine. Opened as
+`http://<LAN address>:8080` on a phone, the page works but Chrome on Android
+won't offer to install it; Safari on iOS can still add it with Share → Add to
+Home Screen. To get the install prompt on Android, serve the dashboard over
+HTTPS, for example through `tailscale serve` or a reverse proxy with a
+certificate.
 
 When the service has a token, open the dashboard once as
 `http://<host>:8080/?token=<token>`, or enter the token in the form the page

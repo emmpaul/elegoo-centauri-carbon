@@ -14,5 +14,6 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true
   },
-  "include": ["*.ts"]
+  "include": ["*.ts"],
+  "exclude": ["sw.ts"]
 }
