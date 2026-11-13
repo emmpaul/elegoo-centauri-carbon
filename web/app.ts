@@ -164,8 +164,8 @@ function render(): void {
   setText("nozzleTarget", target(nozzle));
   setText("bed", degrees(bed.current));
   setText("bedTarget", target(bed));
-  // The printer reports no chamber target, so only the current value is shown.
   setText("chamber", degrees(chamber.current));
+  setText("chamberTarget", target(chamber));
 
   renderControls(snapshot);
 
