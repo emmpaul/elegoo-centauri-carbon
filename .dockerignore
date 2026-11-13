@@ -1,0 +1,8 @@
+# Allow-list: everything stays out of the build context unless listed here,
+# so config.json, captures, .git, test/, and node_modules/ never reach the image.
+*
+!package.json
+!pnpm-lock.yaml
+!src/
+!web/
+!scripts/healthcheck.ts
