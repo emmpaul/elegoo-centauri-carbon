@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
-import { EVENT_TYPES, defaultConfig, loadConfig } from "../src/config.ts";
+import { EVENT_TYPES, defaultConfig, listenAuthError, loadConfig } from "../src/config.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "ecc-config-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -101,4 +101,32 @@ describe("loadConfig", () => {
     assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { LISTEN_PORT: "abc" } }), /LISTEN_PORT/);
     assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { NOTIFY_EVENTS: "finished,bogus" } }), /unknown event/);
   });
+});
+
+describe("listenAuthError", () => {
+  const exposed = ["0.0.0.0", "::", "192.0.2.10", "printer.example"];
+  const loopback = ["127.0.0.1", "127.1.2.3", "localhost", "::1"];
+
+  for (const host of exposed) {
+    it(`refuses ${host} without a token`, () => {
+      const message = listenAuthError({ host }, null);
+      assert.ok(message !== null);
+      assert.ok(message.includes(host));
+      for (const name of ["token", "ACCESS_TOKEN", "listen.host", "LISTEN_HOST"]) assert.ok(message.includes(name), name);
+    });
+
+    it(`allows ${host} with a token`, () => {
+      assert.equal(listenAuthError({ host }, "secret"), null);
+    });
+  }
+
+  for (const host of loopback) {
+    it(`allows ${host} without a token`, () => {
+      assert.equal(listenAuthError({ host }, null), null);
+    });
+
+    it(`allows ${host} with a token`, () => {
+      assert.equal(listenAuthError({ host }, "secret"), null);
+    });
+  }
 });

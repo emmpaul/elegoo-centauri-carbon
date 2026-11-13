@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { isIPv4 } from "node:net";
 
 export const EVENT_TYPES = [
   "started",
@@ -52,6 +53,25 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
   if (file !== undefined) applyFile(config, file, path);
   applyEnv(config, env);
   return config;
+}
+
+/**
+ * The start-up rule for exposure (design D1): a listen host other than
+ * loopback (`localhost`, `::1`, or an IPv4 address in 127.0.0.0/8) needs an
+ * access token. Returns the refusal message, or null when the service may start.
+ */
+export function listenAuthError(listen: { host: string }, token: string | null): string | null {
+  if (token !== null || isLoopbackHost(listen.host)) return null;
+  return (
+    `refusing to listen on ${listen.host} without an access token: ` +
+    `set token in the config file or ACCESS_TOKEN, ` +
+    `or listen on loopback only with listen.host or LISTEN_HOST set to 127.0.0.1`
+  );
+}
+
+function isLoopbackHost(host: string): boolean {
+  if (host === "localhost" || host === "::1") return true;
+  return isIPv4(host) && host.split(".")[0] === "127";
 }
 
 function readJsonFile(path: string): unknown {
