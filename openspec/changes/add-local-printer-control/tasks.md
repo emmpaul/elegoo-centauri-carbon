@@ -31,7 +31,7 @@
 
 - [x] 5.1 Implement the `node:http` server: `GET /api/status` (snapshot), `GET /api/events` (SSE), `POST /api/command`, plus optional bearer/query token checks on every route; verify integration tests cover SSE updates within 1 s, command round-trips, and 401 without the token
 - [x] 5.2 Implement the `/camera` MJPEG proxy with one shared upstream connection; verify a test with a fake MJPEG source shows two clients share one upstream, and the upstream closes when the last client leaves
-- [ ] 5.3 Document the API in `docs/api.md`; verify each documented curl example works against the running service with the fake printer
+- [x] 5.3 Document the API in `docs/api.md`; verify each documented curl example works against the running service with the fake printer
 
 ## 6. Dashboard
 

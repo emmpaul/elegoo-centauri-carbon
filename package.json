@@ -10,6 +10,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "start": "node src/main.ts",
+    "start:fake": "node scripts/run-fake-service.ts",
     "test": "node --test",
     "typecheck": "tsc --noEmit"
   },
