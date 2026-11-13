@@ -17,6 +17,12 @@ export interface CameraProxyOptions {
   beforeConnect?: () => Promise<unknown>;
   /** A viewer whose unsent backlog grows past this many bytes is dropped. 4 MiB by default. */
   maxBacklogBytes?: number;
+  /**
+   * The camera counts as unavailable when it has not answered (connected and
+   * sent its response headers) within this many milliseconds. 10 s by default,
+   * the dashboard's own stall limit.
+   */
+  responseTimeoutMs?: number;
 }
 
 interface Viewer {
@@ -30,6 +36,7 @@ export class CameraProxy {
   private readonly options: CameraProxyOptions;
   private readonly logger: Logger;
   private readonly maxBacklogBytes: number;
+  private readonly responseTimeoutMs: number;
   private readonly viewers = new Set<Viewer>();
   /** Bumped on every connect and close; callbacks of an older connection do nothing. */
   private generation = 0;
@@ -41,11 +48,14 @@ export class CameraProxy {
   /** Last bytes of the previous chunk, for a delimiter split across chunks. */
   private tail: Buffer = Buffer.alloc(0);
   private connections = 0;
+  /** Fails the connection when the camera has not answered in time. */
+  private responseTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: CameraProxyOptions) {
     this.options = options;
     this.logger = options.logger ?? console;
     this.maxBacklogBytes = options.maxBacklogBytes ?? 4 * 1024 * 1024;
+    this.responseTimeoutMs = options.responseTimeoutMs ?? 10_000;
   }
 
   /** Number of viewers currently attached. */
@@ -94,6 +104,7 @@ export class CameraProxy {
     this.connections++;
     const current = () => generation === this.generation;
     const request = get(this.options.url, (upstream) => {
+      clearTimeout(this.responseTimer);
       if (!current()) {
         upstream.destroy();
         return;
@@ -116,6 +127,9 @@ export class CameraProxy {
       });
     });
     this.request = request;
+    this.responseTimer = setTimeout(() => {
+      if (current()) this.fail(`camera did not answer within ${this.responseTimeoutMs} ms`);
+    }, this.responseTimeoutMs);
     request.on("error", (error) => {
       if (current()) this.fail(`camera unreachable: ${error.message}`);
     });
@@ -182,6 +196,7 @@ export class CameraProxy {
   }
 
   private closeUpstream(): void {
+    clearTimeout(this.responseTimer);
     this.generation++;
     this.connecting = false;
     this.upstream?.destroy();

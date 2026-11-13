@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { once } from "node:events";
 import { type ClientRequest, get, type IncomingMessage, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { type AddressInfo, createServer as createTcpServer, type Socket } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { CameraProxy, delimiterOf } from "../src/camera-proxy.ts";
 import { createApiServer } from "../src/http-server.ts";
@@ -62,13 +62,14 @@ describe("CameraProxy with a fake MJPEG source", () => {
   let prepared: number;
 
   async function start(
-    options: { token?: string | null; url?: string; beforeConnect?: () => Promise<unknown>; maxBacklogBytes?: number; logger?: Logger } = {},
+    options: { token?: string | null; url?: string; beforeConnect?: () => Promise<unknown>; maxBacklogBytes?: number; responseTimeoutMs?: number; logger?: Logger } = {},
   ): Promise<void> {
     prepared = 0;
     proxy = new CameraProxy({
       url: options.url ?? source.url,
       logger: options.logger ?? quiet,
       maxBacklogBytes: options.maxBacklogBytes,
+      responseTimeoutMs: options.responseTimeoutMs,
       beforeConnect:
         options.beforeConnect ??
         (async () => {
@@ -172,6 +173,50 @@ describe("CameraProxy with a fake MJPEG source", () => {
     await once(viewer.response, "end");
     assert.equal(JSON.parse(viewer.text).error.code, "camera-unavailable");
     source = await FakeMjpegSource.start(); // for afterEach
+  });
+
+  it("answers 502 when the camera accepts the connection but never answers", async () => {
+    // A camera that takes the TCP connection and sends nothing back.
+    const sockets = new Set<Socket>();
+    const silent = createTcpServer((socket) => {
+      sockets.add(socket);
+      socket.on("error", () => {});
+      socket.on("close", () => sockets.delete(socket));
+      socket.resume(); // reads (and drops) the request, so the proxy's hang-up is seen
+    });
+    silent.listen(0, "127.0.0.1");
+    await once(silent, "listening");
+    try {
+      const warnings: string[] = [];
+      await start({
+        url: `http://127.0.0.1:${(silent.address() as AddressInfo).port}/video`,
+        responseTimeoutMs: 200,
+        logger: { ...quiet, warn: (message: string) => warnings.push(message) },
+      });
+      const started = Date.now();
+      const viewer = await Viewer.open(`${base}/camera`);
+      assert.equal(viewer.response.statusCode, 502);
+      await once(viewer.response, "end");
+      assert.ok(Date.now() - started < 2000, "fails at the timeout, not later");
+      assert.equal(JSON.parse(viewer.text).error.code, "camera-unavailable");
+      assert.ok(warnings.some((w) => /did not answer within 200 ms/.test(w)), "the timeout is logged");
+      assert.equal(proxy.upstreamOpen, false);
+      await until(() => sockets.size === 0, "the upstream socket closed");
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => silent.close(() => resolve()));
+    }
+  });
+
+  it("does not time out a camera that answered in time", async () => {
+    await start({ responseTimeoutMs: 200 });
+    const viewer = await Viewer.open(`${base}/camera`);
+    await viewer.waitForParts(1);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const before = viewer.data.length;
+    await until(() => viewer.data.length > before, "frames after the timeout would have fired");
+    assert.equal(viewer.response.statusCode, 200);
+    viewer.close();
   });
 
   it("ends viewers when the upstream stream ends", async () => {
