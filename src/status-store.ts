@@ -189,6 +189,15 @@ export class StatusStore extends EventEmitter<StoreEvents> {
     return structuredClone(this.current);
   }
 
+  /**
+   * The last raw `Status.LightStatus` object (`{SecondLight, RgbLight}`), or
+   * null before one arrives. The light command sends this whole object back
+   * with `SecondLight` changed (docs/sdcp-protocol.md, "Cmd 403 payloads").
+   */
+  get lightStatus(): Record<string, unknown> | null {
+    return isObject(this.raw.LightStatus) ? structuredClone(this.raw.LightStatus) : null;
+  }
+
   /** Follows a session's state changes and status pushes. */
   attach(source: StatusSource): void {
     source.on("state", (state) => this.setConnection(state));
