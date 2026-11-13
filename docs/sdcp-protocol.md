@@ -106,7 +106,9 @@ each frame.
 
 Each fixture is `{source, frames: [{seq, direction, payload}]}`, with frames
 in receipt order and payloads parsed from JSON (the heartbeat stays the string
-`"ping"`). The fixtures keep the printer's real task ids and mainboard id,
+`"ping"`). `direction` is exactly one of two strings, the same in every
+fixture: `"sent"` for a frame from a client to the printer, and
+`"received"` for a frame from the printer to the recording client. The fixtures keep the printer's real task ids and mainboard id,
 but device and owner details are redacted, here and in this document: the
 printer's LAN IP is replaced by the documentation address `192.0.2.10`, its
 MAC by `00:00:00:00:00:00`, and every print file name (in `Filename`,
