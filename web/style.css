@@ -1,0 +1,225 @@
+/* Dashboard styles. Colors, spacing, and type live in custom properties so a
+   later redesign can restyle the page without touching the markup. */
+:root {
+  color-scheme: light dark;
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-text: #1b1d21;
+  --color-muted: #5f6672;
+  --color-border: #d9dce1;
+  --color-accent: #2563eb;
+  --color-accent-text: #ffffff;
+  --color-online: #15803d;
+  --color-offline: #b91c1c;
+  --color-pending: #a16207;
+  --color-notice-bg: #fef2f2;
+  --color-notice-text: #7f1d1d;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-size: 1rem;
+  --font-size-small: 0.875rem;
+  --font-size-large: 1.25rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --radius: 0.5rem;
+  --content-width: 60rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #121417;
+    --color-surface: #1c1f24;
+    --color-text: #e8eaed;
+    --color-muted: #a0a7b2;
+    --color-border: #2f343b;
+    --color-accent: #60a5fa;
+    --color-accent-text: #0b1220;
+    --color-online: #4ade80;
+    --color-offline: #f87171;
+    --color-pending: #facc15;
+    --color-notice-bg: #3b1417;
+    --color-notice-text: #fecaca;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--font-size);
+  line-height: 1.4;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--font-size-large);
+}
+
+h2 {
+  font-size: var(--font-size);
+  margin-bottom: var(--space-3);
+}
+
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding: var(--space-4);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.topbar__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  flex: none;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--badge-color, var(--color-pending));
+  border: 1px solid currentColor;
+}
+
+.badge[data-state="online"] {
+  --badge-color: var(--color-online);
+}
+
+.badge[data-state="offline"],
+.badge[data-state="unreachable"] {
+  --badge-color: var(--color-offline);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--color-notice-bg);
+  color: var(--color-notice-text);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-4);
+}
+
+.card {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+.field dt {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+
+.field dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-weight: 400;
+  font-size: var(--font-size-small);
+}
+
+.wrap {
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  display: block;
+  width: 100%;
+  height: var(--space-3);
+  margin-top: var(--space-1);
+  accent-color: var(--color-accent);
+}
+
+.token {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.token p {
+  margin: 0;
+}
+
+.token__label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+input {
+  font: inherit;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.footer {
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}

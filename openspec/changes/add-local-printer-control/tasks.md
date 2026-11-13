@@ -35,7 +35,7 @@
 
 ## 6. Dashboard
 
-- [ ] 6.1 Build the static dashboard (vanilla TS/HTML/CSS): status panel, progress, temperatures, offline indicator with last-update time; verify by loading it against the fake printer and watching values update without a reload
+- [x] 6.1 Build the static dashboard (vanilla TS/HTML/CSS): status panel, progress, temperatures, offline indicator with last-update time; verify by loading it against the fake printer and watching values update without a reload
 - [ ] 6.2 Add the camera view with an "unavailable" placeholder, and control buttons enabled by state, with stop confirmation and failure messages; verify manually against the fake printer, including a forced camera failure and a timeout
 - [ ] 6.3 Add the PWA manifest, icons, and service worker, and make the layout work at 360 px; verify a 360 px screenshot shows no horizontal scroll and that the browser offers install
 

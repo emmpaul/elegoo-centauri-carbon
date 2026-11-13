@@ -1,10 +1,13 @@
 // HTTP API for the dashboard (design D3, D4, D5): the status snapshot, a
 // Server-Sent Events stream of snapshot changes, the control command
-// endpoint, and the camera proxy. When an access token is configured, every route requires it,
-// as a bearer header or, for clients that cannot set headers (EventSource,
-// <img>), as a `token` query parameter.
+// endpoint, the camera proxy, and the dashboard's static files. When an access
+// token is configured, every API and camera route requires it, as a bearer
+// header or, for clients that cannot set headers (EventSource, <img>), as a
+// `token` query parameter. The dashboard's files hold no printer data and are
+// served without it.
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { StaticFiles } from "./dashboard-files.ts";
 import { type CommandResult, ControlRejectedError } from "./print-control.ts";
 import { type Logger, NotConnectedError } from "./sdcp-client.ts";
 import type { StatusSnapshot } from "./status-store.ts";
@@ -31,6 +34,8 @@ export interface ApiServerOptions {
   token: string | null;
   /** Serves `GET /camera` (a CameraProxy); without it the route does not exist. */
   camera?: { handle(req: IncomingMessage, res: ServerResponse): void };
+  /** The dashboard's files, served on GET without the token; without it there is no dashboard. */
+  dashboard?: StaticFiles;
   logger?: Logger;
   /** Interval of SSE keep-alive comments. 15 s by default. */
   keepAliveMs?: number;
@@ -92,6 +97,10 @@ export function createApiServer(options: ApiServerOptions): Server {
     void (async () => {
       const url = parseTarget(req.url);
       path = url.pathname;
+      if (options.dashboard?.has(url.pathname) && req.method === "GET") {
+        await options.dashboard.serve(url.pathname, res);
+        return;
+      }
       if (!authorized(req, url, options.token)) {
         res.setHeader("WWW-Authenticate", 'Bearer realm="printer"');
         throw new ApiError(401, "unauthorized", "missing or wrong access token");

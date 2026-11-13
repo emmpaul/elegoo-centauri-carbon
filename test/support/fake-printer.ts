@@ -132,6 +132,12 @@ export class FakePrinter {
     });
   }
 
+  /** Calls `listener` with every frame received from now on; returns a function that stops it. */
+  onFrame(listener: (frame: ReceivedFrame) => void): () => void {
+    this.frameListeners.add(listener);
+    return () => this.frameListeners.delete(listener);
+  }
+
   /** Resolves once a client is connected. */
   async waitForClient(): Promise<void> {
     if (this.clientCount > 0) return;
@@ -141,10 +147,10 @@ export class FakePrinter {
   /**
    * Stops answering requests and pushing frames while keeping every connection
    * open, as a printer that lost power or Wi-Fi without closing would. Frames
-   * are still recorded.
+   * are still recorded. `goSilent(false)` answers and pushes again.
    */
-  goSilent(): void {
-    this.silent = true;
+  goSilent(silent = true): void {
+    this.silent = silent;
   }
 
   /** Drops every client connection abruptly, as a printer reboot would. */

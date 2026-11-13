@@ -3,7 +3,7 @@
 // "Status message").
 import { EventEmitter } from "node:events";
 import type { ConnectionState } from "./printer-session.ts";
-import type { SdcpResponse, StatusMessage } from "./sdcp-client.ts";
+import type { AttributesMessage, SdcpResponse, StatusMessage } from "./sdcp-client.ts";
 
 /** A protocol code with its name; `name` is "unknown" for codes the reference does not list. */
 export interface NamedCode<Name extends string> {
@@ -88,6 +88,8 @@ export interface Temperature {
 
 export interface StatusSnapshot {
   connection: ConnectionState;
+  /** Printer name from the attributes push (`Name`, else `MachineName`); null before one arrives. */
+  printerName: string | null;
   machineState: NamedCode<MachineStateName>;
   printState: NamedCode<PrintStateName>;
   /** Current job id; null when the printer reports none. */
@@ -115,6 +117,7 @@ export function emptySnapshot(connection: ConnectionState = "connecting"): Statu
   const none: Temperature = { current: null, target: null };
   return {
     connection,
+    printerName: null,
     machineState: { name: "unknown", code: null },
     printState: { name: "unknown", code: null },
     taskId: null,
@@ -136,6 +139,7 @@ export function normalizeStatus(
   connection: ConnectionState,
   updatedAt: number,
   errorCode: number | null = null,
+  printerName: string | null = null,
 ): StatusSnapshot {
   const codes = Array.isArray(status.CurrentStatus) ? status.CurrentStatus.filter(isNumber) : [];
   const machineCode = codes[0] ?? null;
@@ -150,6 +154,7 @@ export function normalizeStatus(
 
   return {
     connection,
+    printerName,
     machineState: { name: (machineCode !== null && MACHINE_STATES[machineCode]) || "unknown", code: machineCode },
     printState: { name: printName ?? "unknown", code: printCode },
     taskId: nonEmpty(info.TaskId),
@@ -170,10 +175,11 @@ export function normalizeStatus(
   };
 }
 
-/** Anything that reports connection state changes and status pushes (a PrinterSession). */
+/** Anything that reports connection state changes, status pushes, and attributes pushes (a PrinterSession). */
 export interface StatusSource {
   on(event: "state", listener: (state: ConnectionState) => void): unknown;
   on(event: "status", listener: (message: StatusMessage) => void): unknown;
+  on(event: "attributes", listener: (message: AttributesMessage) => void): unknown;
 }
 
 type StoreEvents = { change: [StatusSnapshot] };
@@ -198,10 +204,11 @@ export class StatusStore extends EventEmitter<StoreEvents> {
     return isObject(this.raw.LightStatus) ? structuredClone(this.raw.LightStatus) : null;
   }
 
-  /** Follows a session's state changes and status pushes. */
+  /** Follows a session's state changes, status pushes, and attributes pushes. */
   attach(source: StatusSource): void {
     source.on("state", (state) => this.setConnection(state));
     source.on("status", (message) => this.applyStatus(message));
+    source.on("attributes", (message) => this.applyAttributes(message));
   }
 
   /**
@@ -218,7 +225,15 @@ export class StatusStore extends EventEmitter<StoreEvents> {
       this.jobId = taskId;
       errorCode = null;
     }
-    this.current = normalizeStatus(this.raw, this.current.connection, now, errorCode);
+    this.current = normalizeStatus(this.raw, this.current.connection, now, errorCode, this.current.printerName);
+    this.emit("change", this.snapshot);
+  }
+
+  /** Applies one attributes push: takes the printer name (`Name`, else `MachineName`). */
+  applyAttributes(message: AttributesMessage): void {
+    const printerName = nonEmpty(message.Attributes.Name) ?? nonEmpty(message.Attributes.MachineName);
+    if (printerName === null || printerName === this.current.printerName) return;
+    this.current = { ...this.current, printerName };
     this.emit("change", this.snapshot);
   }
 

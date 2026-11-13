@@ -24,6 +24,7 @@ describe("StatusStore with recorded status pushes", () => {
   it("idle (connect-idle.json#27)", () => {
     assert.deepEqual(snapshotOf(statusFrame("connect-idle.json", 27)), {
       connection: "online",
+      printerName: null,
       machineState: { name: "idle", code: 0 },
       printState: { name: "idle", code: 0 },
       taskId: null,
@@ -46,6 +47,7 @@ describe("StatusStore with recorded status pushes", () => {
   it("printing (connect-printing.json#9)", () => {
     assert.deepEqual(snapshotOf(statusFrame("connect-printing.json", 9)), {
       connection: "online",
+      printerName: null,
       machineState: { name: "printing", code: 1 },
       printState: { name: "printing", code: 13 },
       taskId: "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
@@ -68,6 +70,7 @@ describe("StatusStore with recorded status pushes", () => {
   it("paused (control-pause-resume-light.json#16)", () => {
     assert.deepEqual(snapshotOf(statusFrame("control-pause-resume-light.json", 16)), {
       connection: "online",
+      printerName: null,
       machineState: { name: "printing", code: 1 },
       printState: { name: "paused", code: 6 },
       taskId: "9f0f4d7e-826e-45df-998e-ea24f6815410",
@@ -90,6 +93,7 @@ describe("StatusStore with recorded status pushes", () => {
   it("completed (print-complete.json#24) shows 100 % although the printer resets Progress to 0", () => {
     assert.deepEqual(snapshotOf(statusFrame("print-complete.json", 24)), {
       connection: "online",
+      printerName: null,
       machineState: { name: "idle", code: 0 },
       printState: { name: "completed", code: 9 },
       taskId: null,
@@ -186,6 +190,7 @@ describe("StatusStore error code from Cmd 321 task detail", () => {
     assert.equal(changes.length, 1);
     assert.deepEqual(store.snapshot, {
       connection: "online",
+      printerName: null,
       machineState: { name: "printing", code: 1 },
       printState: { name: "printing", code: 13 },
       taskId: printingTaskId,
@@ -297,5 +302,20 @@ describe("StatusStore updates", () => {
     session.emit("state", "offline");
     assert.equal(store.snapshot.connection, "offline");
     assert.equal(store.snapshot.printState.name, "printing", "last known state is kept while offline");
+  });
+  it("takes the printer name from the attributes push (connect-loading.json#17) and keeps it across status pushes", () => {
+    const frame = loadFixture("connect-loading.json").frames.find((f) => f.seq === 17);
+    assert.ok(frame && typeof frame.payload === "object" && frame.payload !== null && "Attributes" in frame.payload);
+    const session = new EventEmitter();
+    const store = new StatusStore();
+    store.attach(session as never);
+    const changes: StatusSnapshot[] = [];
+    store.on("change", (snapshot) => changes.push(snapshot));
+    session.emit("attributes", structuredClone(frame.payload));
+    assert.equal(store.snapshot.printerName, "Centauri Carbon");
+    session.emit("attributes", structuredClone(frame.payload));
+    assert.equal(changes.length, 1, "an unchanged name emits no change");
+    session.emit("status", statusFrame("connect-printing.json", 9));
+    assert.equal(store.snapshot.printerName, "Centauri Carbon");
   });
 });

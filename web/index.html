@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Printer</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <h1 class="topbar__name" data-field="printerName">Printer</h1>
+        <span class="badge" data-field="connection" data-state="connecting" role="status">Connecting</span>
+      </header>
+
+      <p class="notice" data-field="offlineNotice" role="alert" hidden></p>
+
+      <form class="card token" data-view="token" hidden>
+        <h2>Access token</h2>
+        <p data-field="tokenMessage">This service needs its access token.</p>
+        <label class="token__label">
+          Token
+          <input type="password" name="token" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="button">Connect</button>
+      </form>
+
+      <main class="layout" data-view="dashboard">
+        <section class="card" aria-labelledby="print-heading">
+          <h2 id="print-heading">Print</h2>
+          <dl class="fields">
+            <div class="field"><dt>State</dt><dd data-field="printState">—</dd></div>
+            <div class="field"><dt>Machine</dt><dd data-field="machineState">—</dd></div>
+            <div class="field field--wide"><dt>File</dt><dd class="wrap" data-field="fileName">—</dd></div>
+            <div class="field field--wide">
+              <dt>Progress</dt>
+              <dd>
+                <span data-field="progress">—</span>
+                <progress class="progress" max="100" value="0" data-field="progressBar" aria-label="Print progress"></progress>
+              </dd>
+            </div>
+            <div class="field"><dt>Layer</dt><dd data-field="layer">—</dd></div>
+            <div class="field"><dt>Elapsed</dt><dd data-field="elapsed">—</dd></div>
+            <div class="field"><dt>Remaining</dt><dd data-field="remaining">—</dd></div>
+            <div class="field" data-field="errorRow" hidden><dt>Error code</dt><dd data-field="errorCode">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="card" aria-labelledby="temps-heading">
+          <h2 id="temps-heading">Temperatures</h2>
+          <dl class="fields">
+            <div class="field"><dt>Nozzle</dt><dd><span data-field="nozzle">—</span> <span class="muted" data-field="nozzleTarget"></span></dd></div>
+            <div class="field"><dt>Bed</dt><dd><span data-field="bed">—</span> <span class="muted" data-field="bedTarget"></span></dd></div>
+            <div class="field"><dt>Chamber</dt><dd data-field="chamber">—</dd></div>
+          </dl>
+        </section>
+      </main>
+
+      <footer class="footer">
+        Last update: <time data-field="updatedAt">never</time>
+      </footer>
+    </div>
+  </body>
+</html>

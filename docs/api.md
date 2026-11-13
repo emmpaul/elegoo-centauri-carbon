@@ -1,7 +1,7 @@
 # HTTP API
 
-The service serves a small HTTP API for the dashboard and for scripts. It
-listens on `listen.host`:`listen.port` from the config (`0.0.0.0:8080` by
+The service serves a small HTTP API for the dashboard and for scripts, and
+the dashboard itself at `/`. It listens on `listen.host`:`listen.port` from the config (`0.0.0.0:8080` by
 default). Don't expose it to the internet: anyone who can reach it can pause or
 stop prints.
 
@@ -23,7 +23,7 @@ TOKEN=change-me
 ## Access token
 
 When `token` is set in the config (or `ACCESS_TOKEN` in the environment),
-every route needs it, in one of two forms:
+every API and camera route needs it, in one of two forms:
 
 - the header `Authorization: Bearer <token>`, or
 - the query parameter `?token=<token>`, for clients that can't set headers,
@@ -31,7 +31,8 @@ every route needs it, in one of two forms:
 
 A request without the right token gets `401` with
 `{"error":{"code":"unauthorized",...}}` and reaches nothing, the printer
-included.
+included. The dashboard's own files (see [Dashboard](#dashboard)) hold no
+printer data and are served without the token.
 
 ```sh
 curl -s -i "$BASE/api/status" | head -n 1
@@ -49,6 +50,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/status"
 ```json
 {
   "connection": "online",
+  "printerName": "Centauri Carbon",
   "machineState": { "name": "printing", "code": 1 },
   "printState": { "name": "printing", "code": 13 },
   "taskId": "9f0f4d7e-826e-45df-998e-ea24f6815410",
@@ -71,6 +73,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/status"
 | Field | Meaning |
 | --- | --- |
 | `connection` | `connecting`, `online`, or `offline`. When it isn't `online`, the other values are the last ones received |
+| `printerName` | The printer's name from its attributes; `null` until they arrive |
 | `machineState`, `printState` | A named state plus the raw protocol code. A code the protocol reference doesn't list has the name `unknown` (see `docs/sdcp-protocol.md`) |
 | `taskId`, `fileName` | Current or last job; `null` when the printer reports none |
 | `progress` | Percent, 0 to 100 |
@@ -201,6 +204,18 @@ Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 | 503 | `too-many-clients` | 32 event streams are already open |
 | 500 | `internal` | Anything else (details go to the service log) |
 
+## Dashboard
+
+`GET /` serves the dashboard, a page that reads `/api/status`, then follows
+`/api/events` and updates without a reload. Its files are `/`, `/app.js`, and
+`/style.css`; `app.js` is `web/app.ts` with its types stripped when served.
+They are served without the token.
+
+When the service has a token, open the dashboard once as
+`http://<host>:8080/?token=<token>`, or enter the token in the form the page
+shows. The page keeps the token in the browser's local storage and sends it
+with every API request.
+
 ## Trying it without the printer
 
 `pnpm start:fake` runs the service on `127.0.0.1:8080` against a fake printer
@@ -211,5 +226,12 @@ the port and the token:
 ACCESS_TOKEN=change-me pnpm start:fake
 ```
 
-The fake printer accepts every command but doesn't change its state, so the
-snapshot keeps showing the running print.
+The fake printer simulates the print: progress, layers, and times advance
+(`FAKE_SPEED` print seconds per second, 10 by default) until the job
+completes. Pause, resume, stop, and the light change its state as the printer
+would. Sending `SIGUSR2` to the process takes the fake printer offline, and
+sending it again brings it back:
+
+```sh
+pkill -USR2 -f run-fake-service
+```

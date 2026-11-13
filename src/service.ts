@@ -1,9 +1,10 @@
 // Wires the service together (design D4): one printer session, the status
-// store, print control, the camera proxy, and the HTTP API.
+// store, print control, the camera proxy, and the HTTP API with the dashboard.
 import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { CameraProxy } from "./camera-proxy.ts";
+import { dashboardFiles } from "./dashboard-files.ts";
 import { createApiServer } from "./http-server.ts";
 import { PrintControl } from "./print-control.ts";
 import { PrinterSession } from "./printer-session.ts";
@@ -47,7 +48,7 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     // The web UI enables streaming before it shows the camera.
     beforeConnect: () => session.send(Cmd.EDIT_PRINTER_VIDEO_STREAMING, { Enable: 1 }),
   });
-  const server = createApiServer({ store, control, token: options.token, camera, logger });
+  const server = createApiServer({ store, control, token: options.token, camera, dashboard: dashboardFiles(), logger });
   server.listen(options.listen.port, options.listen.host);
   await once(server, "listening");
   session.start();

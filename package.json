@@ -12,7 +12,7 @@
     "start": "node src/main.ts",
     "start:fake": "node scripts/run-fake-service.ts",
     "test": "node --test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

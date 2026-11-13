@@ -3,6 +3,7 @@ import { EventEmitter, once } from "node:events";
 import type { Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { dashboardFiles } from "../src/dashboard-files.ts";
 import { createApiServer } from "../src/http-server.ts";
 import { type CommandSender, PrintControl } from "../src/print-control.ts";
 import { PrinterSession } from "../src/printer-session.ts";
@@ -434,5 +435,45 @@ describe("HTTP API event stream limits", () => {
     await thirdEvents.next();
     await second.cancel();
     await thirdEvents.cancel();
+  });
+});
+
+describe("HTTP API dashboard files", () => {
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    const store = new StatusStore();
+    const control = new PrintControl({ send: () => Promise.reject(new NotConnectedError()) }, store);
+    server = createApiServer({ store, control, token: "secret", dashboard: dashboardFiles(), logger: quiet });
+    base = await listen(server);
+  });
+
+  afterEach(() => closeServer(server));
+
+  it("serves the page, its script with types stripped, and its styles without the token", async () => {
+    const page = await fetch(`${base}/`);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get("content-type") ?? "", /^text\/html/);
+    assert.match(await page.text(), /<script type="module" src="app\.js"><\/script>/);
+
+    const script = await fetch(`${base}/app.js`);
+    assert.equal(script.status, 200);
+    assert.match(script.headers.get("content-type") ?? "", /^text\/javascript/);
+    const source = await script.text();
+    assert.doesNotMatch(source, /import type|: StatusSnapshot\b/, "types are stripped");
+    assert.doesNotThrow(() => new Function(source.replace(/^import .*$/gm, "")), "the stripped script parses");
+
+    const styles = await fetch(`${base}/style.css`);
+    assert.equal(styles.status, 200);
+    assert.match(styles.headers.get("content-type") ?? "", /^text\/css/);
+  });
+
+  it("serves nothing else from the web directory, and the API still needs the token", async () => {
+    for (const path of ["/app.ts", "/index.html", "/tsconfig.json", "/../package.json"]) {
+      assert.equal((await fetch(`${base}${path}`)).status, 401, path);
+      assert.equal((await fetch(`${base}${path}`, { headers: { Authorization: "Bearer secret" } })).status, 404, path);
+    }
+    assert.equal((await fetch(`${base}/api/status`)).status, 401);
   });
 });
