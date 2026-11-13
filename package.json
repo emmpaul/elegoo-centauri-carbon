@@ -1,0 +1,20 @@
+{
+  "name": "elegoo-centauri-carbon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first control, dashboard, and notifications for the Elegoo Centauri Carbon over SDCP",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
