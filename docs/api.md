@@ -2,8 +2,9 @@
 
 The service serves a small HTTP API for the dashboard and for scripts, and
 the dashboard itself at `/`. It listens on `listen.host`:`listen.port` from the config (`0.0.0.0:8080` by
-default). Don't expose it to the internet: anyone who can reach it can pause or
-stop prints.
+default; `config.example.json` uses `127.0.0.1`). A non-loopback listen address
+requires a token: see [Access token](#access-token). Don't expose it to the
+internet: anyone who can reach it can pause or stop prints.
 
 | Method | Path | What it does |
 | --- | --- | --- |
@@ -21,6 +22,15 @@ TOKEN=change-me
 ```
 
 ## Access token
+
+A non-loopback listen address requires a token. When `listen.host` (or
+`LISTEN_HOST`) is anything but `localhost`, `::1`, or an address in
+`127.0.0.0/8` (so `0.0.0.0`, `::`, a LAN address, or a host name) and no
+token is set, the service refuses to start: it prints a message naming the
+address, `token` / `ACCESS_TOKEN`, and `listen.host` / `LISTEN_HOST`, and
+exits with status 1 before it contacts the printer or opens the port. An
+install that listened on `0.0.0.0` without a token must set a token, or
+listen on `127.0.0.1`, to start again.
 
 When `token` is set in the config (or `ACCESS_TOKEN` in the environment),
 every API and camera route needs it, in one of two forms:

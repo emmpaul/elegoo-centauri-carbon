@@ -1,7 +1,7 @@
 {
   "printerIp": "192.168.0.96",
   "listen": {
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",
     "port": 8080
   },
   "token": null,

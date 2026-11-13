@@ -45,7 +45,9 @@ describe("loadConfig", () => {
   it("loads config.example.json", () => {
     const config = loadConfig({ path: "config.example.json", env: {} });
     assert.equal(config.printerIp, "192.168.0.96");
-    assert.deepEqual(config.listen, { host: "0.0.0.0", port: 8080 });
+    assert.deepEqual(config.listen, { host: "127.0.0.1", port: 8080 });
+    assert.equal(config.token, null);
+    assert.equal(listenAuthError(config.listen, config.token), null);
   });
 
   it("lets env variables override file values", () => {

@@ -86,9 +86,9 @@ cp config.example.json config.json
 | Setting | Meaning | Environment override |
 | --- | --- | --- |
 | `printerIp` | Printer address. `null` finds the printer with UDP discovery. | `PRINTER_IP` |
-| `listen.host` | Address the API and dashboard listen on (`0.0.0.0` = every interface). | `LISTEN_HOST` |
+| `listen.host` | Address the API and dashboard listen on (default `0.0.0.0` = every interface; the example config uses `127.0.0.1`). A non-loopback address requires a token. | `LISTEN_HOST` |
 | `listen.port` | Port of the API and dashboard (default `8080`). | `LISTEN_PORT` |
-| `token` | Access token for the API and dashboard. `null` means no token check. | `ACCESS_TOKEN` |
+| `token` | Access token for the API and dashboard. `null` means no token check, allowed only on a loopback `listen.host`. | `ACCESS_TOKEN` |
 | `ntfy.url` | ntfy server (default `https://ntfy.sh`). | `NTFY_URL` |
 | `ntfy.topic` | ntfy topic. `null` turns notifications off. | `NTFY_TOPIC` |
 | `events` | Which events notify (`started`, `finished`, `failed`, `paused`, `stopped`, `offline`, `online`). | `NOTIFY_EVENTS` |
@@ -101,7 +101,15 @@ file than `./config.json`.
 
 ### Access token
 
-Set a token. Generate a random one with:
+A non-loopback listen address requires a token. The service refuses to start
+when `listen.host` is anything other than `127.0.0.1` (or another
+`127.x.x.x` address), `localhost`, or `::1` and no token is set, and prints
+which setting to change. The example config listens on `127.0.0.1`, so it
+starts as copied, but only this machine can open the dashboard. To reach it
+from your phone, set a token and `listen.host` (or `LISTEN_HOST`) to
+`0.0.0.0`.
+
+Generate a random token with:
 
 ```sh
 node -e "console.log(crypto.randomBytes(24).toString('hex'))"
@@ -110,6 +118,12 @@ node -e "console.log(crypto.randomBytes(24).toString('hex'))"
 and put it in `token` (or `ACCESS_TOKEN`). API clients send it as
 `Authorization: Bearer <token>` or `?token=<token>`; the dashboard asks for it
 once and remembers it. See [docs/api.md](docs/api.md#access-token).
+
+**Upgrading an install that listens on `0.0.0.0` without a token:** it stops
+starting, with
+`refusing to listen on 0.0.0.0 without an access token: ...`. Set `token` (or
+`ACCESS_TOKEN`) and open the dashboard once with `?token=<token>`, or set
+`listen.host` (or `LISTEN_HOST`) to `127.0.0.1` if only this machine uses it.
 
 ### Notifications
 
@@ -125,7 +139,9 @@ pnpm start
 
 It prints the printer address and the port, for example
 `printer 192.168.0.96; API on http://0.0.0.0:8080`. Open
-`http://<address of this machine>:8080/` on your phone. Stop it with Ctrl-C.
+`http://<address of this machine>:8080/` on your phone (this needs
+`listen.host` `0.0.0.0` and a token, see [Access token](#access-token)). Stop
+it with Ctrl-C.
 
 ### On a PC (Linux, macOS, Windows)
 
@@ -189,7 +205,8 @@ or a reverse proxy. Details in [docs/api.md](docs/api.md#dashboard).
   port on your router. For remote access, use a VPN such as Tailscale or
   WireGuard.
 - **Set a token** (`token` / `ACCESS_TOKEN`) so other devices on your network
-  can't pause or stop a print.
+  can't pause or stop a print. The service requires one to listen on anything
+  but loopback.
 - Treat the ntfy topic as a password: anyone who knows it can read your
   notifications. See [docs/notifications.md](docs/notifications.md).
 
