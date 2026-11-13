@@ -17,7 +17,8 @@
   with `sdcp/request|response|status|attributes/<MainboardID>` topics. We treat
   those notes as hypotheses that phase A must confirm.
 - Dev machine: WSL2 on Windows. Node 22 is installed via nvm; the user wants
-  **Node 26**. No tcpdump or tshark is installed in WSL.
+  **Node 26**, with **pnpm** as the package manager. No tcpdump or tshark is
+  installed in WSL.
 
 ## Goals / Non-Goals
 
@@ -59,8 +60,16 @@ Node 26 runs `.ts` files directly through built-in type stripping, so there's
 no bundler or `tsc` emit. `tsc --noEmit` is used only for type checking. The
 built-in `WebSocket` client and `fetch` cover printer and ntfy traffic. The test
 runner is `node:test`.
+
+Package manager is **pnpm**, pinned through the `packageManager` field in
+`package.json` (`pnpm@10.x`), with `pnpm-lock.yaml` committed. Node 25+ no
+longer bundles Corepack, so pnpm is installed once on its own (the standalone
+installer, or `npm i -g pnpm` as a one-time bootstrap); pnpm then switches to
+the pinned version by itself. pnpm 10 blocks dependency install scripts by
+default, which suits us: `typescript` and `ws` need none.
 *Alternatives:* Python (also fine, but the dashboard is TS anyway, so one
-language wins). Bun/Deno: the user chose Node.
+language wins). Bun/Deno: the user chose Node. npm (the default, but the user
+prefers pnpm's strict `node_modules` and speed).
 
 ### D3. Dashboard gets live updates through Server-Sent Events, not WebSocket
 The dashboard only needs a push stream from server to browser. Commands are

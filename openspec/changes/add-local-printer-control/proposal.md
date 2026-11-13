@@ -48,8 +48,8 @@ first map the protocol with REA, then build a small local-first app on it.
 
 ## Impact
 
-- New codebase in this repo: a Node.js 26 + TypeScript service and a static
-  dashboard. No existing code is affected.
+- New codebase in this repo: a Node.js 26 + TypeScript service (managed with
+  pnpm) and a static dashboard. No existing code is affected.
 - Network: talks only to the printer on the LAN (UDP 3000, WS 3030, HTTP 3031
   for the camera) and to the configured notification endpoint (ntfy.sh, or a
   self-hosted ntfy).

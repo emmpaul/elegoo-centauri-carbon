@@ -2,8 +2,8 @@
 
 ## 1. Project setup
 
-- [ ] 1.1 Install Node 26 via nvm and add `.nvmrc` (`26`); verify `node --version` prints v26.x in the repo directory
-- [ ] 1.2 Create `package.json` (type: module, engines node >=26), `tsconfig.json` (noEmit, strict, erasable syntax only), `.gitignore` (node_modules, config.json, scratch captures), and the npm scripts `start`, `test` (`node --test`), and `typecheck` (`tsc --noEmit`); verify `npm run typecheck` and `npm test` both run cleanly on an empty `src/`
+- [ ] 1.1 Install Node 26 via nvm and add `.nvmrc` (`26`), then install pnpm (standalone installer, since Node 26 ships no Corepack); verify `node --version` prints v26.x and `pnpm --version` prints 10.x in the repo directory
+- [ ] 1.2 Create `package.json` (type: module, engines node >=26, `packageManager` pinned to an exact `pnpm@10.x` version), `tsconfig.json` (noEmit, strict, erasable syntax only), `.gitignore` (node_modules, config.json, scratch captures), and the scripts `start`, `test` (`node --test`), and `typecheck` (`tsc --noEmit`); run `pnpm install` and commit `pnpm-lock.yaml`; verify `pnpm typecheck` and `pnpm test` both run cleanly on an empty `src/`
 - [ ] 1.3 Add `config.example.json` with the D7 settings (printerIp 192.168.0.96, listen address, token, ntfy url/topic, enabled events); verify a config loader unit test covers file values, env overrides, and defaults
 
 ## 2. Protocol mapping with REA (phase A)
@@ -48,7 +48,7 @@
 ## 8. End-to-end on the real printer
 
 - [ ] 8.1 Run the service against 192.168.0.96 during a small test print; verify the dashboard on a phone shows live status and camera, pause/resume work, and a "print finished" notification arrives exactly once
-- [ ] 8.2 Write `README.md` (requirements, config, running on a PC/WSL or Raspberry Pi, the WSL discovery caveat, the security note about not exposing the service to the internet); verify a fresh clone works by following the README
+- [ ] 8.2 Write `README.md` (requirements including Node 26 and installing pnpm, config, running on a PC/WSL or Raspberry Pi, the WSL discovery caveat, the security note about not exposing the service to the internet); verify a fresh clone works by following the README
 
 ## Workflow follow-up
 
