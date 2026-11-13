@@ -1,0 +1,2496 @@
+{
+  "source": {
+    "tool": "REA capture_browser_scenario: headless Chromium loads http://192.0.2.10/ and waits; no clicks",
+    "evidenceId": "ev_0b2a5ed9541809fdb23aaaedb79c4b47c019335db386e73a7d5f6d9a8eb7b318",
+    "captured": "2026-11-13",
+    "socket": "ws://192.0.2.10:3030/websocket",
+    "firmware": "V1.4.49",
+    "printerState": "printing job c735768d: CurrentStatus [1], PrintInfo.Status 13, progress 53 to 87",
+    "note": "Frames in receipt order. Every 'sent' frame came from Elegoo's web UI on page load; this project sent nothing."
+  },
+  "frames": [
+    {
+      "seq": 2,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 0,
+          "Data": {},
+          "RequestID": "3db634195cbd4277943b62e2a30081cb",
+          "MainboardID": "",
+          "TimeStamp": 1794605335245,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 1,
+          "Data": {},
+          "RequestID": "4857670f22ec4ae5bc54a3c2d75387e8",
+          "MainboardID": "",
+          "TimeStamp": 1794605335245,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 320,
+          "Data": {},
+          "RequestID": "62244d49dbc340c788c4f04baa81cfda",
+          "MainboardID": "",
+          "TimeStamp": 1794605335246,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 134,
+          "Data": {},
+          "RequestID": "abfdc64f115b4614b8a282bae17671e5",
+          "MainboardID": "",
+          "TimeStamp": 1794605335246,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 6,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 258,
+          "Data": {
+            "Url": "/local"
+          },
+          "RequestID": "500371c9fd7b451789df8f16a81b6904",
+          "MainboardID": "",
+          "TimeStamp": 1794605335246,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 7,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 386,
+          "Data": {
+            "Enable": 1
+          },
+          "RequestID": "a36572e0713244e39325fa48da9aaa8b",
+          "MainboardID": "",
+          "TimeStamp": 1794605335247,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 8,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 0,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "3db634195cbd4277943b62e2a30081cb",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 9,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.9989376386032,
+          "TempOfNozzle": 250.8423991539576,
+          "TempOfBox": 29.50750501645421,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "114.21,124.37,0.84",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 9,
+            "TotalLayer": 12,
+            "CurrentTicks": 306.30663568805903,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 53
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605341,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 10,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 321,
+          "Data": {
+            "Id": [
+              "c735768d-8d67-4ae2-8d07-05c0c05c4aa2"
+            ]
+          },
+          "RequestID": "4759cebd366040dcbc284563f38449b1",
+          "MainboardID": "",
+          "TimeStamp": 1794605335459,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 11,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 1,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "4857670f22ec4ae5bc54a3c2d75387e8",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 12,
+      "direction": "received",
+      "payload": {
+        "Attributes": {
+          "Name": "Centauri Carbon",
+          "MachineName": "Centauri Carbon",
+          "BrandName": "ELEGOO",
+          "ProtocolVersion": "V3.0.0",
+          "FirmwareVersion": "V1.4.49",
+          "XYZsize": "218.88x128.88x220",
+          "MainboardIP": "192.0.2.10",
+          "MainboardMAC": "00:00:00:00:00:00",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "SDCPStatus": 0,
+          "MaximumCloudSDCPSercicesAllowed": 0,
+          "NumberOfCloudSDCPServicesConnected": 0,
+          "NumberOfVideoStreamConnected": 0,
+          "MaximumVideoStreamAllowed": 4,
+          "NetworkStatus": "wlan",
+          "UsbDiskStatus": 0,
+          "Capabilities": [
+            "FILE_TRANSFER",
+            "PRINT_CONTROL",
+            "VIDEO_STREAM"
+          ],
+          "SupportFileType": [
+            "gcode"
+          ],
+          "DevicesStatus": {
+            "SgStatus": 1,
+            "ZMotorStatus": 1,
+            "XMotorStatus": 1,
+            "YMotorStatus": 1
+          },
+          "CameraStatus": 1,
+          "RemainingMemory": 6445940736,
+          "TLPNoCapPos": 0,
+          "TLPStartCapPos": 0,
+          "TLPInterLayers": 0
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605341,
+        "Topic": "sdcp/attributes/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 13,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 320,
+          "Data": {
+            "Ack": 0,
+            "HistoryData": [
+              "27febebe-8552-40e8-9e82-086c014a5502",
+              "fdc64051-5885-4199-a0ff-79dc4318a407",
+              "9df0bd07-958b-4985-8b4d-8960901a13e1",
+              "0cb4c050-6e53-4120-9c48-398d6055e32d",
+              "cf79601e-f25c-4ea9-b151-198c8513aa11",
+              "7e59e939-27d4-4332-9d87-3e6961cc4833",
+              "c75a4120-ff58-4835-9285-d626b6d1cf40",
+              "38581a7e-d14e-4163-a881-72c27e57c0f9",
+              "20b6b4ea-ec75-4bd7-a7bb-3d0466d1bc39",
+              "66b919a1-65a9-409d-a86b-a706e1c00d40",
+              "7893a7fb-a77c-46b1-8c12-cada998f1961",
+              "92283f9a-9ef0-47db-bc2c-6033299e910a",
+              "e28bd4ce-f31e-405e-baf6-b97f2a5b3298",
+              "dcc335ad-04a5-4ef1-b69e-afe90afcb1d1",
+              "045cd3dc-e1fc-4202-8431-8807bcea05d4",
+              "5d0cf003-4337-4472-9c98-2f0e4bb6eb76",
+              "ab288df6-4559-494d-baf6-3ea4f0b2df08",
+              "768aca0f-c069-445e-89bf-575bed4a1387",
+              "85c58a9a-1ea1-4be8-ac2a-ebc2dc84ee38",
+              "01cc953c-9d99-4fdd-9215-1e4dcca5df7b",
+              "edb66750-8166-490b-bcb9-14872f0e0250",
+              "f335acda-412d-4480-ab82-6d1e71c95990",
+              "3067c6bb-07da-4987-a350-0e2720e96cac",
+              "c5fbdbfa-6e57-4d18-a6ba-bce89539c748",
+              "7b1d209d-9d3b-4b48-a6e5-4333a4b1f7a1"
+            ]
+          },
+          "RequestID": "62244d49dbc340c788c4f04baa81cfda",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 14,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 134,
+          "Data": {
+            "Ack": 0
+          },
+          "RequestID": "abfdc64f115b4614b8a282bae17671e5",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 15,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 258,
+          "Data": {
+            "Ack": 0,
+            "FileList": [
+              {
+                "name": "/local/test-print-2.gcode",
+                "type": 1,
+                "CreateTime": 1794604716,
+                "FileSize": 278186,
+                "LayerHeight": 0,
+                "TotalLayers": 12,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-1.gcode",
+                "type": 1,
+                "CreateTime": 1794600355,
+                "FileSize": 1591016,
+                "LayerHeight": 0,
+                "TotalLayers": 180,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-4.gcode",
+                "type": 1,
+                "CreateTime": 1794567527,
+                "FileSize": 7406200,
+                "LayerHeight": 0,
+                "TotalLayers": 640,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-17.gcode",
+                "type": 1,
+                "CreateTime": 1794531523,
+                "FileSize": 2542858,
+                "LayerHeight": 0,
+                "TotalLayers": 30,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-19.gcode",
+                "type": 1,
+                "CreateTime": 1794526524,
+                "FileSize": 2411084,
+                "LayerHeight": 0,
+                "TotalLayers": 30,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-16.gcode",
+                "type": 1,
+                "CreateTime": 1794523425,
+                "FileSize": 1453270,
+                "LayerHeight": 0,
+                "TotalLayers": 28,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-15.gcode",
+                "type": 1,
+                "CreateTime": 1794520753,
+                "FileSize": 1066790,
+                "LayerHeight": 0,
+                "TotalLayers": 19,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-20.gcode",
+                "type": 1,
+                "CreateTime": 1794516397,
+                "FileSize": 1594623,
+                "LayerHeight": 0,
+                "TotalLayers": 20,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-18.gcode",
+                "type": 1,
+                "CreateTime": 1794480691,
+                "FileSize": 1588196,
+                "LayerHeight": 0,
+                "TotalLayers": 20,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-22.gcode",
+                "type": 1,
+                "CreateTime": 1794169506,
+                "FileSize": 18183567,
+                "LayerHeight": 0,
+                "TotalLayers": 611,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-8.gcode",
+                "type": 1,
+                "CreateTime": 1792875451,
+                "FileSize": 1492684,
+                "LayerHeight": 0,
+                "TotalLayers": 185,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-14.gcode",
+                "type": 1,
+                "CreateTime": 1790520646,
+                "FileSize": 4354885,
+                "LayerHeight": 0,
+                "TotalLayers": 185,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-21.gcode",
+                "type": 1,
+                "CreateTime": 1789905376,
+                "FileSize": 8351957,
+                "LayerHeight": 0,
+                "TotalLayers": 215,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-6.gcode",
+                "type": 1,
+                "CreateTime": 1789899824,
+                "FileSize": 2311922,
+                "LayerHeight": 0,
+                "TotalLayers": 116,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-9.gcode",
+                "type": 1,
+                "CreateTime": 1789846233,
+                "FileSize": 19339123,
+                "LayerHeight": 0,
+                "TotalLayers": 75,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-23.gcode",
+                "type": 1,
+                "CreateTime": 1789218057,
+                "FileSize": 10043666,
+                "LayerHeight": 0,
+                "TotalLayers": 969,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-12.gcode",
+                "type": 1,
+                "CreateTime": 1788823258,
+                "FileSize": 3107661,
+                "LayerHeight": 0,
+                "TotalLayers": 137,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-7.gcode",
+                "type": 1,
+                "CreateTime": 1788800848,
+                "FileSize": 1836496,
+                "LayerHeight": 0,
+                "TotalLayers": 125,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-13.gcode",
+                "type": 1,
+                "CreateTime": 1788779905,
+                "FileSize": 10432011,
+                "LayerHeight": 0,
+                "TotalLayers": 187,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-11.gcode",
+                "type": 1,
+                "CreateTime": 1788729876,
+                "FileSize": 2863862,
+                "LayerHeight": 0,
+                "TotalLayers": 137,
+                "EstFilamentLength": 0
+              },
+              {
+                "name": "/local/test-print-10.gcode",
+                "type": 1,
+                "CreateTime": 1788704399,
+                "FileSize": 1842061,
+                "LayerHeight": 0,
+                "TotalLayers": 137,
+                "EstFilamentLength": 0
+              }
+            ]
+          },
+          "RequestID": "500371c9fd7b451789df8f16a81b6904",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 16,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 386,
+          "Data": {
+            "Ack": 0,
+            "VideoUrl": "192.0.2.10:3031/video"
+          },
+          "RequestID": "a36572e0713244e39325fa48da9aaa8b",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605341
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 17,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 321,
+          "Data": {
+            "Ack": 0,
+            "HistoryDetailList": [
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/c735768d-8d67-4ae2-8d07-05c0c05c4aa2.png",
+                "TaskName": "/local/test-print-2.gcode",
+                "BeginTime": 1794604720,
+                "EndTime": 1794605305,
+                "TaskStatus": 4,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 12,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 298.49953764211386
+                },
+                "AlreadyPrintLayer": 9,
+                "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+                "MD5": "97854ddcd04538caf5964466ad34f5dc",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-2.gcode",
+                "ErrorStatusReason": 0
+              }
+            ]
+          },
+          "RequestID": "4759cebd366040dcbc284563f38449b1",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605342
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 18,
+      "direction": "received",
+      "payload": {
+        "Attributes": {
+          "Name": "Centauri Carbon",
+          "MachineName": "Centauri Carbon",
+          "BrandName": "ELEGOO",
+          "ProtocolVersion": "V3.0.0",
+          "FirmwareVersion": "V1.4.49",
+          "XYZsize": "218.88x128.88x220",
+          "MainboardIP": "192.0.2.10",
+          "MainboardMAC": "00:00:00:00:00:00",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "SDCPStatus": 0,
+          "MaximumCloudSDCPSercicesAllowed": 0,
+          "NumberOfCloudSDCPServicesConnected": 0,
+          "NumberOfVideoStreamConnected": 1,
+          "MaximumVideoStreamAllowed": 4,
+          "NetworkStatus": "wlan",
+          "UsbDiskStatus": 0,
+          "Capabilities": [
+            "FILE_TRANSFER",
+            "PRINT_CONTROL",
+            "VIDEO_STREAM"
+          ],
+          "SupportFileType": [
+            "gcode"
+          ],
+          "DevicesStatus": {
+            "SgStatus": 1,
+            "ZMotorStatus": 1,
+            "XMotorStatus": 1,
+            "YMotorStatus": 1
+          },
+          "CameraStatus": 1,
+          "RemainingMemory": 6445940736,
+          "TLPNoCapPos": 0,
+          "TLPStartCapPos": 0,
+          "TLPInterLayers": 0
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605342,
+        "Topic": "sdcp/attributes/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 19,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.93214445938357,
+          "TempOfNozzle": 250.900160809291,
+          "TempOfBox": 29.71413510731491,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "121.47,124.43,0.84",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 9,
+            "TotalLayer": 12,
+            "CurrentTicks": 308.13952556438744,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 54
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605343,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 20,
+      "direction": "sent",
+      "payload": {
+        "Id": "",
+        "Data": {
+          "Cmd": 321,
+          "Data": {
+            "Id": [
+              "27febebe-8552-40e8-9e82-086c014a5502",
+              "fdc64051-5885-4199-a0ff-79dc4318a407",
+              "9df0bd07-958b-4985-8b4d-8960901a13e1",
+              "0cb4c050-6e53-4120-9c48-398d6055e32d",
+              "cf79601e-f25c-4ea9-b151-198c8513aa11",
+              "7e59e939-27d4-4332-9d87-3e6961cc4833",
+              "c75a4120-ff58-4835-9285-d626b6d1cf40",
+              "38581a7e-d14e-4163-a881-72c27e57c0f9",
+              "20b6b4ea-ec75-4bd7-a7bb-3d0466d1bc39",
+              "66b919a1-65a9-409d-a86b-a706e1c00d40",
+              "7893a7fb-a77c-46b1-8c12-cada998f1961",
+              "92283f9a-9ef0-47db-bc2c-6033299e910a",
+              "e28bd4ce-f31e-405e-baf6-b97f2a5b3298",
+              "dcc335ad-04a5-4ef1-b69e-afe90afcb1d1",
+              "045cd3dc-e1fc-4202-8431-8807bcea05d4",
+              "5d0cf003-4337-4472-9c98-2f0e4bb6eb76",
+              "ab288df6-4559-494d-baf6-3ea4f0b2df08",
+              "768aca0f-c069-445e-89bf-575bed4a1387",
+              "85c58a9a-1ea1-4be8-ac2a-ebc2dc84ee38",
+              "01cc953c-9d99-4fdd-9215-1e4dcca5df7b",
+              "edb66750-8166-490b-bcb9-14872f0e0250",
+              "f335acda-412d-4480-ab82-6d1e71c95990",
+              "3067c6bb-07da-4987-a350-0e2720e96cac",
+              "c5fbdbfa-6e57-4d18-a6ba-bce89539c748",
+              "7b1d209d-9d3b-4b48-a6e5-4333a4b1f7a1"
+            ]
+          },
+          "RequestID": "a46764bd3457480e82a6e2b7a1c4e9c0",
+          "MainboardID": "",
+          "TimeStamp": 1794605337684,
+          "From": 1
+        }
+      }
+    },
+    {
+      "seq": 21,
+      "direction": "received",
+      "payload": {
+        "Id": "979d4C788A4a78bC777A870F1A02867A",
+        "Data": {
+          "Cmd": 321,
+          "Data": {
+            "Ack": 0,
+            "HistoryDetailList": [
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/27febebe-8552-40e8-9e82-086c014a5502.png",
+                "TaskName": "/local/test-print-1.gcode",
+                "BeginTime": 1794600358,
+                "EndTime": 1794604693,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 180,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 4024.1261094193906
+                },
+                "AlreadyPrintLayer": 180,
+                "TaskId": "27febebe-8552-40e8-9e82-086c014a5502",
+                "MD5": "f6bf5198f34652f6938883e7818c612f",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-1.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/fdc64051-5885-4199-a0ff-79dc4318a407.png",
+                "TaskName": "/local/test-print-4.gcode",
+                "BeginTime": 1794567530,
+                "EndTime": 1794574421,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 640,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 6689.013901147991
+                },
+                "AlreadyPrintLayer": 640,
+                "TaskId": "fdc64051-5885-4199-a0ff-79dc4318a407",
+                "MD5": "6cb8f3754222401508e051c407c2f1b2",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-4.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/9df0bd07-958b-4985-8b4d-8960901a13e1.png",
+                "TaskName": "/local/test-print-17.gcode",
+                "BeginTime": 1794531527,
+                "EndTime": 1794536169,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 30,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 4538.7885366640985
+                },
+                "AlreadyPrintLayer": 30,
+                "TaskId": "9df0bd07-958b-4985-8b4d-8960901a13e1",
+                "MD5": "3aefae6f93c060401cd148672f84978d",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-17.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/0cb4c050-6e53-4120-9c48-398d6055e32d.png",
+                "TaskName": "/local/test-print-19.gcode",
+                "BeginTime": 1794526527,
+                "EndTime": 1794531206,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 30,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 4480.919180011377
+                },
+                "AlreadyPrintLayer": 30,
+                "TaskId": "0cb4c050-6e53-4120-9c48-398d6055e32d",
+                "MD5": "de55bad47cd0406ffbf4835f5b8f7dfd",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-19.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/cf79601e-f25c-4ea9-b151-198c8513aa11.png",
+                "TaskName": "/local/test-print-16.gcode",
+                "BeginTime": 1794523428,
+                "EndTime": 1794525573,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 28,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 2105.4571649637073
+                },
+                "AlreadyPrintLayer": 28,
+                "TaskId": "cf79601e-f25c-4ea9-b151-198c8513aa11",
+                "MD5": "73844ca47a53d35f490258cfa52c1600",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-16.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/7e59e939-27d4-4332-9d87-3e6961cc4833.png",
+                "TaskName": "/local/test-print-15.gcode",
+                "BeginTime": 1794521915,
+                "EndTime": 1794523213,
+                "TaskStatus": 3,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 19,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 1249.754184845835
+                },
+                "AlreadyPrintLayer": 16,
+                "TaskId": "7e59e939-27d4-4332-9d87-3e6961cc4833",
+                "MD5": "e8232352462c1cd939d8c735a2119b6b",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-15.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/c75a4120-ff58-4835-9285-d626b6d1cf40.png",
+                "TaskName": "/local/test-print-15.gcode",
+                "BeginTime": 1794520756,
+                "EndTime": 1794521653,
+                "TaskStatus": 3,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 19,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 853.7077524485067
+                },
+                "AlreadyPrintLayer": 11,
+                "TaskId": "c75a4120-ff58-4835-9285-d626b6d1cf40",
+                "MD5": "e8232352462c1cd939d8c735a2119b6b",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-15.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/38581a7e-d14e-4163-a881-72c27e57c0f9.png",
+                "TaskName": "/local/test-print-20.gcode",
+                "BeginTime": 1794516400,
+                "EndTime": 1794520362,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 20,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 3756.8697707913816
+                },
+                "AlreadyPrintLayer": 20,
+                "TaskId": "38581a7e-d14e-4163-a881-72c27e57c0f9",
+                "MD5": "dde0e5db9dd8a9cecadb2c2c28b63904",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-20.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/20b6b4ea-ec75-4bd7-a7bb-3d0466d1bc39.png",
+                "TaskName": "/local/test-print-18.gcode",
+                "BeginTime": 1794480694,
+                "EndTime": 1794484632,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 20,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 3721.9562409827486
+                },
+                "AlreadyPrintLayer": 20,
+                "TaskId": "20b6b4ea-ec75-4bd7-a7bb-3d0466d1bc39",
+                "MD5": "e03ae6aa0a3b6349f25729efd47b954d",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-18.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/66b919a1-65a9-409d-a86b-a706e1c00d40.png",
+                "TaskName": "/local/test-print-22.gcode",
+                "BeginTime": 1794169508,
+                "EndTime": 1794193676,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 611,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 23947.681113211438
+                },
+                "AlreadyPrintLayer": 611,
+                "TaskId": "66b919a1-65a9-409d-a86b-a706e1c00d40",
+                "MD5": "8962603275cdcd7cbd563d23583a2b8e",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-22.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/7893a7fb-a77c-46b1-8c12-cada998f1961.png",
+                "TaskName": "/local/test-print-8.gcode",
+                "BeginTime": 1792879015,
+                "EndTime": 1792881852,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 185,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 2741.167444014922
+                },
+                "AlreadyPrintLayer": 185,
+                "TaskId": "7893a7fb-a77c-46b1-8c12-cada998f1961",
+                "MD5": "10df156d80967810c147d5f82a6896a8",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-8.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/92283f9a-9ef0-47db-bc2c-6033299e910a.png",
+                "TaskName": "/local/test-print-8.gcode",
+                "BeginTime": 1792875454,
+                "EndTime": 1792878384,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 185,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 2741.21383018326
+                },
+                "AlreadyPrintLayer": 185,
+                "TaskId": "92283f9a-9ef0-47db-bc2c-6033299e910a",
+                "MD5": "10df156d80967810c147d5f82a6896a8",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-8.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/e28bd4ce-f31e-405e-baf6-b97f2a5b3298.png",
+                "TaskName": "/local/test-print-14.gcode",
+                "BeginTime": 1790520649,
+                "EndTime": 1790524582,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 185,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 3754.221912455978
+                },
+                "AlreadyPrintLayer": 185,
+                "TaskId": "e28bd4ce-f31e-405e-baf6-b97f2a5b3298",
+                "MD5": "368aac50e2126987881d14b201fef35f",
+                "TimeLapseVideoStatus": 0,
+                "TimeLapseVideoUrl": "/local/test-print-14.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/dcc335ad-04a5-4ef1-b69e-afe90afcb1d1.png",
+                "TaskName": "/local/test-print-21.gcode",
+                "BeginTime": 1789905379,
+                "EndTime": 1789912931,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 215,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 7475.558213063981
+                },
+                "AlreadyPrintLayer": 215,
+                "TaskId": "dcc335ad-04a5-4ef1-b69e-afe90afcb1d1",
+                "MD5": "4600c6c1759fd859f5b2b70c79d44656",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-21.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/045cd3dc-e1fc-4202-8431-8807bcea05d4.png",
+                "TaskName": "/local/test-print-6.gcode",
+                "BeginTime": 1789901943,
+                "EndTime": 1789903717,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 116,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 1677.9238028828986
+                },
+                "AlreadyPrintLayer": 116,
+                "TaskId": "045cd3dc-e1fc-4202-8431-8807bcea05d4",
+                "MD5": "34c077dc278320afbb9238d8e5f024e6",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-6.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/5d0cf003-4337-4472-9c98-2f0e4bb6eb76.png",
+                "TaskName": "/local/test-print-6.gcode",
+                "BeginTime": 1789899827,
+                "EndTime": 1789901736,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 116,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 1677.9389429669827
+                },
+                "AlreadyPrintLayer": 116,
+                "TaskId": "5d0cf003-4337-4472-9c98-2f0e4bb6eb76",
+                "MD5": "34c077dc278320afbb9238d8e5f024e6",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-6.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/ab288df6-4559-494d-baf6-3ea4f0b2df08.png",
+                "TaskName": "/local/test-print-9.gcode",
+                "BeginTime": 1789846236,
+                "EndTime": 1789858105,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 75,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 11686.983029988827
+                },
+                "AlreadyPrintLayer": 75,
+                "TaskId": "ab288df6-4559-494d-baf6-3ea4f0b2df08",
+                "MD5": "9696f1487e1e8d27340cf0840741a53a",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-9.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/768aca0f-c069-445e-89bf-575bed4a1387.png",
+                "TaskName": "/local/test-print-23.gcode",
+                "BeginTime": 1789218060,
+                "EndTime": 1789224769,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 969,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 6536.999685659015
+                },
+                "AlreadyPrintLayer": 966,
+                "TaskId": "768aca0f-c069-445e-89bf-575bed4a1387",
+                "MD5": "07fbae673bc2d000236d0d14f7cd790c",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-23.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/85c58a9a-1ea1-4be8-ac2a-ebc2dc84ee38.png",
+                "TaskName": "/local/test-print-12.gcode",
+                "BeginTime": 1788823261,
+                "EndTime": 1788830575,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 137,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 7151.344119410001
+                },
+                "AlreadyPrintLayer": 137,
+                "TaskId": "85c58a9a-1ea1-4be8-ac2a-ebc2dc84ee38",
+                "MD5": "3288b05396a3aba0f30d2421a4178247",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-12.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/01cc953c-9d99-4fdd-9215-1e4dcca5df7b.png",
+                "TaskName": "/local/test-print-7.gcode",
+                "BeginTime": 1788800851,
+                "EndTime": 1788803466,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 125,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 2389.3369157230045
+                },
+                "AlreadyPrintLayer": 125,
+                "TaskId": "01cc953c-9d99-4fdd-9215-1e4dcca5df7b",
+                "MD5": "76e349afa2b57d97d767c609d6cd8ce3",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-7.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/edb66750-8166-490b-bcb9-14872f0e0250.png",
+                "TaskName": "/local/test-print-13.gcode",
+                "BeginTime": 1788779908,
+                "EndTime": 1788795834,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 187,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 15758.743370514
+                },
+                "AlreadyPrintLayer": 187,
+                "TaskId": "edb66750-8166-490b-bcb9-14872f0e0250",
+                "MD5": "f3735074ae57f6291644af0813f3b2af",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-13.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/f335acda-412d-4480-ab82-6d1e71c95990.png",
+                "TaskName": "/local/test-print-11.gcode",
+                "BeginTime": 1788729879,
+                "EndTime": 1788729982,
+                "TaskStatus": 3,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 137,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 0
+                },
+                "AlreadyPrintLayer": 0,
+                "TaskId": "f335acda-412d-4480-ab82-6d1e71c95990",
+                "MD5": "a93d964ff61ae1afe259480818de1f78",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-11.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/3067c6bb-07da-4987-a350-0e2720e96cac.png",
+                "TaskName": "/local/test-print-10.gcode",
+                "BeginTime": 1788708474,
+                "EndTime": 1788712059,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 137,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 3491.2391776230006
+                },
+                "AlreadyPrintLayer": 137,
+                "TaskId": "3067c6bb-07da-4987-a350-0e2720e96cac",
+                "MD5": "7971c7e152d57006c36c0735296b48cf",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-10.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/c5fbdbfa-6e57-4d18-a6ba-bce89539c748.png",
+                "TaskName": "/local/test-print-10.gcode",
+                "BeginTime": 1788704402,
+                "EndTime": 1788707964,
+                "TaskStatus": 1,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 137,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 3491.267420706
+                },
+                "AlreadyPrintLayer": 137,
+                "TaskId": "c5fbdbfa-6e57-4d18-a6ba-bce89539c748",
+                "MD5": "7971c7e152d57006c36c0735296b48cf",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-10.gcode",
+                "ErrorStatusReason": 0
+              },
+              {
+                "Thumbnail": "http://192.0.2.10/board-resource/history_image/7b1d209d-9d3b-4b48-a6e5-4333a4b1f7a1.png",
+                "TaskName": "/local/test-print-3.gcode",
+                "BeginTime": 1788703699,
+                "EndTime": 1788703971,
+                "TaskStatus": 3,
+                "SliceInformation": {
+                  "layer_height": 0,
+                  "total_layer_numbers": 192,
+                  "model_size_x": 0,
+                  "model_size_y": 0,
+                  "model_size_z": 0,
+                  "print_time": 233.71422252800005
+                },
+                "AlreadyPrintLayer": 33,
+                "TaskId": "7b1d209d-9d3b-4b48-a6e5-4333a4b1f7a1",
+                "MD5": "d1c9d8fe6e0b6358bf8e6496be8416cf",
+                "TimeLapseVideoStatus": 4,
+                "TimeLapseVideoUrl": "/local/test-print-3.gcode",
+                "ErrorStatusReason": 0
+              }
+            ]
+          },
+          "RequestID": "a46764bd3457480e82a6e2b7a1c4e9c0",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "TimeStamp": 1794605343
+        },
+        "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 22,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.9000640641031,
+          "TempOfNozzle": 250.25164528067128,
+          "TempOfBox": 29.81010020994278,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "142.00,124.26,0.83",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 9,
+            "TotalLayer": 12,
+            "CurrentTicks": 311.1849628575146,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 56
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605346,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 23,
+      "direction": "received",
+      "payload": {
+        "Attributes": {
+          "Name": "Centauri Carbon",
+          "MachineName": "Centauri Carbon",
+          "BrandName": "ELEGOO",
+          "ProtocolVersion": "V3.0.0",
+          "FirmwareVersion": "V1.4.49",
+          "XYZsize": "218.88x128.88x220",
+          "MainboardIP": "192.0.2.10",
+          "MainboardMAC": "00:00:00:00:00:00",
+          "MainboardID": "40551f980103d46c00004c0000000000",
+          "SDCPStatus": 0,
+          "MaximumCloudSDCPSercicesAllowed": 0,
+          "NumberOfCloudSDCPServicesConnected": 0,
+          "NumberOfVideoStreamConnected": 1,
+          "MaximumVideoStreamAllowed": 4,
+          "NetworkStatus": "wlan",
+          "UsbDiskStatus": 0,
+          "Capabilities": [
+            "FILE_TRANSFER",
+            "PRINT_CONTROL",
+            "VIDEO_STREAM"
+          ],
+          "SupportFileType": [
+            "gcode"
+          ],
+          "DevicesStatus": {
+            "SgStatus": 1,
+            "ZMotorStatus": 1,
+            "XMotorStatus": 1,
+            "YMotorStatus": 1
+          },
+          "CameraStatus": 1,
+          "RemainingMemory": 6445940736,
+          "TLPNoCapPos": 0,
+          "TLPStartCapPos": 0,
+          "TLPInterLayers": 0
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605347,
+        "Topic": "sdcp/attributes/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 24,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.8904837362273,
+          "TempOfNozzle": 250.13280987935346,
+          "TempOfBox": 30.0147619108929,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "143.90,135.58,0.82",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 9,
+            "TotalLayer": 12,
+            "CurrentTicks": 314.2177219009027,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 58
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605349,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 25,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.92106978848629,
+          "TempOfNozzle": 250.2674951898823,
+          "TempOfBox": 30.05553563735367,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "151.40,133.86,1.01",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 316.7643703594804,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 59
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605351,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 26,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.87543319474258,
+          "TempOfNozzle": 250.26489171875448,
+          "TempOfBox": 30.21810731237656,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "154.68,135.20,1.01",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 317.2070611510426,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 59
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605352,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 27,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.86947696915539,
+          "TempOfNozzle": 250.28239398138226,
+          "TempOfBox": 30.54077264026699,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "142.43,134.77,1.02",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 320.25736311171204,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 60
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605355,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 28,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.84744774268131,
+          "TempOfNozzle": 249.93301028811598,
+          "TempOfBox": 30.67425662679346,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "131.80,124.15,1.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 323.30170611385256,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 63
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605358,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 29,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.83760922898352,
+          "TempOfNozzle": 249.99884363241367,
+          "TempOfBox": 30.7540796566476,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "114.00,124.19,1.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 326.3415254065767,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 64
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605361,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 30,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.82523680446198,
+          "TempOfNozzle": 250.0236495137709,
+          "TempOfBox": 30.87344138723307,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "113.86,129.19,1.04",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 329.2907892828807,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 66
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605364,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 31,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.8139027594115,
+          "TempOfNozzle": 249.81951377531496,
+          "TempOfBox": 31.12397477085011,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "130.81,135.20,1.03",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 332.3343749921769,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 67
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605367,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 32,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.82114584756003,
+          "TempOfNozzle": 249.98174951726415,
+          "TempOfBox": 31.12397477085011,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "135.06,135.13,1.03",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 10,
+            "TotalLayer": 12,
+            "CurrentTicks": 335.37918124347925,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 68
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605370,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 33,
+      "direction": "sent",
+      "payload": "ping"
+    },
+    {
+      "seq": 34,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.82547122427945,
+          "TempOfNozzle": 249.99532039121814,
+          "TempOfBox": 31.07139340337437,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "145.02,125.46,1.22",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 336.1201520776376,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 69
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605371,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 35,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.82074574462489,
+          "TempOfNozzle": 249.9781004965703,
+          "TempOfBox": 31.28120420607268,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "150.63,133.18,1.21",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 338.3619972458109,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 69
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605373,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 36,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.81697412819653,
+          "TempOfNozzle": 249.89483548113245,
+          "TempOfBox": 31.22887983109103,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "140.66,124.37,1.23",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 341.5041936635971,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 72
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605376,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 37,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.81391383697994,
+          "TempOfNozzle": 250.07579132535486,
+          "TempOfBox": 31.17647013270919,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "125.75,122.86,1.24",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 344.5497314147651,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 73
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605379,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 38,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.79810002637424,
+          "TempOfNozzle": 249.94356745999121,
+          "TempOfBox": 31.38559833593461,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "106.09,135.14,1.23",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 347.5937378741801,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 75
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605382,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 39,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.7998084389016,
+          "TempOfNozzle": 250.0381651706164,
+          "TempOfBox": 31.5674781170764,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "120.04,135.20,1.24",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 350.63670300133526,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 77
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605385,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 40,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.81535037819314,
+          "TempOfNozzle": 250.13562818894945,
+          "TempOfBox": 31.54155799043189,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "129.81,133.89,1.23",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 11,
+            "TotalLayer": 12,
+            "CurrentTicks": 353.68176916986704,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 78
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605388,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 41,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.81597534852018,
+          "TempOfNozzle": 249.9295205951536,
+          "TempOfBox": 31.48965520230296,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "139.21,129.80,1.32",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 356.125490212813,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 79
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605391,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 42,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.80094784725213,
+          "TempOfNozzle": 249.82593732793546,
+          "TempOfBox": 31.46367245880611,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "111.98,125.46,1.44",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 356.66381542012095,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 79
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605391,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 43,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.85135844378318,
+          "TempOfNozzle": 249.8853302654425,
+          "TempOfBox": 31.63218756436208,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "124.74,124.76,1.44",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 359.6995232133195,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 81
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605394,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 44,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.79327781353857,
+          "TempOfNozzle": 250.28186639610684,
+          "TempOfBox": 31.61925603964243,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "143.02,122.36,1.43",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 362.7478665485978,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 83
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605397,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 45,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.81794176667402,
+          "TempOfNozzle": 250.10646020003875,
+          "TempOfBox": 31.61925603964243,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "146.15,129.63,1.42",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 365.8906082995236,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 85
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605400,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 46,
+      "direction": "sent",
+      "payload": "ping"
+    },
+    {
+      "seq": 47,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.83731764228774,
+          "TempOfNozzle": 249.87899685061248,
+          "TempOfBox": 31.65803510215101,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "150.55,135.21,1.41",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 368.9322405932471,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 86
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605403,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    },
+    {
+      "seq": 48,
+      "direction": "received",
+      "payload": {
+        "Status": {
+          "CurrentStatus": [
+            1
+          ],
+          "TimeLapseStatus": 0,
+          "PlatFormType": 0,
+          "AmsConnectStatus": 0,
+          "TempOfHotbed": 69.8395018220517,
+          "TempOfNozzle": 250.21863199015604,
+          "TempOfBox": 31.77409407693801,
+          "TempTargetHotbed": 70,
+          "TempTargetNozzle": 250,
+          "TempTargetBox": 0,
+          "CurrenCoord": "135.18,134.67,1.43",
+          "CurrentFanSpeed": {
+            "ModelFan": 78,
+            "AuxiliaryFan": 0,
+            "BoxFan": 68
+          },
+          "ZOffset": 0.0,
+          "LightStatus": {
+            "SecondLight": 1,
+            "RgbLight": [
+              0,
+              0,
+              0
+            ]
+          },
+          "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 12,
+            "TotalLayer": 12,
+            "CurrentTicks": 371.9706122195348,
+            "TotalTicks": 399,
+            "Filename": "test-print-2.gcode",
+            "TaskId": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+            "PrintSpeedPct": 100,
+            "Progress": 87
+          }
+        },
+        "MainboardID": "40551f980103d46c00004c0000000000",
+        "TimeStamp": 1794605407,
+        "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+      }
+    }
+  ]
+}

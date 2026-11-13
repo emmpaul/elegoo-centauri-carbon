@@ -43,6 +43,10 @@ Citations have the form `<file>@<byte offset>`, where `<file>` is `main` (for
 `i18n` (for `assets/i18n/network-en.json`, cited by JSON path). Offsets are
 zero-based byte offsets into the files whose hashes are listed above.
 
+Observed entries cite a recorded fixture as `<fixture>#<seq>`, where
+`<fixture>` is a file in `test/fixtures/` and `<seq>` is the `seq` of a frame
+in it.
+
 Static pass evidence: REA `analyze_javascript_application` over the scratch
 directory (bundles parsed as inert text, never executed), Evidence
 `ev_4c8ba51b29405af91d11bcc30c4c66afa498355480d3db15e0a7417c0e6f4d38`
@@ -50,24 +54,51 @@ directory (bundles parsed as inert text, never executed), Evidence
 call sites, so the call sites below were located by literal string search over
 the same files and read in place.
 
+## Live captures
+
+Live pass, read-only, on 2026-11-13. REA `capture_browser_scenario` launched
+a headless Chromium on `http://192.0.2.10/` and only waited (no clicks, no
+form input); every frame this project recorded as sent came from Elegoo's web
+UI on page load. Those UI frames are Cmd 0, 1, 320, 134, 258, 321, and in
+three of the four captures Cmd 386 `{Enable:1}`, which turns the camera
+stream on. No other state-changing command was sent.
+
+The printer was in use by its owner during the pass, so the captures cover
+more than a plain idle machine. The print start and file upload in
+`connect-idle.json` came from another client.
+
+| Fixture | REA Evidence | Printer state during the capture |
+| --- | --- | --- |
+| `connect-loading.json` | `ev_273fc86943d315c5f04828335af66e1337a246b96349417424c171107b1df20d` | printing, material-change phase: `CurrentStatus` 10 then 1, `PrintInfo.Status` 16 then 20, ticks frozen |
+| `connect-printing.json` | `ev_0b2a5ed9541809fdb23aaaedb79c4b47c019335db386e73a7d5f6d9a8eb7b318` | printing: `CurrentStatus` [1], `PrintInfo.Status` 13, progress 53 to 87 |
+| `print-complete.json` | `ev_cac2f3eb5eed331806ce07b8f047033146ab834f4fda66d806ede03308a40806` | the job finishes: `CurrentStatus` [1] / 13 to [0] / 9 |
+| `connect-idle.json` | `ev_ef7920b458d061eb14599de8b0ff3ee2dc996277c70484026820d21aa5cd893e` | idle with a file upload (2, then 8), idle (0), then a new job starts (1, `PrintInfo.Status` 18 then 1) |
+
+Each fixture is `{source, frames: [{seq, direction, payload}]}`, with frames
+in receipt order and payloads parsed from JSON (the heartbeat stays the string
+`"ping"`). The fixtures hold the printer's real file names, task ids, and
+MAC address.
+
 ## Transport
 
 | Item | Value | Label | Source |
 | --- | --- | --- | --- |
-| WebSocket URL | `ws://<printer-ip>:3030/websocket` | *static-only* | main@783931 (`connect()`) |
+| WebSocket URL | `ws://<printer-ip>:3030/websocket` | *observed* | main@783931 (`connect()`); every fixture's `source.socket` |
 | Connect delay | the UI opens the socket 3 s after `createWebSocket()` | *static-only* | main@783970 (`createWebSocket()`) |
-| Heartbeat | the UI sends the text frame `ping` every 30 s while `readyState === 1` | *static-only* | main@785449 (`period=3e4` at main@783494) |
+| Heartbeat | the UI sends the text frame `ping` every 30 s while `readyState === 1`; **the printer sends no reply** (6 pings across the captures, no non-JSON frame received) | *observed* | main@785449 (`period=3e4` at main@783494); `connect-printing.json#33`, `#46` |
 | Reconnect | on `onerror`, the UI stops the heartbeat and reconnects | *static-only* | main@785125 (`onError`) |
-| Topic routing | inbound JSON has a `Topic` string; the UI routes by substring `sdcp/status`, `sdcp/attributes`, `sdcp/response`, `sdcp/error` | *static-only* | main@784465, main@784631, main@784799, main@784969 |
-| Camera | `Cmd 386 {Enable:1}` answers with `Data.Data.VideoUrl`; the UI shows MJPEG when `Attributes.Capabilities` has `VIDEO_STREAM`, WebRTC when it has `VIDEO_WEBRTC` | *static-only* | c25@325607, c25@283220 |
+| Topic routing | inbound JSON has a `Topic` string of the form `sdcp/<kind>/<MainboardID>`; seen kinds: `status`, `attributes`, `response` | *observed* | main@784465, main@784631, main@784799; `connect-loading.json#11`, `#13`, `#17` |
+| `sdcp/error` topic | routed by the UI (main@784969); never seen on the wire | *static-only* | main@784969 |
+| Camera | `Cmd 386 {Enable:1}` answers `Data.Data.VideoUrl` = `"192.0.2.10:3031/video"` (host:port/path, **no scheme**); `Attributes.Capabilities` has `VIDEO_STREAM` (MJPEG), not `VIDEO_WEBRTC` | *observed* | c25@325607, c25@283220; `connect-loading.json#10`, `#26`, `#17` |
 
-*static-only*: the UI sends no non-JSON frame to port 3030 other than
-`ping`. No reply format for `ping` appears in the bundle.
+The UI sends no non-JSON frame to port 3030 other than `ping` (*observed*:
+every sent frame in the fixtures is JSON or `ping`).
 
 ## Request envelope
 
 Built by `getMsgBodyString(id, cmd, mainboardId = "", data)` (main@775984,
-class at main@775747):
+class at main@775747). *observed* exactly in this shape in every sent frame
+(for example `connect-loading.json#4`):
 
 ```json
 {
@@ -85,59 +116,80 @@ class at main@775747):
 
 | Field | Notes | Label | Source |
 | --- | --- | --- | --- |
-| `Id` | always `""` in the builder, even when an id is passed | *static-only* | main@776059 |
-| `Data.Cmd` | numeric command id (table below) | *static-only* | main@776071 |
-| `Data.Data` | command payload, `{}` when absent | *static-only* | main@776081 |
-| `Data.RequestID` | `uuid()` with `-` removed (32 hex chars) | *static-only* | main@776093 |
-| `Data.MainboardID` | many calls pass `""`; control calls pass `Attributes.MainboardID` | *static-only* | main@776115 |
-| `Data.TimeStamp` | `Date.now()` in **milliseconds** | *static-only* | main@776141 |
-| `Data.From` | always `1` (web UI) | *static-only* | main@776163 |
+| `Id` | always `""` | *observed* | main@776059; `connect-loading.json#4` |
+| `Data.Cmd` | numeric command id (table below) | *observed* | main@776071; `connect-loading.json#4` |
+| `Data.Data` | command payload, `{}` when absent | *observed* | main@776081; `connect-loading.json#4`, `#8` |
+| `Data.RequestID` | `uuid()` with `-` removed (32 hex chars) | *observed* | main@776093; `connect-loading.json#4` |
+| `Data.MainboardID` | `""` on the connect commands; the Cmd 321 sent for the running job may carry `Attributes.MainboardID` | *observed* | main@776115; `connect-loading.json#38`, `connect-idle.json#35` |
+| `Data.TimeStamp` | `Date.now()` in **milliseconds** | *observed* | main@776141; `connect-loading.json#4` |
+| `Data.From` | always `1` (web UI) | *observed* | main@776163; `connect-loading.json#4` |
+
+The printer accepts requests with `MainboardID: ""` (*observed*: every
+connect command is answered with `Ack: 0`).
 
 ## Response envelope
 
-Read by the response handlers (main@776976 onward, c25@321079). Every point
-in this list is *static-only*:
+*observed*: example `connect-loading.json#13`:
 
-- `Topic` contains `sdcp/response`.
-- `Data.Cmd` echoes the request's command id.
-- `Data.Data.Ack` is the result: `0` success; other values are failures. Cmd
-  131 (resume) treats `Ack === 2` as "blocked, see
-  `TaskDetail.ErrorStatusReason`" (c25@321459). Cmd 128 maps `Ack` 0-7 to the
-  messages in `i18n:networkDeviceManager.control.printer`.
-- `Data.MainboardID` is compared with the attribute's `MainboardID` for file
-  lists (main@779200).
+```json
+{
+  "Id": "979d4C788A4a78bC777A870F1A02867A",
+  "Data": {
+    "Cmd": 0,
+    "Data": { "Ack": 0 },
+    "RequestID": "1d768b7ea6cf4047a4c71e38a2602464",
+    "MainboardID": "40551f980103d46c00004c0000000000",
+    "TimeStamp": 1794605229
+  },
+  "Topic": "sdcp/response/40551f980103d46c00004c0000000000"
+}
+```
 
-Not found statically: whether `Data.RequestID` is echoed in the response. The
-UI does not correlate by `RequestID`; it subscribes per command id.
+| Field | Notes | Label | Source |
+| --- | --- | --- | --- |
+| `Topic` | `sdcp/response/<MainboardID>` | *observed* | `connect-loading.json#13` |
+| `Id` | a fixed 32-character value, the same in every response and capture; not the request's `Id` | *observed* | `connect-loading.json#13`, `connect-idle.json#7` |
+| `Data.Cmd` | echoes the request's command id | *observed* | `connect-loading.json#13`, `#15` |
+| `Data.RequestID` | **echoes the request's `RequestID`**, so responses can be correlated by it | *observed* | `connect-loading.json#4` and `#13`, `#10` and `#26` |
+| `Data.MainboardID` | the printer's mainboard id, even when the request sent `""` | *observed* | `connect-loading.json#13` |
+| `Data.TimeStamp` | **seconds** (requests use milliseconds) | *observed* | `connect-loading.json#13` |
+| `Data.Data.Ack` | `0` success. Other values are failures (*static-only*): Cmd 131 treats `Ack === 2` as "blocked, see `TaskDetail.ErrorStatusReason`" (c25@321459); Cmd 128 maps `Ack` 0-7 to the messages in `i18n:networkDeviceManager.control.printer` | *observed* (`0` only) | main@776976, c25@321079; every response in the fixtures |
+
+Responses arrive out of request order with pushed messages in between
+(*observed*: `connect-loading.json#11` is a status push before the Cmd 0
+response at `#13`). The web UI itself does not correlate by `RequestID`; it
+subscribes per command id (*static-only*).
 
 ## Command ids
 
 Constant table at main@774974 (module `543`). "Call site" is where the UI
-builds and sends the command.
+builds and sends the command. Rows labelled *observed* were sent by the web
+UI and answered during the live captures; the control commands (129, 130,
+131, 403) are still *static-only* until the live control capture.
 
 | Cmd | Constant name | Payload | Call site | Notes | Label |
 | ---: | --- | --- | --- | --- | --- |
-| 0 | `GET_PRINTER_STATUS` | none | main@782822 | sent once on connect | *static-only* |
-| 1 | `GET_PRINTER_ATTR` | none | main@782894 | sent once on connect | *static-only* |
+| 0 | `GET_PRINTER_STATUS` | none | main@782822 | sent once on connect; answer is only `{Ack:0}`, and the status itself comes as an `sdcp/status` push | *observed* (`connect-loading.json#4`, `#13`, `#11`) |
+| 1 | `GET_PRINTER_ATTR` | none | main@782894 | sent once on connect; answer is only `{Ack:0}`, and the attributes come as an `sdcp/attributes` push | *observed* (`connect-loading.json#5`, `#15`, `#17`) |
 | 64 | `SEND_PRINTER_DISCONNECT` | - | none | defined, never sent | *static-only* |
 | 128 | `SEND_PRINTER_START_PRINT` | `{Filename, StartLayer:0, Calibration_switch, PrintPlatformType, Tlp_Switch, slot_map}` | c25@33800 (`sendStartPrint`, c25@32772) | out of scope | *static-only* |
 | 129 | `SEND_PRINTER_SUSPEND_PRINT` | none | c25@322328 (`stop()`, c25@320381) | **pause**; sent when `PrintInfo.Status !== 6` | *static-only* |
 | 130 | `SEND_PRINTER_STOP_PRINT` | none | c25@323551 (`cease()`, c25@322462) | **stop**; the UI asks for no confirmation in code | *static-only* |
 | 131 | `SEND_PRINTER_RESTORE_PRINT` | none | c25@322085 (`stop()`) | **resume**; sent when `PrintInfo.Status === 6` | *static-only* |
-| 134 | `GET_BLACKOUT_STATUS` | none | main@783040 | sent on connect; `Ack === 1` means an unfinished print after power loss | *static-only* |
+| 134 | `GET_BLACKOUT_STATUS` | none | main@783040 | sent on connect; `Ack === 1` means an unfinished print after power loss (*static-only*); `Ack: 0` seen with no pending print | *observed* (`connect-loading.json#7`, `#22`) |
 | 135 | `SEND_BLACKOUT_ACTION` | `{action: 1 \| 0}` | main@779951 | 1 resume, 0 discard; only after a user dialog | *static-only* |
 | 192 | `SEND_PRINTER_EDIT_NAME` | - | none | defined, never sent | *static-only* |
 | 255 | `SEND_PRINTER_SEND_FILE_END` | - | none | defined, never sent | *static-only* |
 | 257 | `EDIT_PRINTER_FILE_NAME` | file rename | c25@395716 | out of scope | *static-only* |
-| 258 | `GET_PRINTER_FILE_LIST` | `{Url: "/local"}` | main@783113 | sent on connect | *static-only* |
+| 258 | `GET_PRINTER_FILE_LIST` | `{Url: "/local"}` | main@783113 | sent on connect and again after `CurrentStatus` 8 clears; answer `Data.Data.FileList[]` with `name`, `type`, `CreateTime`, `FileSize`, `LayerHeight`, `TotalLayers`, `EstFilamentLength` | *observed* (`connect-loading.json#8`, `#24`; `connect-idle.json#28`) |
 | 259 | `DELETE_PRINTER_FILE_LIST` | file list | c25@335583 | out of scope | *static-only* |
 | 260 | `GET_PRINTER_FILE_DETAIL` | file name | c25@327761 | answer has `Data.Data.FileInfo` (`EstTime`, `EstWeight`, `TotalLayers`, `ColorNum`) (c25@328317) | *static-only* |
-| 320 | `GET_PRINTER_HISTORY_ID` | none | main@782964 | answer `Data.Data.HistoryData` is a list of task ids | *static-only* |
-| 321 | `GET_PRINTER_TASK_DETAIL` | `{Id: [<TaskId>, ...]}` | main@780760 | answer `Data.Data.HistoryDetailList[]` with `TaskId`, `TaskName`, `Thumbnail`, `ErrorStatusReason`, `TimeLapseVideoStatus`, `TimeLapseVideoUrl` | *static-only* |
+| 320 | `GET_PRINTER_HISTORY_ID` | none | main@782964 | answer `Data.Data.HistoryData` is a list of task ids, newest first; the UI sends it again when a job completes | *observed* (`connect-loading.json#6`, `#19`; `print-complete.json#25`, `#26`) |
+| 321 | `GET_PRINTER_TASK_DETAIL` | `{Id: [<TaskId>, ...]}` | main@780760 | answer `Data.Data.HistoryDetailList[]` with `TaskId`, `TaskName`, `BeginTime`, `EndTime` (0 while running), `TaskStatus` (4 while running, 1 after completion), `SliceInformation`, `AlreadyPrintLayer`, `MD5`, `Thumbnail`, `ErrorStatusReason`, `TimeLapseVideoStatus`, `TimeLapseVideoUrl` | *observed* (`connect-loading.json#38`, `#39`; `print-complete.json#28`) |
 | 322 | `DELETE_PRINTER_HISTORY` | ids | c25@332063 | out of scope | *static-only* |
 | 323 | `GET_PRINTER_HISTORY_VIDEO` | id | c25@337975 | out of scope | *static-only* |
 | 324 | `GET_MATERIAL_DATA` | - | c25@328736 | AMS material data | *static-only* |
-| 386 | `EDIT_PRINTER_VIDEO_STREAMING` | `{Enable: 1 \| 0}` | c25@325607, c25@326443 | the control page enables the camera when the socket connects (c25@319343) | *static-only* |
+| 386 | `EDIT_PRINTER_VIDEO_STREAMING` | `{Enable: 1 \| 0}` | c25@325607, c25@326443 | the control page enables the camera when the socket connects (c25@319343); answer `{Ack:0, VideoUrl}`; afterwards `Attributes.NumberOfVideoStreamConnected` goes from 0 to 1 | *observed* (`connect-loading.json#10`, `#26`, `#28`) |
 | 387 | `EDIT_PRINTER_TIME_LAPSE_STATUS` | - | none | defined, never sent | *static-only* |
 | 401 | `EDIT_PRINTER_AXIS_NUMBER` | jog | c25@326738 | out of scope | *static-only* |
 | 402 | `EDIT_PRINTER_AXIS_ZERO` | `{Axis}` | c25@324257 | out of scope; refused by the UI while printing | *static-only* |
@@ -155,7 +207,9 @@ builds and sends the command.
 | Bed target | `{TempTargetHotbed: <number>}` | c25@334960 | *static-only* |
 
 The UI shows a toast from the `Ack` of the 403 response (c25@318975). The
-exact type of `SecondLight` (boolean or 0/1) is not visible statically.
+status message carries `LightStatus` as `{SecondLight: 1, RgbLight: [0,0,0]}`
+(*observed*, `connect-loading.json#11`), so `SecondLight` is a number (0/1),
+and the whole object the light switch sends back includes `RgbLight`.
 
 ### UI guards before control commands
 
@@ -170,29 +224,68 @@ the button `disabled-img` bindings at c25@263398:
 
 ## Status message (`sdcp/status`)
 
-Pushed by the printer; the UI stores `msg.Status` as-is (main@782513). Fields
-the UI reads (all *static-only*):
+*observed*: pushed by the printer without a request, about every 3 s while
+printing and while idle, plus extra pushes on state changes (for example
+`print-complete.json#23` to `#24`, 1 s apart). It has no `Id` or `Data`
+envelope:
 
-| Field | Meaning (from the UI) | Source | Label |
+```json
+{
+  "Status": {
+    "CurrentStatus": [1],
+    "TimeLapseStatus": 0,
+    "PlatFormType": 0,
+    "AmsConnectStatus": 0,
+    "TempOfHotbed": 69.98,
+    "TempOfNozzle": 249.73,
+    "TempOfBox": 29.29,
+    "TempTargetHotbed": 70,
+    "TempTargetNozzle": 250,
+    "TempTargetBox": 0,
+    "CurrenCoord": "202.00,264.50,10.39",
+    "CurrentFanSpeed": { "ModelFan": 30, "AuxiliaryFan": 0, "BoxFan": 68 },
+    "ZOffset": 0.0,
+    "LightStatus": { "SecondLight": 1, "RgbLight": [0, 0, 0] },
+    "PrintInfo": {
+      "Status": 16, "CurrentLayer": 9, "TotalLayer": 12,
+      "CurrentTicks": 298.5, "TotalTicks": 399,
+      "Filename": "<file>.gcode", "TaskId": "<uuid>",
+      "PrintSpeedPct": 100, "Progress": 48
+    }
+  },
+  "MainboardID": "40551f980103d46c00004c0000000000",
+  "TimeStamp": 1794605247,
+  "Topic": "sdcp/status/40551f980103d46c00004c0000000000"
+}
+```
+
+(`connect-loading.json#35`, numbers rounded.) `TimeStamp` is in seconds. The
+UI stores `msg.Status` as-is (main@782513).
+
+| Field | Meaning | Source | Label |
 | --- | --- | --- | --- |
-| `Status.CurrentStatus` | array of machine-state codes (table below) | c25@266283 (`Gs` template) | *static-only* |
-| `Status.PrintInfo.Status` | print-state code (table below) | c25@8626 | *static-only* |
-| `Status.PrintInfo.Progress` | percent; the UI shows 100 when `Status === 9` | c25@264786 | *static-only* |
-| `Status.PrintInfo.CurrentLayer`, `TotalLayer` | layers | c25@265649 | *static-only* |
-| `Status.PrintInfo.CurrentTicks`, `TotalTicks` | seconds elapsed and total; remaining = total - current | c25@265023 | *static-only* |
-| `Status.PrintInfo.PrintSpeedPct` | speed percent | c25@320313 | *static-only* |
-| `Status.PrintInfo.TaskId` | current job id; the UI uses it to fetch Cmd 321 | main@781286 | *static-only* |
-| `Status.TempOfNozzle`, `TempTargetNozzle` | nozzle current/target (deg C) | c25@285924 | *static-only* |
-| `Status.TempOfHotbed`, `TempTargetHotbed` | bed current/target | c25@286318 | *static-only* |
-| `Status.TempOfBox` | chamber current; **no `TempTargetBox` is read anywhere** | c25@286708 | *static-only* |
-| `Status.CurrentFanSpeed.{ModelFan,AuxiliaryFan,BoxFan}` | fan percent | c25@123034 | *static-only* |
-| `Status.LightStatus.SecondLight` | chamber light state | c25@124019 | *static-only* |
-| `Status.CurrenCoord` | toolhead coordinates (sic) | c25@272342 | *static-only* |
-| `Status.AmsConnectStatus` | AMS present | c25@29562 | *static-only* |
+| `Status.CurrentStatus` | array of machine-state codes (table below); one element in every capture | c25@266283 (`Gs` template); `connect-loading.json#11` | *observed* |
+| `Status.PrintInfo.Status` | print-state code (table below) | c25@8626; `connect-printing.json#9` | *observed* |
+| `Status.PrintInfo.Progress` | percent while printing; **drops to 0 when the job completes** (the UI shows 100 when `Status === 9`) | c25@264786; `print-complete.json#23`, `#24` | *observed* |
+| `Status.PrintInfo.CurrentLayer`, `TotalLayer` | layers; keep the last job's values after completion | c25@265649; `print-complete.json#24` | *observed* |
+| `Status.PrintInfo.CurrentTicks`, `TotalTicks` | seconds elapsed and total (floats); remaining = total - current; ticks stop during the material-change phase | c25@265023; `connect-printing.json#9`, `connect-loading.json#11` | *observed* |
+| `Status.PrintInfo.PrintSpeedPct` | speed percent | c25@320313; `connect-printing.json#9` | *observed* |
+| `Status.PrintInfo.TaskId` | current job id (uuid with dashes); **`""` once the job completes and while idle** | main@781286; `connect-printing.json#9`, `print-complete.json#24` | *observed* |
+| `Status.PrintInfo.Filename` | current file name, no `/local/` prefix; `""` when no job | `connect-printing.json#9`, `print-complete.json#24` | *observed* (not read by the UI) |
+| `Status.TempOfNozzle`, `TempTargetNozzle` | nozzle current/target (deg C); target 0 when idle | c25@285924; `connect-idle.json#8` | *observed* |
+| `Status.TempOfHotbed`, `TempTargetHotbed` | bed current/target | c25@286318; `connect-idle.json#8` | *observed* |
+| `Status.TempOfBox` | chamber current | c25@286708; `connect-idle.json#8` | *observed* |
+| `Status.TempTargetBox` | present on the wire, always 0 in the captures; not read by the UI | `connect-idle.json#8` | *observed* |
+| `Status.CurrentFanSpeed.{ModelFan,AuxiliaryFan,BoxFan}` | fan percent | c25@123034; `connect-loading.json#11` | *observed* |
+| `Status.LightStatus.SecondLight` | chamber light state, number (1 = on in every capture) | c25@124019; `connect-loading.json#11` | *observed* |
+| `Status.LightStatus.RgbLight` | `[r, g, b]`, `[0,0,0]` in every capture; not read by the UI | `connect-loading.json#11` | *observed* |
+| `Status.CurrenCoord` | toolhead coordinates as a `"x,y,z"` string (sic) | c25@272342; `connect-loading.json#11` | *observed* |
+| `Status.AmsConnectStatus` | AMS present (0 in every capture) | c25@29562; `connect-loading.json#11` | *observed* |
+| `Status.TimeLapseStatus`, `PlatFormType`, `ZOffset` | present on the wire, 0 in every capture; not read by the UI | `connect-loading.json#11` | *observed* |
 
-The current file name is shown from `TaskDetail.TaskName` (Cmd 321), not from
-the status message; whether the status message carries a file name is not
-visible statically.
+The UI shows the file name from `TaskDetail.TaskName` (Cmd 321, with the
+`/local/` prefix), but the status message also carries it in
+`PrintInfo.Filename` (*observed*).
 
 ### Machine state: `Status.CurrentStatus[]`
 
@@ -200,18 +293,18 @@ Template `Gs` (c25@266283); labels from `i18n:networkDeviceManager.control.statu
 
 | Code | UI label | Notes | Label |
 | ---: | --- | --- | --- |
-| 0 | Idle | shows the "idle" print-state group | *static-only* |
-| 1 | Printing | shows the "printing" print-state group and the pause/stop controls | *static-only* |
-| 2 | File Sending | shown only when it is the only code | *static-only* |
+| 0 | Idle | shows the "idle" print-state group | *observed* (`print-complete.json#24`, `connect-idle.json#27`) |
+| 1 | Printing | shows the "printing" print-state group and the pause/stop controls | *observed* (`connect-printing.json#9`) |
+| 2 | File Sending | shown only when it is the only code; seen while another client uploaded a file | *observed* (`connect-idle.json#8`) |
 | 5 | Leveling | | *static-only* |
 | 6 | Input shaping | | *static-only* |
 | 7 | busy | | *static-only* |
-| 8 | File Checking | shown only when it is the only code; main refreshes the file list after it clears (main@780227) | *static-only* |
+| 8 | File Checking | shown only when it is the only code; main refreshes the file list after it clears (main@780227) | *observed* (`connect-idle.json#25`, then Cmd 258 at `#28`) |
 | 9 | Homing | | *static-only* |
-| 10 | Incoming or outgoing materials | | *static-only* |
+| 10 | Incoming or outgoing materials | seen mid-job with `PrintInfo.Status` 16 and 20 and frozen ticks | *observed* (`connect-loading.json#11`, `#45`) |
 | 11 | Tuning the Nozzle PID | | *static-only* |
 
-Codes 3 and 4 are not referenced.
+Codes 3 and 4 are not referenced by the UI and were not seen.
 
 ### Print state: `Status.PrintInfo.Status`
 
@@ -220,47 +313,82 @@ Status groups at c25@8626 (`STATUS_*` arrays), shown under machine state 0
 
 | Code | Under machine state 0 | Under machine state 1 | Label |
 | ---: | --- | --- | --- |
-| 0 | Idle (`STATUS_WAIT`) | Preparing (`STATUS_LOADING`) | *static-only* |
-| 1 | Stopping (`STATUS_STOPING`) | Preparing (`STATUS_LOADING`) | *static-only* |
+| 0 | Idle (`STATUS_WAIT`) | Preparing (`STATUS_LOADING`) | *observed* under 0, 2, 8, and 1 (`connect-idle.json#8`, `#27`, `#33`) |
+| 1 | Stopping (`STATUS_STOPING`) | Preparing (`STATUS_LOADING`) | *observed* under 1, right after a job starts (`connect-idle.json#38`) |
 | 5 | - | Pausing (`STATUS_SUSPENDING`) | *static-only* |
 | 6 | - | Paused (`STATUS_SUSPENDED`) | *static-only* |
 | 7 | - | not labelled; controls disabled | *static-only* |
 | 8 | Stopped (`STATUS_STOPED`) | - | *static-only* |
-| 9 | Print Complete (`STATUS_COMPLETE`) | - | *static-only* |
+| 9 | Print Complete (`STATUS_COMPLETE`) | - | *observed* under 0 (`print-complete.json#24`) |
 | 10 | - | File Checking (`STATUS_FILE_DETECTION`) | *static-only* |
 | 12 | - | Restoring (`STATUS_RECOVERY`); controls disabled | *static-only* |
-| 13 | - | Printing (`STATUS_PRINTING`) | *static-only* |
+| 13 | - | Printing (`STATUS_PRINTING`) | *observed* (`connect-printing.json#9`) |
 | 14 | Stopped (`STATUS_STOPED`) | - | *static-only* |
-| 15, 16, 18, 19, 20, 21 | - | Preparing (`STATUS_LOADING`) | *static-only* |
+| 15, 16, 18, 19, 20, 21 | - | Preparing (`STATUS_LOADING`) | 16 and 20 *observed* under 10 and 1 (`connect-loading.json#11`, `#43`); 18 *observed* under 1 at job start (`connect-idle.json#34`); 15, 19, 21 *static-only* |
 
-Codes 2, 3, 4, 11, and 17 are not referenced.
+Codes 2, 3, 4, 11, and 17 are not referenced by the UI and were not seen.
+
+Observed sequences: job start `CurrentStatus` 0 → 1 with `PrintInfo.Status`
+0 → 18 → 1 (`connect-idle.json#32` to `#38`); job end 1/13 → 0/9
+(`print-complete.json#23`, `#24`); upload 2 → 8 → 0 (`connect-idle.json#8`,
+`#25`, `#27`).
 
 ### Error codes
 
 - *static-only*: `TaskDetail.ErrorStatusReason` (Cmd 321 answer): the UI only names code 45,
   "Consumables are about to run out, please replace consumables"
   (`i18n:networkDeviceManager.control.errorStatusReason.45`, main@777696).
-  No other error code table ships with the web UI.
-- *static-only*: `sdcp/error` messages are routed (main@784969) but no handler reads them.
+  No other error code table ships with the web UI. *observed*: `0` on
+  completed and running jobs (`print-complete.json#28`).
+- *static-only*: `sdcp/error` messages are routed (main@784969) but no handler reads them;
+  none were seen during the live pass.
 
 ## Attributes message (`sdcp/attributes`)
 
-The UI merges `msg.Attributes` into its printer record (main@782653). Fields
-read: `MainboardID`, `MainboardIP`, `Name`, `Capabilities` (contains
-`VIDEO_STREAM` and/or `VIDEO_WEBRTC`), `CameraStatus`. *static-only*.
+*observed*: pushed after Cmd 1 and again when an attribute changes (for
+example `NumberOfVideoStreamConnected` after Cmd 386), same outer shape as
+the status message (`Attributes`, `MainboardID`, `TimeStamp` in seconds,
+`Topic: sdcp/attributes/<MainboardID>`). Example `connect-loading.json#17`.
+The UI merges `msg.Attributes` into its printer record (main@782653).
+
+| Field | Value seen | Label |
+| --- | --- | --- |
+| `Name`, `MachineName`, `BrandName` | `Centauri Carbon`, `Centauri Carbon`, `ELEGOO` | *observed* |
+| `ProtocolVersion`, `FirmwareVersion` | `V3.0.0`, `V1.4.49` | *observed* |
+| `MainboardID`, `MainboardIP`, `MainboardMAC` | the printer's id, IP, and MAC | *observed* |
+| `XYZsize` | `"218.88x128.88x220"` | *observed* |
+| `Capabilities` | `["FILE_TRANSFER","PRINT_CONTROL","VIDEO_STREAM"]` | *observed* |
+| `SupportFileType` | `["gcode"]` | *observed* |
+| `CameraStatus` | `1` | *observed* |
+| `NumberOfVideoStreamConnected`, `MaximumVideoStreamAllowed` | 0 then 1 after Cmd 386; max `4` | *observed* (`connect-loading.json#17`, `#28`) |
+| `SDCPStatus`, `MaximumCloudSDCPSercicesAllowed` (sic), `NumberOfCloudSDCPServicesConnected` | `0`, `0`, `0` | *observed* |
+| `NetworkStatus`, `UsbDiskStatus`, `RemainingMemory` | `"wlan"`, `0`, bytes free | *observed* |
+| `DevicesStatus` | `{SgStatus, ZMotorStatus, XMotorStatus, YMotorStatus}`, all `1` | *observed* |
+| `TLPNoCapPos`, `TLPStartCapPos`, `TLPInterLayers` | `0` | *observed* |
+
+The UI reads `MainboardID`, `MainboardIP`, `Name`, `Capabilities`, and
+`CameraStatus` (*static-only* for which fields it reads).
 
 ## Connect sequence used by the web UI
 
-On socket open (main@782801-783113) the UI sends, in this order, all with
-`MainboardID: ""`: Cmd 0, Cmd 1, Cmd 320, Cmd 134, Cmd 258 `{Url:"/local"}`.
-When `CurrentStatus` includes 1 and `PrintInfo.TaskId` is set, it also sends
-Cmd 321 for that task (main@780760). The control page then sends Cmd 386
-`{Enable:1}` to start the camera (c25@325607). *static-only*.
+*observed* (`connect-loading.json#4` to `#10`, all four fixtures): on socket
+open the UI sends, in this order and within 1 ms, all with `MainboardID: ""`:
+Cmd 0, Cmd 1, Cmd 320, Cmd 134, Cmd 258 `{Url:"/local"}`, then Cmd 386
+`{Enable:1}` from the control page (c25@325607). Cmd 386 was not sent in
+`connect-idle.json`; the bundle does not explain why from these captures.
+
+The printer answers each request and, after Cmd 0 and Cmd 1, pushes one
+status and one attributes message. The UI then sends Cmd 321 for the full
+history list (from Cmd 320) and, when `CurrentStatus` includes 1 and
+`PrintInfo.TaskId` is set, Cmd 321 for that task (main@780760;
+`connect-loading.json#30`, `#38`).
 
 ## Open points for the live pass
 
-- Response format and `RequestID` echo for each command.
-- Whether the printer pushes `sdcp/status` unprompted, and how often.
-- Value type of `LightStatus.SecondLight`.
-- Meaning of `PrintInfo.Status` 7 and the unreferenced codes.
-- Whether `TaskId` is stable across reconnects (design open question).
+- Response format of the control commands (129, 130, 131, 403); task 2.4.
+- Meaning of `PrintInfo.Status` 7 and the codes not seen yet.
+- Whether `TaskId` is stable across reconnects (design open question, task
+  2.5). The read-only captures saw the same `TaskId`
+  `c735768d-8d67-4ae2-8d07-05c0c05c4aa2` in the status and in Cmd 321 over
+  three separate connections during one job, and `TaskId` is `""` in the
+  completion push itself (`print-complete.json#24`).
