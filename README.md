@@ -5,6 +5,7 @@
 ![pnpm 10](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Protocol SDCP V3](https://img.shields.io/badge/SDCP-V3.0.0-555)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A small service that talks to an Elegoo Centauri Carbon over its local SDCP
 protocol and gives you, on your own network:
@@ -199,3 +200,7 @@ or a reverse proxy. Details in [docs/api.md](docs/api.md#dashboard).
   that notify.
 - [docs/sdcp-protocol.md](docs/sdcp-protocol.md): the printer's SDCP protocol
   as this project uses it.
+
+## License
+
+[MIT](LICENSE) © 2026 Emmanuel Paul. Not affiliated with or endorsed by Elegoo.
