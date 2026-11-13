@@ -49,6 +49,7 @@ export class FakePrinter {
   readonly replies: Map<number, Reply>;
   private readonly server: WebSocketServer;
   private readonly frameListeners = new Set<(frame: ReceivedFrame) => void>();
+  private silent = false;
 
   private constructor(server: WebSocketServer, options: FakePrinterOptions) {
     this.server = server;
@@ -97,6 +98,7 @@ export class FakePrinter {
 
   /** Sends one frame (an object is serialized as JSON) to every connected client. */
   push(payload: unknown): void {
+    if (this.silent) return;
     const text = typeof payload === "string" ? payload : JSON.stringify(payload);
     for (const client of this.server.clients) {
       if (client.readyState === WebSocket.OPEN) client.send(text);
@@ -136,6 +138,15 @@ export class FakePrinter {
     await new Promise<void>((resolve) => this.server.once("connection", () => resolve()));
   }
 
+  /**
+   * Stops answering requests and pushing frames while keeping every connection
+   * open, as a printer that lost power or Wi-Fi without closing would. Frames
+   * are still recorded.
+   */
+  goSilent(): void {
+    this.silent = true;
+  }
+
   /** Drops every client connection abruptly, as a printer reboot would. */
   dropClients(): void {
     for (const client of this.server.clients) client.terminate();
@@ -149,7 +160,7 @@ export class FakePrinter {
 
   private answer(socket: WebSocket, payload: unknown): void {
     const cmd = commandOf(payload);
-    if (cmd === undefined) return;
+    if (cmd === undefined || this.silent) return;
     const reply = this.replies.get(cmd) ?? 0;
     if (reply === "silent") return;
     const request = (payload as { Data: { RequestID?: unknown } }).Data;

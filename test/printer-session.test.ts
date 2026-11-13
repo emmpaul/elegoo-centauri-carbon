@@ -49,6 +49,10 @@ describe("PrinterSession", () => {
   afterEach(async () => {
     session.stop();
     await printer.close();
+    // Let the closed sockets fail their pending requests while this test's mock
+    // clock is still installed: clearing a stale mocked timer under the next
+    // test's clock would remove one of that test's timers instead.
+    await settle();
     mock.timers.reset();
   });
 
@@ -61,6 +65,9 @@ describe("PrinterSession", () => {
     printer.push(statusPush);
     await status;
     assert.equal(session.state, "online");
+    // Let the responses to the connect requests arrive before a test moves the
+    // mocked clock, so their 10 s timeouts never fire.
+    await settle();
   }
 
   it("asks for status and attributes on connect and goes online on the first status push", async () => {
@@ -106,12 +113,14 @@ describe("PrinterSession", () => {
     let poll = printer.nextFrame(isCmd(Cmd.GET_PRINTER_STATUS));
     mock.timers.tick(1);
     await poll;
+    await settle(); // the response arrives before the clock moves past its timeout
     assert.equal(polls(), 2);
 
     poll = printer.nextFrame(isCmd(Cmd.GET_PRINTER_STATUS));
     mock.timers.tick(30_000);
     await poll;
     assert.equal(polls(), 3);
+    assert.equal(session.state, "online");
   });
 
   it("does not poll while status messages keep arriving", async () => {
@@ -124,5 +133,31 @@ describe("PrinterSession", () => {
     }
     await settle();
     assert.equal(printer.receivedCommands.filter((cmd) => cmd === Cmd.GET_PRINTER_STATUS).length, 1);
+  });
+
+  it("goes offline and reconnects when the printer stops answering a status poll without closing", async () => {
+    await goOnline();
+    await settle();
+    printer.goSilent();
+
+    const poll = printer.nextFrame(isCmd(Cmd.GET_PRINTER_STATUS));
+    mock.timers.tick(30_000);
+    await poll;
+    assert.equal(printer.clientCount, 1, "the fake keeps the socket open");
+
+    // The status request times out after 10 s with no response.
+    mock.timers.tick(9_999);
+    await settle();
+    assert.equal(session.state, "online");
+
+    mock.timers.tick(1);
+    await settle();
+    assert.equal(session.state, "offline");
+    assert.deepEqual(states, ["online", "offline"]);
+
+    // The back-off reconnect takes over: a new session asks for status after 1 s.
+    const reconnected = printer.nextFrame(isCmd(Cmd.GET_PRINTER_STATUS));
+    mock.timers.tick(1_000);
+    await reconnected;
   });
 });

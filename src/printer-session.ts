@@ -1,9 +1,12 @@
 // Keeps one SDCP session to the printer open: reconnects with capped back-off
-// after a drop, and asks for status when the printer has been silent.
+// after a drop, and asks for status when the printer has been silent. A status
+// request that gets no response means the printer went silent without closing
+// the socket (powered off, off Wi-Fi), so the session is dropped as if closed.
 import { EventEmitter } from "node:events";
 import {
   type AttributesMessage,
   Cmd,
+  CommandTimeoutError,
   type Logger,
   NotConnectedError,
   SdcpClient,
@@ -22,7 +25,10 @@ export interface PrinterSessionOptions {
   maxBackoffMs?: number;
   /** Silence after which status is requested. 30 s by default. */
   idlePollMs?: number;
-  /** Response timeout passed to the client. */
+  /**
+   * Response timeout passed to the client. A status request that times out
+   * marks the session lost.
+   */
   responseTimeoutMs?: number;
 }
 
@@ -149,8 +155,21 @@ export class PrinterSession extends EventEmitter<SessionEvents> {
     }, this.options.idlePollMs);
   }
 
+  /**
+   * Sends a session-owned request. A status request that times out means the
+   * printer stopped answering without closing the socket: close it and treat
+   * the session as lost, so the back-off reconnect takes over.
+   */
   private request(cmd: number): void {
-    this.client?.send(cmd).catch((error: Error) => this.logger.warn(`SDCP command ${cmd} failed: ${error.message}`));
+    const client = this.client;
+    client?.send(cmd).catch((error: Error) => {
+      this.logger.warn(`SDCP command ${cmd} failed: ${error.message}`);
+      if (cmd !== Cmd.GET_PRINTER_STATUS || !(error instanceof CommandTimeoutError)) return;
+      if (this.client !== client || this.stopped) return;
+      this.logger.warn(`printer at ${this.options.url} stopped responding; dropping the session`);
+      this.onLost();
+      client.close();
+    });
   }
 
   private setState(state: ConnectionState): void {
