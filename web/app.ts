@@ -1,12 +1,21 @@
 // Dashboard: reads the status snapshot once, then follows the Server-Sent
 // Events stream (docs/api.md) and renders every snapshot without a reload.
+// It shows the camera through the service's proxy and sends control commands,
+// enabling only those the service would accept in the current state.
 // The access token, when the service needs one, comes from `?token=` on the
 // first visit or from the token form, and is kept in localStorage.
+import { type ControlAction, isAllowed } from "../src/control-rules.ts";
+import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot, Temperature } from "../src/status-store.ts";
+import { delimiterOf, MjpegParser } from "./mjpeg.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
 const RETRY_MS = 5000;
+/** Wait before trying the camera again after it failed. */
+const CAMERA_RETRY_MS = 15_000;
+/** A camera stream that sends no frame for this long counts as failed. */
+const CAMERA_STALL_MS = 10_000;
 
 // ---- Access token ----
 
@@ -158,6 +167,8 @@ function render(): void {
   // The printer reports no chamber target, so only the current value is shown.
   setText("chamber", degrees(chamber.current));
 
+  renderControls(snapshot);
+
   const title = snapshot.progress !== null && snapshot.printState.name === "printing" ? `${snapshot.progress}% · ${name}` : name;
   if (document.title !== title) document.title = title;
 }
@@ -193,6 +204,179 @@ function renderUpdatedAt(snapshot: StatusSnapshot | null): void {
   }
   element.dateTime = new Date(at).toISOString();
   setText("updatedAt", `${clock(at)} (${age(at, Date.now())})`);
+}
+
+// ---- Controls ----
+
+const ACTION_LABELS: Record<ControlAction, string> = { pause: "Pause", resume: "Resume", stop: "Stop", light: "Light" };
+
+/** The command waiting for its result; every button is disabled meanwhile. */
+let pending: ControlAction | null = null;
+
+function controlButtons(): HTMLButtonElement[] {
+  return [...document.querySelectorAll<HTMLButtonElement>("button[data-action]")];
+}
+
+function renderControls(snapshot: StatusSnapshot): void {
+  for (const button of controlButtons()) {
+    const action = button.dataset.action as ControlAction;
+    button.disabled = pending !== null || !serviceReachable || !isAllowed(action, snapshot);
+    if (action === "light") {
+      const text = snapshot.light === "on" ? "Light off" : snapshot.light === "off" ? "Light on" : "Light";
+      if (button.textContent !== text) button.textContent = text;
+    }
+  }
+}
+
+function showMessage(text: string, kind: "info" | "error"): void {
+  const element = field("commandMessage");
+  element.dataset.kind = kind;
+  element.textContent = text;
+}
+
+/** One line for a command's result, and whether it is a failure. */
+function describeResult(result: CommandResult): [string, "info" | "error"] {
+  const name = ACTION_LABELS[result.action];
+  switch (result.outcome) {
+    case "acknowledged":
+      return [`${name}: the printer accepted it.`, "info"];
+    case "failed":
+      return [`${name} failed: the printer refused it${result.code === null ? "" : ` (code ${result.code})`}.`, "error"];
+    case "timeout":
+      return [`${name} timed out: the printer didn't answer within 10 seconds.`, "error"];
+  }
+}
+
+async function sendCommand(action: ControlAction, body: Record<string, unknown>): Promise<void> {
+  pending = action;
+  render();
+  showMessage(`${ACTION_LABELS[action]}: sending…`, "info");
+  try {
+    const response = await apiFetch("/api/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | CommandResult | null;
+    if (response.ok && payload !== null && "outcome" in payload) {
+      showMessage(...describeResult(payload));
+    } else {
+      const reason = (payload !== null && "error" in payload && payload.error?.message) || `HTTP ${response.status}`;
+      showMessage(`${ACTION_LABELS[action]} failed: ${reason}.`, "error");
+      if (response.status === 401) void connect();
+    }
+  } catch {
+    showMessage(`${ACTION_LABELS[action]} failed: the service can't be reached.`, "error");
+  } finally {
+    pending = null;
+    render();
+  }
+}
+
+function setUpControls(): void {
+  const dialog = view("stopConfirm") as HTMLDialogElement;
+  dialog.addEventListener("close", () => {
+    if (dialog.returnValue === "stop") void sendCommand("stop", { action: "stop", confirm: true });
+  });
+  for (const button of controlButtons()) {
+    button.addEventListener("click", () => {
+      const action = button.dataset.action as ControlAction;
+      if (action === "stop") {
+        // Stop is sent only from the dialog's "Stop print" button.
+        dialog.returnValue = "";
+        dialog.showModal();
+      } else if (action === "light") {
+        void sendCommand("light", { action: "light", on: latest?.light !== "on" });
+      } else {
+        void sendCommand(action, { action });
+      }
+    });
+  }
+}
+
+// ---- Camera ----
+
+/** The open camera stream; aborting it closes the connection. */
+let cameraAbort: AbortController | null = null;
+let cameraRetryTimer: ReturnType<typeof setTimeout> | undefined;
+/** Object URL of the frame on screen, revoked when the next one replaces it. */
+let frameUrl: string | null = null;
+
+function setCamera(state: "loading" | "live" | "unavailable" | "paused"): void {
+  field("camera").hidden = state !== "live";
+  field("cameraPlaceholder").hidden = state === "live";
+  field("cameraRetry").hidden = state !== "unavailable";
+  const messages = { loading: "Loading camera…", live: "", unavailable: "Camera unavailable", paused: "Camera paused" };
+  setText("cameraMessage", messages[state]);
+}
+
+function showFrame(frame: Uint8Array): void {
+  const image = field<HTMLImageElement>("camera");
+  const previous = frameUrl;
+  frameUrl = URL.createObjectURL(new Blob([frame as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }));
+  image.src = frameUrl;
+  if (previous !== null) URL.revokeObjectURL(previous);
+}
+
+/**
+ * Reads /camera and shows each frame. Resolves when the stream ends or
+ * stalls, and rejects when it can't be opened; either way the camera is
+ * unavailable until a retry.
+ */
+async function readCamera(signal: AbortSignal): Promise<void> {
+  const response = await apiFetch("/camera", { signal, cache: "no-store" });
+  if (!response.ok || response.body === null) throw new Error(`camera answered HTTP ${response.status}`);
+  const parser = new MjpegParser(delimiterOf(response.headers.get("content-type")));
+  const reader = response.body.getReader();
+  let stall: ReturnType<typeof setTimeout> | undefined;
+  const armStall = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => void reader.cancel(), CAMERA_STALL_MS);
+  };
+  armStall();
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      const frames = parser.push(value);
+      const last = frames.at(-1);
+      if (last === undefined) continue;
+      armStall();
+      showFrame(last);
+      setCamera("live");
+    }
+  } finally {
+    clearTimeout(stall);
+  }
+}
+
+function startCamera(): void {
+  stopCamera();
+  const abort = new AbortController();
+  cameraAbort = abort;
+  setCamera("loading");
+  readCamera(abort.signal)
+    .catch(() => undefined)
+    .then(() => {
+      if (cameraAbort !== abort) return; // stopped or restarted meanwhile
+      cameraAbort = null;
+      setCamera("unavailable");
+      cameraRetryTimer = setTimeout(startCamera, CAMERA_RETRY_MS);
+    });
+}
+
+/** Closes the stream, e.g. while the page is hidden, so it costs the printer nothing. */
+function stopCamera(): void {
+  clearTimeout(cameraRetryTimer);
+  const abort = cameraAbort;
+  cameraAbort = null;
+  abort?.abort();
+  setCamera("paused");
+}
+
+function setUpCamera(): void {
+  field("cameraRetry").addEventListener("click", startCamera);
+  document.addEventListener("visibilitychange", () => (document.hidden ? stopCamera() : startCamera()));
 }
 
 // ---- Live updates ----
@@ -245,6 +429,7 @@ async function connect(): Promise<void> {
   serviceReachable = true;
   latest = (await response.json()) as StatusSnapshot;
   render();
+  if (!document.hidden) startCamera();
 
   const source = new EventSource(withToken("/api/events"));
   events = source;
@@ -277,6 +462,8 @@ function start(): void {
     input.value = "";
     void connect();
   });
+  setUpControls();
+  setUpCamera();
   // Keeps the "… ago" texts current between updates.
   setInterval(render, 1000);
   void connect();

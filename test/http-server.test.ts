@@ -464,6 +464,13 @@ describe("HTTP API dashboard files", () => {
     assert.doesNotMatch(source, /import type|: StatusSnapshot\b/, "types are stripped");
     assert.doesNotThrow(() => new Function(source.replace(/^import .*$/gm, "")), "the stripped script parses");
 
+    for (const path of ["/mjpeg.js", "/src/control-rules.ts"]) {
+      const module = await fetch(`${base}${path}`);
+      assert.equal(module.status, 200, path);
+      assert.match(module.headers.get("content-type") ?? "", /^text\/javascript/, path);
+      assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b/, `${path}: types are stripped`);
+    }
+
     const styles = await fetch(`${base}/style.css`);
     assert.equal(styles.status, 200);
     assert.match(styles.headers.get("content-type") ?? "", /^text\/css/);

@@ -8,11 +8,17 @@
 //   LISTEN_PORT   API port (default 8080)
 //   ACCESS_TOKEN  access token (default none)
 //   FAKE_SPEED    simulated print seconds per real second (default 10)
+//   FAKE_CAMERA   "down" starts with the camera answering 503
+//   FAKE_REPLIES  per-command replies, e.g. "129=silent,131=2": "silent" sends
+//                 no response (the command times out after 10 s), a number
+//                 answers with that Ack (failed); the state then doesn't change
 // Signals:
+//   SIGUSR1       toggles the camera down (open streams end, new ones get 503) and back
 //   SIGUSR2       toggles the printer offline (silent, connections dropped) and back
+import { readFileSync } from "node:fs";
 import { startService } from "../src/service.ts";
 import { FakeMjpegSource } from "../test/support/fake-mjpeg.ts";
-import { FakePrinter, loadFixture, type ReceivedFrame } from "../test/support/fake-printer.ts";
+import { FakePrinter, loadFixture, type ReceivedFrame, type Reply } from "../test/support/fake-printer.ts";
 
 interface PrintInfo {
   Status: number;
@@ -49,9 +55,27 @@ function fixturePayload(fixture: string, seq: number): unknown {
 const state = structuredClone(fixturePayload("control-pause-resume-light.json", 11)) as FakeStatus; // printing, light on
 const attributes = fixturePayload("connect-loading.json", 17);
 const speed = Number(process.env.FAKE_SPEED || 10);
+const frames = [1, 2].map((n) => readFileSync(new URL(`../test/fixtures/camera-frame-${n}.jpg`, import.meta.url)));
 
-const printer = await FakePrinter.start();
-const camera = await FakeMjpegSource.start({ frameIntervalMs: 200 });
+/** Parses FAKE_REPLIES ("129=silent,131=2"). */
+function parseReplies(text: string): Record<number, Reply> {
+  const replies: Record<number, Reply> = {};
+  for (const entry of text.split(",").filter(Boolean)) {
+    const [cmd, reply] = entry.split("=").map((part) => part.trim());
+    if (!cmd || !reply || !/^\d+$/.test(cmd) || !(reply === "silent" || /^\d+$/.test(reply))) {
+      throw new Error(`FAKE_REPLIES: "${entry}" is not <cmd>=silent or <cmd>=<ack>`);
+    }
+    replies[Number(cmd)] = reply === "silent" ? "silent" : Number(reply);
+  }
+  return replies;
+}
+
+const printer = await FakePrinter.start({ replies: parseReplies(process.env.FAKE_REPLIES ?? "") });
+const camera = await FakeMjpegSource.start({
+  frameIntervalMs: 200,
+  frame: (n) => frames[Math.floor(n / 5) % frames.length] as Buffer,
+  status: process.env.FAKE_CAMERA === "down" ? 503 : 200,
+});
 const service = await startService({
   printerUrl: printer.url,
   cameraUrl: camera.url,
@@ -74,6 +98,8 @@ function setPrintStatus(code: number, machine = 1): void {
 function onRequest(frame: ReceivedFrame): void {
   const data = (frame.payload as { Data?: { Cmd?: unknown; Data?: Record<string, unknown> } }).Data;
   if (typeof data?.Cmd !== "number") return;
+  // A command the fake refuses or ignores changes nothing.
+  if ((printer.replies.get(data.Cmd) ?? 0) !== 0) return;
   switch (data.Cmd) {
     case 0: // status request: the printer pushes a status message
       setTimeout(pushStatus, 20);
@@ -133,6 +159,13 @@ while (service.store.snapshot.connection !== "online") {
 }
 console.info(`fake printer ${printer.url}, fake camera ${camera.url}`);
 console.info(`API and dashboard on http://127.0.0.1:${service.address.port}/`);
+
+process.on("SIGUSR1", () => {
+  const down = camera.status === 200;
+  camera.status = down ? 503 : 200;
+  if (down) camera.endStreams();
+  console.info(`fake camera ${down ? "down" : "back up"}`);
+});
 
 let offline = false;
 process.on("SIGUSR2", () => {

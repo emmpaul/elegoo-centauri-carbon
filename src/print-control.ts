@@ -3,10 +3,11 @@
 // anything is sent (design D6); a rejected command sends nothing. A command
 // that is sent reports its outcome: acknowledged, failed with the printer's
 // code, or timeout.
+import { type ControlAction, isAllowed } from "./control-rules.ts";
 import { Cmd, CommandTimeoutError, type SdcpResponse } from "./sdcp-client.ts";
-import type { PrintStateName, StatusSnapshot } from "./status-store.ts";
+import type { StatusSnapshot } from "./status-store.ts";
 
-export type ControlAction = "pause" | "resume" | "stop" | "light";
+export { type ControlAction, isAllowed };
 
 export type RejectReason = "not-allowed" | "confirmation-required";
 
@@ -57,32 +58,6 @@ export interface CommandSender {
 export interface ControlStateSource {
   readonly snapshot: StatusSnapshot;
   readonly lightStatus: Record<string, unknown> | null;
-}
-
-/**
- * Print states in which each command may be sent. They follow the web UI's
- * guards (docs/sdcp-protocol.md, "UI guards before control commands"): no
- * control while pausing (5), restoring (12), or in the unlabelled code 7
- * ("unknown"); resume only while paused (6); pause otherwise while a job is
- * active. Every idle-side state (idle, stopping, stopped, completed) and every
- * unknown code is refused.
- */
-const ALLOWED_PRINT_STATES: Record<Exclude<ControlAction, "light">, ReadonlySet<PrintStateName>> = {
-  pause: new Set(["preparing", "file-checking", "printing"]),
-  resume: new Set(["paused"]),
-  stop: new Set(["preparing", "file-checking", "printing", "paused"]),
-};
-
-/**
- * Whether `action` fits the snapshot. Nothing is allowed unless the printer is
- * online, since an offline snapshot is stale. The light needs a known
- * `LightStatus` (`lightKnown`) because its command sends that object back.
- */
-export function isAllowed(action: ControlAction, snapshot: StatusSnapshot, lightKnown = snapshot.light !== "unknown"): boolean {
-  if (snapshot.connection !== "online") return false;
-  if (action === "light") return lightKnown;
-  const name = snapshot.printState.name;
-  return name !== "unknown" && ALLOWED_PRINT_STATES[action].has(name);
 }
 
 export interface StopOptions {

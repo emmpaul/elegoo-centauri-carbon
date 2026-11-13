@@ -27,6 +27,28 @@
       </form>
 
       <main class="layout" data-view="dashboard">
+        <section class="card camera" aria-labelledby="camera-heading">
+          <h2 id="camera-heading">Camera</h2>
+          <div class="camera__frame">
+            <img class="camera__image" data-field="camera" alt="Live view of the print bed" hidden>
+            <div class="camera__placeholder" data-field="cameraPlaceholder">
+              <p data-field="cameraMessage">Loading camera…</p>
+              <button type="button" class="button button--secondary" data-field="cameraRetry" hidden>Retry</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="controls-heading">
+          <h2 id="controls-heading">Controls</h2>
+          <div class="controls">
+            <button type="button" class="button" data-action="pause" disabled>Pause</button>
+            <button type="button" class="button" data-action="resume" disabled>Resume</button>
+            <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
+            <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
+          </div>
+          <p class="message" data-field="commandMessage" aria-live="polite"></p>
+        </section>
+
         <section class="card" aria-labelledby="print-heading">
           <h2 id="print-heading">Print</h2>
           <dl class="fields">
@@ -56,6 +78,17 @@
           </dl>
         </section>
       </main>
+
+      <dialog class="dialog" data-view="stopConfirm" aria-labelledby="stop-heading">
+        <form method="dialog" class="dialog__form">
+          <h2 id="stop-heading">Stop the print?</h2>
+          <p>A stopped print can't be resumed.</p>
+          <div class="controls">
+            <button type="submit" class="button button--secondary" value="cancel" autofocus>Keep printing</button>
+            <button type="submit" class="button button--danger" value="stop">Stop print</button>
+          </div>
+        </form>
+      </dialog>
 
       <footer class="footer">
         Last update: <time data-field="updatedAt">never</time>

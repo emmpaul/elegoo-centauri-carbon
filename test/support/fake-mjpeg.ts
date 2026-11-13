@@ -23,6 +23,8 @@ export interface FakeMjpegOptions {
   status?: number;
   /** Zero bytes added to each frame, for tests that need volume. 0 by default. */
   framePadBytes?: number;
+  /** Body of part `n`; fakeJpeg (not a decodable image) by default. */
+  frame?: (n: number) => Buffer;
 }
 
 export class FakeMjpegSource {
@@ -34,6 +36,7 @@ export class FakeMjpegSource {
   private readonly server: Server;
   private readonly frameIntervalMs: number;
   private readonly framePadBytes: number;
+  private readonly frame: ((n: number) => Buffer) | undefined;
   private readonly closeListeners = new Set<() => void>();
 
   private constructor(server: Server, options: FakeMjpegOptions) {
@@ -41,6 +44,7 @@ export class FakeMjpegSource {
     this.status = options.status ?? 200;
     this.frameIntervalMs = options.frameIntervalMs ?? 20;
     this.framePadBytes = options.framePadBytes ?? 0;
+    this.frame = options.frame;
     server.on("request", (req: IncomingMessage, res: ServerResponse) => this.serve(req, res));
   }
 
@@ -68,6 +72,11 @@ export class FakeMjpegSource {
     });
   }
 
+  /** Ends every open stream, as a camera that stops would. */
+  endStreams(): void {
+    for (const res of this.open) res.end();
+  }
+
   async close(): Promise<void> {
     this.server.closeAllConnections();
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
@@ -83,7 +92,7 @@ export class FakeMjpegSource {
     this.open.add(res);
     let n = 0;
     const timer = setInterval(() => {
-      const jpeg = fakeJpeg(n++, this.framePadBytes);
+      const jpeg = this.frame ? this.frame(n++) : fakeJpeg(n++, this.framePadBytes);
       res.write(`--${FAKE_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`);
       res.write(jpeg);
       res.write("\r\n");

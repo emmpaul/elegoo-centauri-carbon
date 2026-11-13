@@ -207,9 +207,18 @@ Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 ## Dashboard
 
 `GET /` serves the dashboard, a page that reads `/api/status`, then follows
-`/api/events` and updates without a reload. Its files are `/`, `/app.js`, and
-`/style.css`; `app.js` is `web/app.ts` with its types stripped when served.
-They are served without the token.
+`/api/events` and updates without a reload. It reads `/camera` with `fetch`
+and shows "Camera unavailable" with a retry button when the stream can't be
+opened, ends, or sends no frame for 10 seconds (it tries again every 15
+seconds). Its pause, resume, stop, and light buttons are enabled by the same
+rules `POST /api/command` applies (`src/control-rules.ts`); stop asks for
+confirmation first, and a failed or timed-out command is shown under the
+buttons.
+
+Its files are `/`, `/app.js`, `/mjpeg.js`, `/src/control-rules.ts`, and
+`/style.css`. The scripts are the TypeScript sources in `web/` (and
+`src/control-rules.ts`) with their types stripped when served. They are
+served without the token.
 
 When the service has a token, open the dashboard once as
 `http://<host>:8080/?token=<token>`, or enter the token in the form the page
@@ -229,9 +238,22 @@ ACCESS_TOKEN=change-me pnpm start:fake
 The fake printer simulates the print: progress, layers, and times advance
 (`FAKE_SPEED` print seconds per second, 10 by default) until the job
 completes. Pause, resume, stop, and the light change its state as the printer
-would. Sending `SIGUSR2` to the process takes the fake printer offline, and
-sending it again brings it back:
+would. To try failures:
 
-```sh
-pkill -USR2 -f run-fake-service
-```
+- `FAKE_CAMERA=down` starts with the camera answering `503`.
+- `FAKE_REPLIES` sets per-command replies by command id (see
+  `docs/sdcp-protocol.md`): `silent` sends no response, so the command times
+  out after 10 seconds, and a number answers with that `Ack`, so it fails with
+  that code. For example, resume times out and the light fails with code 3:
+
+  ```sh
+  FAKE_REPLIES=131=silent,403=3 pnpm start:fake
+  ```
+
+- `SIGUSR1` takes the camera down (open streams end, new ones get `503`) and
+  back up; `SIGUSR2` takes the fake printer offline and back:
+
+  ```sh
+  pkill -USR1 -f run-fake-service
+  pkill -USR2 -f run-fake-service
+  ```
