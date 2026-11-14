@@ -3,6 +3,7 @@
 // failures the service or the network give.
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import type { StatusSnapshot } from "../src/status-store.ts";
 import "./support/web-modules.ts";
 
 const { COMMAND_ABORT_MS, Commands, reasonOf } = await import("../web/commands.ts");
@@ -13,13 +14,38 @@ interface Sent {
   body: unknown;
 }
 
-/** A host whose fetch answers from `answer` and records every request. */
+/** A printing printer's snapshot, with `patch` on top. */
+function snap(patch: Partial<StatusSnapshot> = {}): StatusSnapshot {
+  return {
+    connection: "online",
+    printerName: "Centauri Carbon",
+    machineState: { name: "printing", code: 1 },
+    printState: { name: "printing", code: 13 },
+    taskId: null,
+    fileName: "benchy.gcode",
+    progress: 42,
+    layer: { current: 210, total: 500 },
+    elapsed: 3600,
+    remaining: 4900,
+    temperatures: { nozzle: { current: 210, target: 210 }, bed: { current: 60, target: 60 }, chamber: { current: 30, target: 0 } },
+    light: "on",
+    errorCode: 0,
+    updatedAt: 0,
+    ...patch,
+  } as StatusSnapshot;
+}
+
+/** A host whose fetch answers from `answer` and records every request; the page state is in `page`. */
 function host(answer: (body: unknown, signal: AbortSignal) => Promise<Response>) {
   const sent: Sent[] = [];
   const counts = { changed: 0, unauthorized: 0 };
+  const page = { snapshot: snap() as StatusSnapshot | null, streamOpen: true };
   return {
     sent,
     counts,
+    page,
+    snapshot: () => page.snapshot,
+    streamOpen: () => page.streamOpen,
     fetch(path: string, init: RequestInit): Promise<Response> {
       const body = JSON.parse(String(init.body)) as unknown;
       sent.push({ path, body });
@@ -109,5 +135,33 @@ describe("dashboard commands", () => {
     await commands.send("pause", { action: "pause" });
     commands.dismiss();
     assert.equal(commands.state, null);
+  });
+
+  it("Retry re-sends the last request only while the service would accept it", async () => {
+    const h = host(() => json(200, { outcome: "timeout" }));
+    const commands = new Commands(h);
+    await commands.send("pause", { action: "pause" });
+    // The printer paused anyway: the service would answer 409.
+    h.page.snapshot = snap({ printState: { name: "paused", code: 6 }, machineState: { name: "printing", code: 1 } });
+    await commands.retry();
+    h.page.snapshot = snap();
+    h.page.streamOpen = false;
+    await commands.retry();
+    h.page.streamOpen = true;
+    h.page.snapshot = snap({ connection: "offline" });
+    await commands.retry();
+    assert.equal(h.sent.length, 1, "nothing re-sent while pause is not accepted");
+    assert.deepEqual(commands.state, { action: "pause", status: "timeout" }, "the message stays for ×");
+    h.page.snapshot = snap();
+    await commands.retry();
+    assert.deepEqual(h.sent.map((s) => s.body), [{ action: "pause" }, { action: "pause" }]);
+  });
+
+  it("Retry never re-sends stop", async () => {
+    const h = host(() => json(200, { outcome: "timeout" }));
+    const commands = new Commands(h);
+    await commands.stop();
+    await commands.retry();
+    assert.equal(h.sent.length, 1);
   });
 });
