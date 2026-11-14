@@ -301,7 +301,7 @@ describe("dashboardView: controls, message, and slide", () => {
     const v = dashboardView(PRESETS.a1, page(null, { x, dragging: true }), NOW);
     assert.equal(MAX, 272);
     assert.deepEqual(v.message, {
-      tone: "bad", mark: "square", title: "Stops benchy.gcode at 42%", sub: "Can’t be resumed. Release at the end to confirm.", retry: false, pending: false,
+      tone: "bad", mark: "square", title: "Stops benchy.gcode at 42%", sub: "Can’t be resumed. Release at the end to confirm.", retry: false, dismiss: false, pending: false,
     });
     assert.deepEqual(v.slide, {
       pending: false, look: "enabled", disabled: false, label: "Release to stop", labelInk: "text",
@@ -342,7 +342,7 @@ describe("dashboardView: controls, message, and slide", () => {
     const v = dashboardView(PRESETS.a1, page({ action: "pause", status: "pending" }), NOW);
     assert.deepEqual(v.pause, { look: "pending", label: "Pausing…", disabled: true });
     assert.deepEqual(v.message, {
-      tone: "info", mark: "round", title: "Sending pause…", sub: "Waiting for printer · up to 10 s", retry: false, pending: true,
+      tone: "info", mark: "round", title: "Sending pause…", sub: "Waiting for printer · up to 10 s", retry: false, dismiss: false, pending: true,
     });
     assert.equal(v.light.disabled, true);
     assert.equal(v.resume.disabled, true);
@@ -358,7 +358,7 @@ describe("dashboardView: controls, message, and slide", () => {
     const v = dashboardView(PRESETS.a1, page({ action: "pause", status: "failed", code: 2 }), NOW);
     assert.deepEqual(v.pause, { look: "failed", label: "Retry", disabled: false });
     assert.deepEqual(v.message, {
-      tone: "bad", mark: "square", title: "Pause failed · code 2", sub: "Printer rejected it. Nothing changed.", retry: true, pending: false,
+      tone: "bad", mark: "square", title: "Pause failed · code 2", sub: "Printer rejected it. Nothing changed.", retry: true, dismiss: true, pending: false,
     });
     assert.equal(v.light.disabled, false);
     assert.equal(v.slide.label, "Slide to stop print");
@@ -368,13 +368,13 @@ describe("dashboardView: controls, message, and slide", () => {
     const v = dashboardView(PRESETS.a1, page({ action: "pause", status: "timeout" }), NOW);
     assert.deepEqual(v.pause, { look: "failed", label: "Retry", disabled: false });
     assert.deepEqual(v.message, {
-      tone: "warn", mark: "round", title: "Pause timed out", sub: "No reply in 10 s. Check state first.", retry: true, pending: false,
+      tone: "warn", mark: "round", title: "Pause timed out", sub: "No reply in 10 s. Check state first.", retry: true, dismiss: true, pending: false,
     });
   });
 
   it("acknowledged messages per action", () => {
     const ack = (action: ControlAction) => dashboardView(PRESETS.a1, page({ action, status: "ack" }), NOW).message;
-    assert.deepEqual(ack("pause"), { tone: "ok", mark: "round", title: "Pause acknowledged", sub: "Printer is pausing.", retry: false, pending: false });
+    assert.deepEqual(ack("pause"), { tone: "ok", mark: "round", title: "Pause acknowledged", sub: "Printer is pausing.", retry: false, dismiss: false, pending: false });
     assert.equal(ack("resume")?.sub, "Printer is resuming.");
     assert.equal(ack("stop")?.title, "Stop acknowledged");
     assert.equal(ack("stop")?.sub, "Printer is stopping.");
@@ -401,6 +401,16 @@ describe("dashboardView: controls, message, and slide", () => {
     assert.equal(timeout.message?.retry, false);
     const noCode = dashboardView(PRESETS.a1, page({ action: "stop", status: "failed", code: null }), NOW);
     assert.equal(noCode.slide.label, "Stop failed · again");
+  });
+
+  it("a failed or timed-out stop message can be dismissed with ×, even once the job can no longer be stopped", () => {
+    for (const status of ["failed", "timeout"] as const) {
+      for (const snap of [PRESETS.a1, snapshot({ printState: { name: "stopped" } })]) {
+        const message = dashboardView(snap, page({ action: "stop", status }), NOW).message;
+        assert.equal(message?.retry, false, `stop ${status}: no Retry`);
+        assert.equal(message?.dismiss, true, `stop ${status}: × shown`);
+      }
+    }
   });
 
   it("states every disabled reason on the stop track", () => {

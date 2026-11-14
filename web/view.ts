@@ -290,8 +290,10 @@ export interface MessageView {
   mark: "round" | "square";
   title: string;
   sub: string;
-  /** Shows Retry and the × dismiss button. */
+  /** Shows Retry. */
   retry: boolean;
+  /** Shows the × dismiss button: on every failure or timeout, stop's too, so no message is stuck. */
+  dismiss: boolean;
   /** Shows the indeterminate bar. */
   pending: boolean;
 }
@@ -382,6 +384,7 @@ function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSna
       title: `Stops ${snap?.fileName || "the job"} at ${snap?.progress ?? NONE}%`,
       sub: "Can’t be resumed. Release at the end to confirm.",
       retry: false,
+      dismiss: false,
       pending: false,
     };
   }
@@ -390,9 +393,9 @@ function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSna
   const retry = cmd.action !== "stop";
   switch (cmd.status) {
     case "pending":
-      return { tone: "info", mark: "round", title: `Sending ${verb.toLowerCase()}…`, sub: "Waiting for printer · up to 10 s", retry: false, pending: true };
+      return { tone: "info", mark: "round", title: `Sending ${verb.toLowerCase()}…`, sub: "Waiting for printer · up to 10 s", retry: false, dismiss: false, pending: true };
     case "ack":
-      return { tone: "ok", mark: "round", title: `${verb} acknowledged`, sub: ACK_TEXT[cmd.action], retry: false, pending: false };
+      return { tone: "ok", mark: "round", title: `${verb} acknowledged`, sub: ACK_TEXT[cmd.action], retry: false, dismiss: false, pending: false };
     case "failed":
       return {
         tone: "bad",
@@ -400,10 +403,11 @@ function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSna
         title: `${verb} failed${cmd.code == null ? "" : ` · code ${cmd.code}`}`,
         sub: cmd.reason ?? "Printer rejected it. Nothing changed.",
         retry,
+        dismiss: true,
         pending: false,
       };
     case "timeout":
-      return { tone: "warn", mark: "round", title: `${verb} timed out`, sub: cmd.reason ?? "No reply in 10 s. Check state first.", retry, pending: false };
+      return { tone: "warn", mark: "round", title: `${verb} timed out`, sub: cmd.reason ?? "No reply in 10 s. Check state first.", retry, dismiss: true, pending: false };
   }
 }
 
