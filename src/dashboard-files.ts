@@ -24,6 +24,8 @@ const FILES: Record<string, PublicFile> = {
   "/": { source: "index.html", type: "text/html; charset=utf-8" },
   "/app.js": { source: "app.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/mjpeg.js": { source: "mjpeg.ts", type: "text/javascript; charset=utf-8", typescript: true },
+  // Classic script run in <head> before the stylesheet: applies the stored theme before the first paint.
+  "/theme.js": { source: "theme.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/view.js": { source: "view.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/style.css": { source: "style.css", type: "text/css; charset=utf-8" },
   "/sw.js": { source: "sw.ts", type: "text/javascript; charset=utf-8", typescript: true },

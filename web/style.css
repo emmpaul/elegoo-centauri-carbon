@@ -1,75 +1,254 @@
-/* Dashboard styles. Colors, spacing, and type live in custom properties so a
-   later redesign can restyle the page without touching the markup. */
-:root {
-  color-scheme: light dark;
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-text: #1b1d21;
-  --color-muted: #5f6672;
-  --color-border: #d9dce1;
-  --color-accent: #2563eb;
-  --color-accent-text: #ffffff;
-  --color-danger: #b91c1c;
-  --color-danger-text: #ffffff;
-  --color-camera-bg: #1f2937;
-  --color-camera-text: #d1d5db;
-  --color-online: #15803d;
-  --color-offline: #b91c1c;
-  --color-pending: #a16207;
-  --color-notice-bg: #fef2f2;
-  --color-notice-text: #7f1d1d;
+/* Dashboard styles. Every size, colour, radius, and shadow is copied from
+   docs/design/reference/PrinterScreen.dc.html (design D1): the palette from its
+   palette(), the layout from its `layout` variables, the rest from its inline
+   styles. Dark is the default theme; light applies with data-theme="light"
+   (set by /theme.js from the stored choice) or, with nothing stored, when the
+   system prefers light (design D4). */
 
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-size: 1rem;
-  --font-size-small: 0.875rem;
-  --font-size-large: 1.25rem;
-
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --radius: 0.5rem;
-  --content-width: 60rem;
+/* ---- Fonts (design D2): fetched by the operator into web/fonts/, never
+   committed. Missing files answer 404 and the stacks fall back to system fonts. */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/satoshi-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-800.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #121417;
-    --color-surface: #1c1f24;
-    --color-text: #e8eaed;
-    --color-muted: #a0a7b2;
-    --color-border: #2f343b;
-    --color-accent: #60a5fa;
-    --color-accent-text: #0b1220;
-    --color-danger: #f87171;
-    --color-danger-text: #1b0a0a;
-    --color-camera-bg: #0b0d10;
-    --color-camera-text: #a0a7b2;
-    --color-online: #4ade80;
-    --color-offline: #f87171;
-    --color-pending: #facc15;
-    --color-notice-bg: #3b1417;
-    --color-notice-text: #fecaca;
+/* ---- Tokens: dark palette, font stacks, phone layout ---- */
+:root {
+  color-scheme: dark;
+  --bg: #0f0f0f;
+  --sheet: linear-gradient(180deg, #1d1d1d, #161616 40%);
+  --sheet-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -18px 40px rgba(0, 0, 0, 0.6);
+  --text: #ececec;
+  --text-2: #b4b4b4;
+  --text-3: #8b8b8b;
+  --text-4: #5c5c5c;
+  --line: rgba(255, 255, 255, 0.07);
+  --dash: #3d3d3d;
+  --tick: #2e2e2e;
+  --raise: #262626;
+  --input-bg: #121212;
+  --btn: linear-gradient(180deg, #2a2a2a, #1f1f1f);
+  --btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --solid: linear-gradient(180deg, #f6f6f6, #d9d9d9);
+  --on-solid: #0f0f0f;
+  --solid-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 18px rgba(0, 0, 0, 0.4);
+  --go: linear-gradient(180deg, #86e3b9, #5cc492);
+  --on-go: #0b1f12;
+  --go-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 20px rgba(111, 215, 168, 0.2);
+  --ok: #6fd7a8;
+  --ok-text: #a9e5c9;
+  --warn: #f0c36b;
+  --warn-text: #f3d79b;
+  --bad: #f28b8b;
+  --bad-text: #f6a5a5;
+  --info: #7aa7ff;
+  --info-text: #a9c5ff;
+  --bad-tint: linear-gradient(180deg, rgba(242, 139, 139, 0.12), rgba(242, 139, 139, 0.06));
+  --bad-ring: rgba(242, 139, 139, 0.28);
+  --warn-tint: linear-gradient(180deg, rgba(56, 46, 22, 0.95), rgba(40, 33, 16, 0.95));
+  --warn-ring: rgba(240, 195, 107, 0.25);
+  --info-tint: linear-gradient(180deg, rgba(122, 167, 255, 0.12), rgba(122, 167, 255, 0.05));
+  --info-ring: rgba(122, 167, 255, 0.35);
+  --ok-tint: linear-gradient(180deg, rgba(111, 215, 168, 0.12), rgba(111, 215, 168, 0.05));
+  --ok-ring: rgba(111, 215, 168, 0.3);
+  --neutral-tint: rgba(255, 255, 255, 0.04);
+  --neutral-ring: rgba(255, 255, 255, 0.08);
+  --track: linear-gradient(180deg, rgba(242, 139, 139, 0.05), rgba(242, 139, 139, 0.09));
+  --track-shadow: inset 0 0 0 1px rgba(242, 139, 139, 0.3), inset 0 2px 6px rgba(0, 0, 0, 0.45);
+  --thumb: linear-gradient(180deg, #f7a3a3, #e77a7a);
+  --thumb-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.4);
+  --on-thumb: #0f0f0f;
+
+  --font-ui: "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cabinet Grotesk", "Satoshi", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  /* Phone layout (the component's `layout`, narrow). */
+  --pad: 16px;
+  --cam-l: 0px;
+  --cam-r: 0px;
+  --cam-t: 0px;
+  --cam-h: 240px;
+  --cam-rad: 0px;
+  --cam-inset: 88px 16px 44px;
+  --cam-shade: 0.65;
+  --sh-l: 0px;
+  --sh-r: 0px;
+  --sh-t: 212px;
+  --sh-b: 0px;
+  --sh-rad: 20px 20px 0 0;
+  --head-t: 38px;
+  --head-c: #ececec;
+  --head-bad: #f6a5a5;
+  --hbtn-bg: rgba(20, 20, 20, 0.5);
+  --hbtn-sh: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Light palette: chosen on this device, or the system's preference with no choice stored.
+   The two blocks are the same; keep them in step. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f3f1;
+  --sheet: linear-gradient(180deg, #ffffff, #fbfbf9 40%);
+  --sheet-shadow: inset 0 1px 0 #ffffff, 0 0 0 1px rgba(0, 0, 0, 0.05), 0 -10px 30px rgba(0, 0, 0, 0.1);
+  --text: #161616;
+  --text-2: #3f3f3f;
+  --text-3: #595959;
+  --text-4: #9a9a96;
+  --line: rgba(0, 0, 0, 0.08);
+  --dash: #b5b5b0;
+  --tick: #e4e4e0;
+  --raise: #e4e4e0;
+  --input-bg: #ffffff;
+  --btn: linear-gradient(180deg, #fafaf8, #ececea);
+  --btn-shadow: inset 0 1px 0 #ffffff, inset 0 0 0 1px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --solid: linear-gradient(180deg, #2c2c2c, #121212);
+  --on-solid: #ffffff;
+  --solid-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 14px rgba(0, 0, 0, 0.18);
+  --go: linear-gradient(180deg, #1f9a66, #157a50);
+  --on-go: #ffffff;
+  --go-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 14px rgba(26, 138, 91, 0.2);
+  --ok: #1a8a5b;
+  --ok-text: #14603f;
+  --warn: #946000;
+  --warn-text: #6b4500;
+  --bad: #c94a4a;
+  --bad-text: #b42323;
+  --info: #2f6fe0;
+  --info-text: #1f4fb0;
+  --bad-tint: rgba(201, 74, 74, 0.07);
+  --bad-ring: rgba(201, 74, 74, 0.3);
+  --warn-tint: rgba(217, 160, 40, 0.14);
+  --warn-ring: rgba(148, 96, 0, 0.25);
+  --info-tint: rgba(47, 111, 224, 0.07);
+  --info-ring: rgba(47, 111, 224, 0.3);
+  --ok-tint: rgba(26, 138, 91, 0.08);
+  --ok-ring: rgba(26, 138, 91, 0.28);
+  --neutral-tint: rgba(0, 0, 0, 0.03);
+  --neutral-ring: rgba(0, 0, 0, 0.08);
+  --track: rgba(201, 74, 74, 0.06);
+  --track-shadow: inset 0 0 0 1px rgba(201, 74, 74, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  --thumb: linear-gradient(180deg, #d65a5a, #bd4040);
+  --thumb-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 10px rgba(201, 74, 74, 0.25);
+  --on-thumb: #ffffff;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #f3f3f1;
+    --sheet: linear-gradient(180deg, #ffffff, #fbfbf9 40%);
+    --sheet-shadow: inset 0 1px 0 #ffffff, 0 0 0 1px rgba(0, 0, 0, 0.05), 0 -10px 30px rgba(0, 0, 0, 0.1);
+    --text: #161616;
+    --text-2: #3f3f3f;
+    --text-3: #595959;
+    --text-4: #9a9a96;
+    --line: rgba(0, 0, 0, 0.08);
+    --dash: #b5b5b0;
+    --tick: #e4e4e0;
+    --raise: #e4e4e0;
+    --input-bg: #ffffff;
+    --btn: linear-gradient(180deg, #fafaf8, #ececea);
+    --btn-shadow: inset 0 1px 0 #ffffff, inset 0 0 0 1px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.08);
+    --solid: linear-gradient(180deg, #2c2c2c, #121212);
+    --on-solid: #ffffff;
+    --solid-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 14px rgba(0, 0, 0, 0.18);
+    --go: linear-gradient(180deg, #1f9a66, #157a50);
+    --on-go: #ffffff;
+    --go-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 14px rgba(26, 138, 91, 0.2);
+    --ok: #1a8a5b;
+    --ok-text: #14603f;
+    --warn: #946000;
+    --warn-text: #6b4500;
+    --bad: #c94a4a;
+    --bad-text: #b42323;
+    --info: #2f6fe0;
+    --info-text: #1f4fb0;
+    --bad-tint: rgba(201, 74, 74, 0.07);
+    --bad-ring: rgba(201, 74, 74, 0.3);
+    --warn-tint: rgba(217, 160, 40, 0.14);
+    --warn-ring: rgba(148, 96, 0, 0.25);
+    --info-tint: rgba(47, 111, 224, 0.07);
+    --info-ring: rgba(47, 111, 224, 0.3);
+    --ok-tint: rgba(26, 138, 91, 0.08);
+    --ok-ring: rgba(26, 138, 91, 0.28);
+    --neutral-tint: rgba(0, 0, 0, 0.03);
+    --neutral-ring: rgba(0, 0, 0, 0.08);
+    --track: rgba(201, 74, 74, 0.06);
+    --track-shadow: inset 0 0 0 1px rgba(201, 74, 74, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.06);
+    --thumb: linear-gradient(180deg, #d65a5a, #bd4040);
+    --thumb-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 10px rgba(201, 74, 74, 0.25);
+    --on-thumb: #ffffff;
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
+/* ---- Base ---- */
 [hidden] {
   display: none !important;
 }
 
+html,
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  font-size: var(--font-size);
-  line-height: 1.4;
+  background: var(--bg);
+}
+
+body {
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Under reduced motion nothing animates: no indeterminate bar, no spring-back. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---- Previous page parts, kept working until their redesign replaces them
+   (header and camera 4.2, status sheet 4.3, controls 5.1–5.2, token 6.1). ---- */
+.page {
+  display: grid;
+  gap: 16px;
+  max-width: 60rem;
+  margin-inline: auto;
+  padding: 16px;
+}
+
+.page *,
+.page *::before,
+.page *::after {
+  box-sizing: border-box;
 }
 
 h1,
@@ -78,27 +257,19 @@ h2 {
 }
 
 h1 {
-  font-size: var(--font-size-large);
+  font-size: 20px;
 }
 
 h2 {
-  font-size: var(--font-size);
-  margin-bottom: var(--space-3);
-}
-
-.page {
-  display: grid;
-  gap: var(--space-4);
-  max-width: var(--content-width);
-  margin-inline: auto;
-  padding: var(--space-4);
+  font-size: 16px;
+  margin-bottom: 12px;
 }
 
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .topbar__name {
@@ -108,49 +279,50 @@ h2 {
 
 .badge {
   flex: none;
-  padding: var(--space-1) var(--space-3);
+  padding: 4px 12px;
   border-radius: 999px;
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  color: var(--badge-color, var(--color-pending));
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--badge-color, var(--warn));
   border: 1px solid currentColor;
 }
 
 .badge[data-state="online"] {
-  --badge-color: var(--color-online);
+  --badge-color: var(--ok);
 }
 
 .badge[data-state="offline"],
 .badge[data-state="unreachable"] {
-  --badge-color: var(--color-offline);
+  --badge-color: var(--bad);
 }
 
 .notice {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
-  background: var(--color-notice-bg);
-  color: var(--color-notice-text);
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--warn-tint);
+  box-shadow: inset 0 0 0 1px var(--warn-ring);
+  color: var(--warn-text);
 }
 
 .layout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .card {
   min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--sheet);
+  box-shadow: var(--sheet-shadow);
 }
 
 .fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: 12px;
   margin: 0;
 }
 
@@ -159,20 +331,20 @@ h2 {
 }
 
 .field dt {
-  color: var(--color-muted);
-  font-size: var(--font-size-small);
+  color: var(--text-3);
+  font-size: 14px;
 }
 
 .field dd {
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .muted {
-  color: var(--color-muted);
+  color: var(--text-3);
   font-weight: 400;
-  font-size: var(--font-size-small);
+  font-size: 14px;
 }
 
 .wrap {
@@ -182,14 +354,14 @@ h2 {
 .progress {
   display: block;
   width: 100%;
-  height: var(--space-3);
-  margin-top: var(--space-1);
-  accent-color: var(--color-accent);
+  height: 12px;
+  margin-top: 4px;
+  accent-color: var(--ok);
 }
 
 .token {
   display: grid;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .token p {
@@ -198,57 +370,64 @@ h2 {
 
 .token__label {
   display: grid;
-  gap: var(--space-1);
+  gap: 4px;
 }
 
-input {
+.token input {
   font: inherit;
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
-  color: var(--color-text);
+  padding: 8px;
+  border: none;
+  border-radius: 12px;
+  background: var(--input-bg);
+  box-shadow: inset 0 0 0 1px var(--dash);
+  color: var(--text);
 }
 
 .button {
   font: inherit;
-  font-weight: 600;
-  min-height: 2.75rem;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius);
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  font-weight: 700;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--solid);
+  box-shadow: var(--solid-shadow);
+  color: var(--on-solid);
   cursor: pointer;
 }
 
 .button--secondary {
-  background: transparent;
-  color: var(--color-accent);
+  background: var(--btn);
+  box-shadow: var(--btn-shadow);
+  color: var(--text);
 }
 
 .button--danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-danger-text);
+  background: var(--thumb);
+  box-shadow: var(--thumb-shadow);
+  color: var(--on-thumb);
 }
 
 .button:disabled {
-  opacity: 0.45;
+  background: transparent;
+  box-shadow: none;
+  outline: 1px dashed var(--dash);
+  outline-offset: -1px;
+  color: var(--text-3);
   cursor: not-allowed;
 }
 
 .footer {
-  color: var(--color-muted);
-  font-size: var(--font-size-small);
+  color: var(--text-3);
+  font-size: 14px;
 }
 
 .camera__frame {
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border-radius: var(--radius);
-  background: var(--color-camera-bg);
+  border-radius: 12px;
+  background: #121212;
 }
 
 .camera__image {
@@ -264,9 +443,9 @@ input {
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  color: var(--color-camera-text);
+  gap: 12px;
+  padding: 16px;
+  color: #b4b4b4;
   text-align: center;
 }
 
@@ -277,7 +456,7 @@ input {
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .controls .button {
@@ -286,22 +465,23 @@ input {
 
 .message {
   min-height: 1.4em;
-  margin: var(--space-3) 0 0;
-  font-size: var(--font-size-small);
+  margin: 12px 0 0;
+  font-size: 14px;
 }
 
 .message[data-kind="error"] {
-  color: var(--color-offline);
-  font-weight: 600;
+  color: var(--bad-text);
+  font-weight: 700;
 }
 
 .dialog {
-  width: min(24rem, calc(100% - 2 * var(--space-4)));
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
-  color: var(--color-text);
+  width: min(24rem, calc(100% - 32px));
+  padding: 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--sheet);
+  box-shadow: var(--sheet-shadow);
+  color: var(--text);
 }
 
 .dialog::backdrop {
@@ -309,5 +489,5 @@ input {
 }
 
 .dialog__form p {
-  margin: 0 0 var(--space-4);
+  margin: 0 0 16px;
 }

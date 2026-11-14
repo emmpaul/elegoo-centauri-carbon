@@ -459,7 +459,10 @@ describe("HTTP API dashboard files", () => {
     const page = await fetch(`${base}/`);
     assert.equal(page.status, 200);
     assert.match(page.headers.get("content-type") ?? "", /^text\/html/);
-    assert.match(await page.text(), /<script type="module" src="app\.js"><\/script>/);
+    const html = await page.text();
+    assert.match(html, /<script type="module" src="app\.js"><\/script>/);
+    const themeAt = html.indexOf('<script src="theme.js"></script>');
+    assert.ok(themeAt >= 0 && themeAt < html.indexOf('<link rel="stylesheet"'), "the theme applies before the stylesheet");
 
     const script = await fetch(`${base}/app.js`);
     assert.equal(script.status, 200);
@@ -479,6 +482,14 @@ describe("HTTP API dashboard files", () => {
     const viewSource = (await (await fetch(`${base}/view.js`)).text()).replace('"../src/control-rules.ts"', JSON.stringify(rulesUrl));
     const viewModule = (await import(`data:text/javascript,${encodeURIComponent(viewSource)}`)) as Record<string, unknown>;
     assert.equal(typeof viewModule.dashboardView, "function", "the stripped view module loads in plain JavaScript");
+
+    const theme = await fetch(`${base}/theme.js`);
+    assert.equal(theme.status, 200);
+    assert.match(theme.headers.get("content-type") ?? "", /^text\/javascript/);
+    const themeSource = await theme.text();
+    assert.doesNotMatch(themeSource, /: string \| null\b/, "types are stripped");
+    assert.doesNotMatch(themeSource, /^\s*(import|export)\b/m, "the theme bootstrap is a classic script");
+    assert.doesNotThrow(() => new Function(themeSource), "the stripped theme script parses");
 
     const worker = await fetch(`${base}/sw.js`);
     assert.equal(worker.status, 200);
