@@ -232,13 +232,15 @@ with its code, or timed out) is shown in a message line above the buttons.
 
 Its files are `/`, `/app.js`, `/theme.js`, `/view.js`, `/stop-slide.js`, `/mjpeg.js`, `/src/control-rules.ts`,
 `/style.css`, `/sw.js` (the service worker), `/manifest.webmanifest`, the
-icons under `/icons/`, and the fonts `/fonts/satoshi-{400,500,700}.woff2` and
+icons and iOS splash images under `/icons/`, and the fonts `/fonts/satoshi-{400,500,700}.woff2` and
 `/fonts/cabinet-grotesk-800.woff2`. The fonts are optional: they are served
 once fetched with `pnpm fonts:fetch` and answer `404` otherwise. The scripts are the TypeScript sources in `web/` (and
 `src/control-rules.ts`) with their types stripped when served. They are
 served without the token, on `GET` and `HEAD`.
 
 The page works at phone width (360 px) and can be installed as a web app.
+The service worker caches the page's files, and each font the first time it
+loads (never ahead, since the fonts may be absent).
 Browsers install a web app, and run its service worker, only from a secure
 origin: HTTPS, or `localhost`/`127.0.0.1` on the same machine. Opened as
 `http://<LAN address>:8080` on a phone, the page works but Chrome on Android
