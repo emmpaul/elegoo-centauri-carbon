@@ -235,14 +235,220 @@ body {
   }
 }
 
+/* ---- Dashboard frame (phone): camera box at the top, header over it, and the
+   sheet from 212 px to the bottom of the viewport (design D5). The sheet grows
+   with a taller screen, so the controls stay at its bottom; a shorter one scrolls. ---- */
+.dash {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+
+/* ---- Camera (design D11) ---- */
+.cam {
+  position: absolute;
+  left: var(--cam-l);
+  right: var(--cam-r);
+  top: var(--cam-t);
+  height: var(--cam-h);
+  border-radius: var(--cam-rad);
+  overflow: hidden;
+  background: #121212;
+  color: #ececec;
+}
+
+.cam__img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Vignette and the top shade under the header. */
+.cam__shade {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 95% at 50% 35%, transparent 50%, rgba(0, 0, 0, 0.5)), linear-gradient(rgba(0, 0, 0, var(--cam-shade)), transparent 42%);
+}
+
+.cam__fail {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background-color: #0f0f0f;
+  background-image: radial-gradient(#262626 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.cam[data-cam="unavailable"] .cam__fail,
+.cam[data-cam="offline"] .cam__fail {
+  display: block;
+}
+
+.cam[data-cam="unavailable"] .cam__shade,
+.cam[data-cam="offline"] .cam__shade,
+.cam[data-cam="unavailable"] .cam__img,
+.cam[data-cam="offline"] .cam__img {
+  display: none;
+}
+
+.cam__box {
+  position: absolute;
+  inset: var(--cam-inset);
+  border-radius: 12px;
+  border: 1px dashed #3d3d3d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  text-align: center;
+}
+
+.cam__title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #b4b4b4;
+}
+
+.cam__sub {
+  font-size: 12.5px;
+  color: #8b8b8b;
+}
+
+.cam__retry {
+  margin-top: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2a2a2a, #1f1f1f);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 2px rgba(0, 0, 0, 0.6);
+  color: #ececec;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---- Header: printer name, Online/Offline mark, theme toggle ---- */
+.head {
+  position: absolute;
+  left: var(--pad);
+  right: var(--pad);
+  top: var(--head-t);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--head-c);
+}
+
+.head__name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.head__online,
+.head__offline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.head__offline {
+  color: var(--head-bad);
+}
+
+.head__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6fd7a8;
+  box-shadow: 0 0 0 3px rgba(111, 215, 168, 0.18), 0 0 8px rgba(111, 215, 168, 0.6);
+}
+
+.head__ring {
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+
+.head__theme {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: var(--hbtn-bg);
+  box-shadow: var(--hbtn-sh);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* Half-filled disc. */
+.head__theme > span {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--head-c);
+  background: linear-gradient(90deg, var(--head-c) 50%, transparent 50%);
+}
+
+/* ---- Status sheet ---- */
+.sheet {
+  position: relative;
+  flex: 1 0 auto;
+  margin: var(--sh-t) var(--sh-r) var(--sh-b) var(--sh-l);
+  min-height: calc(100vh - var(--sh-t));
+  min-height: calc(100dvh - var(--sh-t));
+  box-sizing: border-box;
+  background: var(--sheet);
+  border-radius: var(--sh-rad);
+  box-shadow: var(--sheet-shadow);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---- Previous page parts, kept working until their redesign replaces them
-   (header and camera 4.2, status sheet 4.3, controls 5.1–5.2, token 6.1). ---- */
+   (status sheet 4.3, controls 5.1–5.2, token 6.1). ---- */
 .page {
   display: grid;
   gap: 16px;
   max-width: 60rem;
   margin-inline: auto;
   padding: 16px;
+}
+
+.sheet > .page {
+  padding: 0;
 }
 
 .page *,
@@ -263,37 +469,6 @@ h1 {
 h2 {
   font-size: 16px;
   margin-bottom: 12px;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.topbar__name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.badge {
-  flex: none;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--badge-color, var(--warn));
-  border: 1px solid currentColor;
-}
-
-.badge[data-state="online"] {
-  --badge-color: var(--ok);
-}
-
-.badge[data-state="offline"],
-.badge[data-state="unreachable"] {
-  --badge-color: var(--bad);
 }
 
 .notice {
@@ -420,37 +595,6 @@ h2 {
 .footer {
   color: var(--text-3);
   font-size: 14px;
-}
-
-.camera__frame {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border-radius: 12px;
-  background: #121212;
-}
-
-.camera__image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.camera__placeholder {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  padding: 16px;
-  color: #b4b4b4;
-  text-align: center;
-}
-
-.camera__placeholder p {
-  margin: 0;
 }
 
 .controls {

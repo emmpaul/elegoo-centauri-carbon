@@ -13,15 +13,8 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <div class="page">
-      <header class="topbar">
-        <h1 class="topbar__name" data-field="printerName">Printer</h1>
-        <span class="badge" data-field="connection" data-state="connecting" role="status">Connecting</span>
-      </header>
-
-      <p class="notice" data-field="offlineNotice" role="alert" hidden></p>
-
-      <form class="card token" data-view="token" hidden>
+    <div class="page" data-view="token" hidden>
+      <form class="card token">
         <h2>Access token</h2>
         <p data-field="tokenMessage">This service needs its access token.</p>
         <label class="token__label">
@@ -30,59 +23,77 @@
         </label>
         <button type="submit" class="button">Connect</button>
       </form>
+    </div>
 
-      <main class="layout" data-view="dashboard">
-        <section class="card camera" aria-labelledby="camera-heading">
-          <h2 id="camera-heading">Camera</h2>
-          <div class="camera__frame">
-            <img class="camera__image" data-field="camera" alt="Live view of the print bed" hidden>
-            <div class="camera__placeholder" data-field="cameraPlaceholder">
-              <p data-field="cameraMessage">Loading camera…</p>
-              <button type="button" class="button button--secondary" data-field="cameraRetry" hidden>Retry</button>
-            </div>
+    <main class="dash" data-view="dashboard">
+      <div class="cam" data-field="camera" data-cam="loading">
+        <img class="cam__img" data-field="cameraImage" alt="Live view of the print bed" hidden>
+        <div class="cam__shade" aria-hidden="true"></div>
+        <div class="cam__fail">
+          <div class="cam__box">
+            <span class="cam__title" data-field="cameraTitle"></span>
+            <span class="cam__sub" data-field="cameraSub"></span>
+            <button type="button" class="cam__retry" data-field="cameraRetry">Retry</button>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <section class="card" aria-labelledby="controls-heading">
-          <h2 id="controls-heading">Controls</h2>
-          <div class="controls">
-            <button type="button" class="button" data-action="pause" disabled>Pause</button>
-            <button type="button" class="button" data-action="resume" disabled>Resume</button>
-            <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
-            <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
-          </div>
-          <p class="message" data-field="commandMessage" aria-live="polite"></p>
-        </section>
+      <header class="head">
+        <h1 class="head__name" data-field="printerName">Centauri Carbon</h1>
+        <span class="head__online" data-field="online" hidden><span class="head__dot" aria-hidden="true"></span>Online</span>
+        <span class="head__offline" data-field="offline"><span class="head__ring" aria-hidden="true"></span>Offline</span>
+        <button type="button" class="head__theme" data-field="themeToggle" aria-label="Switch to light theme" title="Switch to light theme"><span aria-hidden="true"></span></button>
+      </header>
 
-        <section class="card" aria-labelledby="print-heading">
-          <h2 id="print-heading">Print</h2>
-          <dl class="fields">
-            <div class="field"><dt>State</dt><dd data-field="printState">—</dd></div>
-            <div class="field"><dt>Machine</dt><dd data-field="machineState">—</dd></div>
-            <div class="field field--wide"><dt>File</dt><dd class="wrap" data-field="fileName">—</dd></div>
-            <div class="field field--wide">
-              <dt>Progress</dt>
-              <dd>
-                <span data-field="progress">—</span>
-                <progress class="progress" max="100" value="0" data-field="progressBar" aria-label="Print progress"></progress>
-              </dd>
+      <div class="sheet">
+        <div class="page">
+          <p class="notice" data-field="offlineNotice" role="alert" hidden></p>
+
+          <section class="card" aria-labelledby="controls-heading">
+            <h2 id="controls-heading">Controls</h2>
+            <div class="controls">
+              <button type="button" class="button" data-action="pause" disabled>Pause</button>
+              <button type="button" class="button" data-action="resume" disabled>Resume</button>
+              <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
+              <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
             </div>
-            <div class="field"><dt>Layer</dt><dd data-field="layer">—</dd></div>
-            <div class="field"><dt>Elapsed</dt><dd data-field="elapsed">—</dd></div>
-            <div class="field"><dt>Remaining</dt><dd data-field="remaining">—</dd></div>
-            <div class="field" data-field="errorRow" hidden><dt>Error code</dt><dd data-field="errorCode">—</dd></div>
-          </dl>
-        </section>
+            <p class="message" data-field="commandMessage" aria-live="polite"></p>
+          </section>
 
-        <section class="card" aria-labelledby="temps-heading">
-          <h2 id="temps-heading">Temperatures</h2>
-          <dl class="fields">
-            <div class="field"><dt>Nozzle</dt><dd><span data-field="nozzle">—</span> <span class="muted" data-field="nozzleTarget"></span></dd></div>
-            <div class="field"><dt>Bed</dt><dd><span data-field="bed">—</span> <span class="muted" data-field="bedTarget"></span></dd></div>
-            <div class="field"><dt>Chamber</dt><dd><span data-field="chamber">—</span> <span class="muted" data-field="chamberTarget"></span></dd></div>
-          </dl>
-        </section>
-      </main>
+          <section class="card" aria-labelledby="print-heading">
+            <h2 id="print-heading">Print</h2>
+            <dl class="fields">
+              <div class="field"><dt>State</dt><dd data-field="printState">—</dd></div>
+              <div class="field"><dt>Machine</dt><dd data-field="machineState">—</dd></div>
+              <div class="field field--wide"><dt>File</dt><dd class="wrap" data-field="fileName">—</dd></div>
+              <div class="field field--wide">
+                <dt>Progress</dt>
+                <dd>
+                  <span data-field="progress">—</span>
+                  <progress class="progress" max="100" value="0" data-field="progressBar" aria-label="Print progress"></progress>
+                </dd>
+              </div>
+              <div class="field"><dt>Layer</dt><dd data-field="layer">—</dd></div>
+              <div class="field"><dt>Elapsed</dt><dd data-field="elapsed">—</dd></div>
+              <div class="field"><dt>Remaining</dt><dd data-field="remaining">—</dd></div>
+              <div class="field" data-field="errorRow" hidden><dt>Error code</dt><dd data-field="errorCode">—</dd></div>
+            </dl>
+          </section>
+
+          <section class="card" aria-labelledby="temps-heading">
+            <h2 id="temps-heading">Temperatures</h2>
+            <dl class="fields">
+              <div class="field"><dt>Nozzle</dt><dd><span data-field="nozzle">—</span> <span class="muted" data-field="nozzleTarget"></span></dd></div>
+              <div class="field"><dt>Bed</dt><dd><span data-field="bed">—</span> <span class="muted" data-field="bedTarget"></span></dd></div>
+              <div class="field"><dt>Chamber</dt><dd><span data-field="chamber">—</span> <span class="muted" data-field="chamberTarget"></span></dd></div>
+            </dl>
+          </section>
+
+          <footer class="footer">
+            Last update: <time data-field="updatedAt">never</time>
+          </footer>
+        </div>
+      </div>
 
       <dialog class="dialog" data-view="stopConfirm" aria-labelledby="stop-heading">
         <form method="dialog" class="dialog__form">
@@ -94,10 +105,6 @@
           </div>
         </form>
       </dialog>
-
-      <footer class="footer">
-        Last update: <time data-field="updatedAt">never</time>
-      </footer>
-    </div>
+    </main>
   </body>
 </html>
