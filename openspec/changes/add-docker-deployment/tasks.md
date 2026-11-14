@@ -31,7 +31,7 @@
 
 ## 6. Integration check
 
-- [ ] 6.1 Run the full local check from a clean checkout: `pnpm typecheck`, `pnpm test`, `docker build`, the fake-printer `docker run` from 3.3, and the no-token refusal; verify all pass and record the commands and results in the PR description.
+- [x] 6.1 Run the full local check from a clean checkout: `pnpm typecheck`, `pnpm test`, `docker build`, the fake-printer `docker run` from 3.3, and the no-token refusal; verify all pass and record the commands and results in the PR description.
 
 ## Workflow follow-up
 
