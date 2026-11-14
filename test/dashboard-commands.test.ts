@@ -164,4 +164,22 @@ describe("dashboard commands", () => {
     await commands.retry();
     assert.equal(h.sent.length, 1);
   });
+
+  it("a control showing Retry re-sends its original request, so Light keeps its on value", async () => {
+    const h = host(() => json(200, { outcome: "timeout" }));
+    const commands = new Commands(h);
+    // Light was off; the tap asked for on and timed out, but the light came on.
+    await commands.press("light", { action: "light", on: true });
+    h.page.snapshot = snap({ light: "on" });
+    await commands.press("light", { action: "light", on: false });
+    assert.deepEqual(h.sent.map((s) => s.body), [{ action: "light", on: true }, { action: "light", on: true }]);
+  });
+
+  it("a control without Retry sends its own request", async () => {
+    const h = host(() => json(200, { outcome: "failed", code: 2 }));
+    const commands = new Commands(h);
+    await commands.press("pause", { action: "pause" });
+    await commands.press("light", { action: "light", on: false });
+    assert.deepEqual(h.sent.map((s) => s.body), [{ action: "pause" }, { action: "light", on: false }]);
+  });
 });

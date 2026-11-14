@@ -86,6 +86,16 @@ export class Commands {
     }
   }
 
+  /**
+   * A tap on a control button: while the button reads Retry (its own command
+   * failed or timed out, and `canRetry`) it re-sends that command's request
+   * (Light keeps the `on` value it asked for); otherwise it sends `body`.
+   */
+  press(action: ControlAction, body: Record<string, unknown>): Promise<void> {
+    if (this.state?.action === action && canRetry(this.state, this.#host.snapshot(), this.#host.streamOpen())) return this.retry();
+    return this.send(action, body);
+  }
+
   /** Stop, sent only from the slide, always with the confirmation flag. */
   stop(): Promise<void> {
     return this.send("stop", { action: "stop", confirm: true });

@@ -259,9 +259,9 @@ function setUpControls(): void {
     changed: render,
     stop: () => void commands.stop(),
   });
-  controlButton("light").addEventListener("click", () => void commands.send("light", { action: "light", on: latest?.light !== "on" }));
-  controlButton("pause").addEventListener("click", () => void commands.send("pause", { action: "pause" }));
-  controlButton("resume").addEventListener("click", () => void commands.send("resume", { action: "resume" }));
+  controlButton("light").addEventListener("click", () => void commands.press("light", { action: "light", on: latest?.light !== "on" }));
+  controlButton("pause").addEventListener("click", () => void commands.press("pause", { action: "pause" }));
+  controlButton("resume").addEventListener("click", () => void commands.press("resume", { action: "resume" }));
   field("messageRetry").addEventListener("click", () => void commands.retry());
   field("messageDismiss").addEventListener("click", () => commands.dismiss());
 }
