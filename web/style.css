@@ -437,18 +437,383 @@ body {
   flex-direction: column;
 }
 
+/* Per-state inks (the component's rootStyle): the tone of the print state, and
+   the stale treatment (design D7) that puts values in secondary ink with dashed dividers. */
+.dash {
+  --tone: var(--text-3);
+  --tone-text: var(--text-2);
+  --tone-glow: transparent;
+  --val: var(--text);
+  --label: var(--text);
+  --row-bs: solid;
+  --row-bc: var(--line);
+}
+
+.dash[data-tone="ok"] {
+  --tone: var(--ok);
+  --tone-text: var(--ok-text);
+  --tone-glow: rgba(111, 215, 168, 0.45);
+}
+
+.dash[data-tone="warn"] {
+  --tone: var(--warn);
+  --tone-text: var(--warn-text);
+  --tone-glow: rgba(240, 195, 107, 0.4);
+}
+
+.dash[data-tone="info"] {
+  --tone: var(--info);
+  --tone-text: var(--info-text);
+  --tone-glow: rgba(122, 167, 255, 0.4);
+}
+
+.dash[data-tone="bad"] {
+  --tone: var(--bad);
+  --tone-text: var(--bad-text);
+  --tone-glow: rgba(242, 139, 139, 0.4);
+}
+
+.dash[data-stale] {
+  --val: var(--text-2);
+  --label: var(--text-2);
+  --row-bs: dashed;
+  --row-bc: var(--dash);
+}
+
+/* Offline banner. */
+.banner {
+  margin-bottom: 14px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: var(--warn-tint);
+  box-shadow: inset 0 0 0 1px var(--warn-ring);
+  color: var(--warn-text);
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner b {
+  font-weight: 700;
+}
+
+/* Status line: glyph, state, file name, update time. */
+.line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  min-width: 0;
+}
+
+.glyph {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.glyph__mark {
+  box-sizing: border-box;
+}
+
+.glyph__mark[data-glyph="run"] {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 8px var(--tone-glow);
+}
+
+.glyph__mark[data-glyph="busy"] {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone);
+  display: grid;
+  place-items: center;
+}
+
+.glyph__mark[data-glyph="busy"]::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.glyph__mark[data-glyph="pause"] {
+  display: flex;
+  gap: 2px;
+}
+
+.glyph__mark[data-glyph="pause"]::before,
+.glyph__mark[data-glyph="pause"]::after {
+  content: "";
+  width: 3px;
+  height: 10px;
+  background: var(--tone);
+}
+
+.glyph__mark[data-glyph="stop"] {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tone);
+}
+
+.glyph__mark[data-glyph="done"] {
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid var(--tone);
+  border-bottom: 2px solid var(--tone);
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.glyph__mark[data-glyph="idle"] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone);
+}
+
+.glyph__mark[data-glyph="unknown"] {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--tone);
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--tone);
+}
+
+.glyph__mark[data-glyph="unknown"]::before {
+  content: "?";
+}
+
+.glyph__mark[data-glyph="stale"] {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--text-3);
+}
+
+.line__state {
+  flex: none;
+  font-weight: 700;
+  color: var(--tone-text);
+}
+
+.line__slash {
+  flex: none;
+  color: var(--text-4);
+}
+
+.line__file {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line__spacer {
+  flex: 1;
+}
+
+.line__clock {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Headline: time left and percent. */
+.headline {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--val);
+}
+
+.headline__big {
+  flex: none;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 46px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.headline__pct {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.subline {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
+}
+
+/* Layer ticks: 3 px marks every 6 px, filled to the progress in the tone. */
+.ticks {
+  margin-top: 14px;
+  position: relative;
+  height: 22px;
+  flex: none;
+}
+
+.ticks__base,
+.ticks__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.ticks__base {
+  right: 0;
+  background: repeating-linear-gradient(90deg, var(--tick) 0 3px, transparent 3px 6px);
+}
+
+.ticks__fill {
+  background: repeating-linear-gradient(90deg, var(--tone) 0 3px, transparent 3px 6px);
+}
+
+/* The fill glows in its tone in the dark theme only, and never when stale or neutral. */
+.ticks[data-glow] .ticks__fill {
+  filter: drop-shadow(0 0 6px var(--tone-glow));
+}
+
+:root[data-theme="light"] .ticks[data-glow] .ticks__fill {
+  filter: none;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .ticks[data-glow] .ticks__fill {
+    filter: none;
+  }
+}
+
+/* Error alert and the unknown-state note. */
+.alert {
+  margin-top: 14px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: var(--bad-tint);
+  box-shadow: inset 0 0 0 1px var(--bad-ring), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.alert__mark {
+  flex: none;
+  margin-top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--bad);
+}
+
+.alert__title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--bad-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.alert__text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.note {
+  margin-top: 14px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: var(--neutral-tint);
+  box-shadow: inset 0 0 0 1px var(--neutral-ring);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+
+/* Reading rows: label, value, target or total. */
+.rows {
+  margin-top: 14px;
+  border-top: 1px var(--row-bs) var(--row-bc);
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  border-bottom: 1px var(--row-bs) var(--row-bc);
+}
+
+.row__key {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  color: var(--label);
+}
+
+.row__value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--val);
+}
+
+.row__target {
+  width: 52px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* Bottom of the sheet: message slot and controls. */
+.sheet__foot {
+  margin-top: auto;
+  padding-top: 10px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ---- Previous page parts, kept working until their redesign replaces them
-   (status sheet 4.3, controls 5.1–5.2, token 6.1). ---- */
+   (controls 5.1–5.2, token 6.1). ---- */
 .page {
   display: grid;
   gap: 16px;
   max-width: 60rem;
   margin-inline: auto;
   padding: 16px;
-}
-
-.sheet > .page {
-  padding: 0;
 }
 
 .page *,
@@ -471,72 +836,13 @@ h2 {
   margin-bottom: 12px;
 }
 
-.notice {
-  margin: 0;
-  padding: 11px 14px;
-  border-radius: 12px;
-  background: var(--warn-tint);
-  box-shadow: inset 0 0 0 1px var(--warn-ring);
-  color: var(--warn-text);
-}
-
-.layout {
+.token {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: 16px;
-}
-
-.card {
-  min-width: 0;
+  gap: 12px;
   padding: 16px;
   border-radius: 20px;
   background: var(--sheet);
   box-shadow: var(--sheet-shadow);
-}
-
-.fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.field--wide {
-  grid-column: 1 / -1;
-}
-
-.field dt {
-  color: var(--text-3);
-  font-size: 14px;
-}
-
-.field dd {
-  margin: 0;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.muted {
-  color: var(--text-3);
-  font-weight: 400;
-  font-size: 14px;
-}
-
-.wrap {
-  overflow-wrap: anywhere;
-}
-
-.progress {
-  display: block;
-  width: 100%;
-  height: 12px;
-  margin-top: 4px;
-  accent-color: var(--ok);
-}
-
-.token {
-  display: grid;
-  gap: 12px;
 }
 
 .token p {
@@ -590,11 +896,6 @@ h2 {
   outline-offset: -1px;
   color: var(--text-3);
   cursor: not-allowed;
-}
-
-.footer {
-  color: var(--text-3);
-  font-size: 14px;
 }
 
 .controls {

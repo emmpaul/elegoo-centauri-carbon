@@ -6,9 +6,9 @@
 // first visit or from the token form, and is kept in localStorage.
 import { type ControlAction, isAllowed } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
-import type { StatusSnapshot, Temperature } from "../src/status-store.ts";
+import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { isLive, statusView } from "./view.js";
+import { type Row, type StatusView, statusView } from "./view.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
@@ -84,55 +84,6 @@ function setText(name: string, text: string): void {
   if (element.textContent !== text) element.textContent = text;
 }
 
-// ---- Formatting ----
-
-const DASH = "—";
-
-/** "file-checking" → "File checking". */
-function label(name: string): string {
-  const words = name.replaceAll("-", " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function stateLabel(state: { name: string; code: number | null }): string {
-  if (state.name !== "unknown") return label(state.name);
-  return state.code === null ? DASH : `Unknown (code ${state.code})`;
-}
-
-/** Seconds as "1 h 05 min", "4 min 07 s", or "12 s". */
-function duration(seconds: number | null): string {
-  if (seconds === null) return DASH;
-  const s = Math.max(0, Math.round(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const rest = s % 60;
-  if (h > 0) return `${h} h ${String(m).padStart(2, "0")} min`;
-  if (m > 0) return `${m} min ${String(rest).padStart(2, "0")} s`;
-  return `${rest} s`;
-}
-
-function degrees(value: number | null): string {
-  return value === null ? DASH : `${value.toFixed(1)} °C`;
-}
-
-/** "→ 210 °C", "heater off" for a target of 0, or "" when unknown. */
-function target(temperature: Temperature): string {
-  if (temperature.target === null) return "";
-  return temperature.target === 0 ? "heater off" : `→ ${Math.round(temperature.target)} °C`;
-}
-
-function clock(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-/** "12 s ago", "3 min ago", "2 h ago". */
-function age(ms: number, now: number): string {
-  const s = Math.max(0, Math.round((now - ms) / 1000));
-  if (s < 60) return `${s} s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  return `${Math.floor(s / 3600)} h ago`;
-}
-
 // ---- Rendering ----
 
 /** Whether the event stream to this service is open (false while it reconnects). */
@@ -143,36 +94,12 @@ function render(): void {
   const snapshot = latest;
   const status = statusView(snapshot, { streamOpen: serviceReachable, messageShown: false }, Date.now());
   renderHeader(status.printerName, status.online);
-  updateCamera(isLive(snapshot, serviceReachable));
-  renderConnection(snapshot);
-  renderUpdatedAt(snapshot);
-  if (snapshot === null) return;
+  updateCamera(status.online);
+  renderStatus(status);
+  if (snapshot !== null) renderControls(snapshot);
 
   const name = status.printerName;
-  setText("printState", stateLabel(snapshot.printState));
-  setText("machineState", stateLabel(snapshot.machineState));
-  setText("fileName", snapshot.fileName ?? DASH);
-  setText("progress", snapshot.progress === null ? DASH : `${snapshot.progress}%`);
-  field<HTMLProgressElement>("progressBar").value = snapshot.progress ?? 0;
-  const { current, total } = snapshot.layer;
-  setText("layer", current === null || total === null ? DASH : `${current} / ${total}`);
-  setText("elapsed", duration(snapshot.elapsed));
-  setText("remaining", duration(snapshot.remaining));
-  const failed = snapshot.errorCode !== null && snapshot.errorCode !== 0;
-  field("errorRow").hidden = !failed;
-  setText("errorCode", failed ? String(snapshot.errorCode) : DASH);
-
-  const { nozzle, bed, chamber } = snapshot.temperatures;
-  setText("nozzle", degrees(nozzle.current));
-  setText("nozzleTarget", target(nozzle));
-  setText("bed", degrees(bed.current));
-  setText("bedTarget", target(bed));
-  setText("chamber", degrees(chamber.current));
-  setText("chamberTarget", target(chamber));
-
-  renderControls(snapshot);
-
-  const title = snapshot.progress !== null && snapshot.printState.name === "printing" ? `${snapshot.progress}% · ${name}` : name;
+  const title = snapshot !== null && snapshot.progress !== null && snapshot.printState.name === "printing" ? `${snapshot.progress}% · ${name}` : name;
   if (document.title !== title) document.title = title;
 }
 
@@ -183,33 +110,70 @@ function renderHeader(name: string, online: boolean): void {
   field("offline").hidden = online;
 }
 
-function renderConnection(snapshot: StatusSnapshot | null): void {
-  let state: string;
-  if (!serviceReachable) state = "unreachable";
-  else if (snapshot === null || snapshot.connection === "connecting") state = "connecting";
-  else if (snapshot.connection === "online") state = "online";
-  else state = "offline";
-
-  // No "… ago" here: the notice is a live region, and the footer shows the age.
-  const notice = field("offlineNotice");
-  const offline = state === "offline" || state === "unreachable";
-  notice.hidden = !offline;
-  if (!offline) return;
-  const what = state === "offline" ? "The printer is offline." : "The service can't be reached.";
-  const since = snapshot?.updatedAt == null ? "No status received yet." : `Values are from ${clock(snapshot.updatedAt)}.`;
-  setText("offlineNotice", `${what} ${since}`);
+function setAttr(element: HTMLElement, name: string, value: string | null): void {
+  if (value === null) element.removeAttribute(name);
+  else if (element.getAttribute(name) !== value) element.setAttribute(name, value);
 }
 
-function renderUpdatedAt(snapshot: StatusSnapshot | null): void {
-  const element = field<HTMLTimeElement>("updatedAt");
-  const at = snapshot?.updatedAt ?? null;
-  if (at === null) {
-    setText("updatedAt", "never");
-    element.removeAttribute("datetime");
-    return;
+/** The status sheet above the controls, written from the view model. */
+function renderStatus(status: StatusView): void {
+  const dash = view("dashboard");
+  setAttr(dash, "data-tone", status.tone);
+  setAttr(dash, "data-stale", status.online ? null : "");
+
+  field("banner").hidden = status.banner === null;
+  if (status.banner !== null) {
+    setText("bannerStrong", status.banner.strong);
+    setText("bannerRest", status.banner.rest);
   }
-  element.dateTime = new Date(at).toISOString();
-  setText("updatedAt", `${clock(at)} (${age(at, Date.now())})`);
+
+  setAttr(field("glyph"), "data-glyph", status.glyph);
+  setText("stateLabel", status.stateLabel);
+  const hasFile = status.fileName !== null;
+  field("fileSlash").hidden = !hasFile;
+  field("fileName").hidden = !hasFile;
+  field("fileSpacer").hidden = hasFile;
+  setText("fileName", status.fileName ?? "");
+  field("updateClock").hidden = status.updateClock === null;
+  setText("updateClock", status.updateClock ?? "");
+
+  setText("headlineBig", status.headline.big);
+  setText("headlinePct", status.headline.pct);
+  setText("subLine", status.headline.sub);
+  const ticks = field("ticks");
+  setAttr(ticks, "aria-valuenow", String(status.ticks.pct));
+  setAttr(ticks, "data-glow", status.ticks.glow ? "" : null);
+  field("ticksFill").style.width = status.ticks.width;
+
+  field("error").hidden = status.error === null;
+  setText("errorTitle", status.error?.title ?? "");
+  setText("errorText", status.error?.text ?? "");
+  field("note").hidden = status.note === null;
+  setText("note", status.note ?? "");
+
+  renderRows(status.rows);
+}
+
+function renderRows(rows: Row[]): void {
+  const container = field("rows");
+  while (container.children.length > rows.length) container.lastElementChild?.remove();
+  while (container.children.length < rows.length) {
+    const row = document.createElement("div");
+    row.className = "row";
+    for (const part of ["row__key", "row__value", "row__target"]) {
+      const span = document.createElement("span");
+      span.className = part;
+      row.append(span);
+    }
+    container.append(row);
+  }
+  rows.forEach((row, index) => {
+    const cells = container.children[index]!.children;
+    [row.key, row.value, row.target].forEach((text, cell) => {
+      const element = cells[cell]!;
+      if (element.textContent !== text) element.textContent = text;
+    });
+  });
 }
 
 // ---- Controls ----

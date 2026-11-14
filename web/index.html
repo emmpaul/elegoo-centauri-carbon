@@ -14,7 +14,7 @@
   </head>
   <body>
     <div class="page" data-view="token" hidden>
-      <form class="card token">
+      <form class="token">
         <h2>Access token</h2>
         <p data-field="tokenMessage">This service needs its access token.</p>
         <label class="token__label">
@@ -25,7 +25,7 @@
       </form>
     </div>
 
-    <main class="dash" data-view="dashboard">
+    <main class="dash" data-view="dashboard" data-tone="neutral" data-stale>
       <div class="cam" data-field="camera" data-cam="loading">
         <img class="cam__img" data-field="cameraImage" alt="Live view of the print bed" hidden>
         <div class="cam__shade" aria-hidden="true"></div>
@@ -45,55 +45,44 @@
         <button type="button" class="head__theme" data-field="themeToggle" aria-label="Switch to light theme" title="Switch to light theme"><span aria-hidden="true"></span></button>
       </header>
 
-      <div class="sheet">
-        <div class="page">
-          <p class="notice" data-field="offlineNotice" role="alert" hidden></p>
+      <section class="sheet" aria-label="Print status">
+        <div class="banner" data-field="banner" role="status"><b data-field="bannerStrong">No contact yet.</b><span data-field="bannerRest"> Controls off.</span></div>
 
-          <section class="card" aria-labelledby="controls-heading">
-            <h2 id="controls-heading">Controls</h2>
-            <div class="controls">
-              <button type="button" class="button" data-action="pause" disabled>Pause</button>
-              <button type="button" class="button" data-action="resume" disabled>Resume</button>
-              <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
-              <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
-            </div>
-            <p class="message" data-field="commandMessage" aria-live="polite"></p>
-          </section>
-
-          <section class="card" aria-labelledby="print-heading">
-            <h2 id="print-heading">Print</h2>
-            <dl class="fields">
-              <div class="field"><dt>State</dt><dd data-field="printState">—</dd></div>
-              <div class="field"><dt>Machine</dt><dd data-field="machineState">—</dd></div>
-              <div class="field field--wide"><dt>File</dt><dd class="wrap" data-field="fileName">—</dd></div>
-              <div class="field field--wide">
-                <dt>Progress</dt>
-                <dd>
-                  <span data-field="progress">—</span>
-                  <progress class="progress" max="100" value="0" data-field="progressBar" aria-label="Print progress"></progress>
-                </dd>
-              </div>
-              <div class="field"><dt>Layer</dt><dd data-field="layer">—</dd></div>
-              <div class="field"><dt>Elapsed</dt><dd data-field="elapsed">—</dd></div>
-              <div class="field"><dt>Remaining</dt><dd data-field="remaining">—</dd></div>
-              <div class="field" data-field="errorRow" hidden><dt>Error code</dt><dd data-field="errorCode">—</dd></div>
-            </dl>
-          </section>
-
-          <section class="card" aria-labelledby="temps-heading">
-            <h2 id="temps-heading">Temperatures</h2>
-            <dl class="fields">
-              <div class="field"><dt>Nozzle</dt><dd><span data-field="nozzle">—</span> <span class="muted" data-field="nozzleTarget"></span></dd></div>
-              <div class="field"><dt>Bed</dt><dd><span data-field="bed">—</span> <span class="muted" data-field="bedTarget"></span></dd></div>
-              <div class="field"><dt>Chamber</dt><dd><span data-field="chamber">—</span> <span class="muted" data-field="chamberTarget"></span></dd></div>
-            </dl>
-          </section>
-
-          <footer class="footer">
-            Last update: <time data-field="updatedAt">never</time>
-          </footer>
+        <div class="line">
+          <span class="glyph" aria-hidden="true"><span class="glyph__mark" data-field="glyph" data-glyph="stale"></span></span>
+          <span class="line__state" data-field="stateLabel">Last known: unknown state (—)</span>
+          <span class="line__slash" data-field="fileSlash" hidden>/</span><span class="line__file" data-field="fileName" hidden></span>
+          <span class="line__spacer" data-field="fileSpacer"></span>
+          <span class="line__clock" data-field="updateClock" title="Last update" hidden></span>
         </div>
-      </div>
+        <div class="headline">
+          <span class="headline__big" data-field="headlineBig">—</span>
+          <span class="headline__pct" data-field="headlinePct">—</span>
+        </div>
+        <div class="subline" data-field="subLine"></div>
+        <div class="ticks" data-field="ticks" role="progressbar" aria-label="Print progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="ticks__base"></div>
+          <div class="ticks__fill" data-field="ticksFill" style="width: 0%"></div>
+        </div>
+
+        <div class="alert" data-field="error" role="alert" hidden>
+          <span class="alert__mark" aria-hidden="true"></span>
+          <div><div class="alert__title" data-field="errorTitle"></div><div class="alert__text" data-field="errorText"></div></div>
+        </div>
+        <div class="note" data-field="note" hidden></div>
+
+        <div class="rows" data-field="rows"></div>
+
+        <div class="sheet__foot">
+          <div class="controls">
+            <button type="button" class="button" data-action="pause" disabled>Pause</button>
+            <button type="button" class="button" data-action="resume" disabled>Resume</button>
+            <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
+            <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
+          </div>
+          <p class="message" data-field="commandMessage" aria-live="polite"></p>
+        </div>
+      </section>
 
       <dialog class="dialog" data-view="stopConfirm" aria-labelledby="stop-heading">
         <form method="dialog" class="dialog__form">
