@@ -4,11 +4,11 @@
 // enabling only those the service would accept in the current state.
 // The access token, when the service needs one, comes from `?token=` on the
 // first visit or from the token form, and is kept in localStorage.
-import { type ControlAction, isAllowed } from "../src/control-rules.ts";
+import type { ControlAction } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { type Row, type StatusView, statusView } from "./view.js";
+import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, type SlideState, type StatusView } from "./view.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
@@ -92,11 +92,12 @@ let latest: StatusSnapshot | null = null;
 
 function render(): void {
   const snapshot = latest;
-  const status = statusView(snapshot, { streamOpen: serviceReachable, messageShown: false }, Date.now());
+  const dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command, slide }, Date.now());
+  const status = dashboard.status;
   renderHeader(status.printerName, status.online);
   updateCamera(status.online);
   renderStatus(status);
-  if (snapshot !== null) renderControls(snapshot);
+  renderControls(dashboard);
 
   const name = status.printerName;
   const title = snapshot !== null && snapshot.progress !== null && snapshot.printState.name === "printing" ? `${snapshot.progress}% · ${name}` : name;
@@ -176,70 +177,102 @@ function renderRows(rows: Row[]): void {
   });
 }
 
-// ---- Controls ----
+// ---- Controls and message slot (design D8) ----
 
-const ACTION_LABELS: Record<ControlAction, string> = { pause: "Pause", resume: "Resume", stop: "Stop", light: "Light" };
+/** The page aborts a command request after this long and shows it as timed out (the service's own limit is 10 s). */
+const COMMAND_ABORT_MS = 15_000;
 
-/** The command waiting for its result; every button is disabled meanwhile. */
-let pending: ControlAction | null = null;
+/** The command in flight or last answered; one at a time. */
+let command: CommandState | null = null;
+/** The request body of `command`, re-sent by Retry. */
+let commandBody: Record<string, unknown> | null = null;
+let ackTimer: ReturnType<typeof setTimeout> | undefined;
+/** The stop thumb (design D12). */
+const slide: SlideState = { x: 0, dragging: false, max: 0 };
 
-function controlButtons(): HTMLButtonElement[] {
-  return [...document.querySelectorAll<HTMLButtonElement>("button[data-action]")];
+function controlButton(action: ControlAction): HTMLButtonElement {
+  const element = document.querySelector<HTMLButtonElement>(`button[data-action="${action}"]`);
+  if (element === null) throw new Error(`missing button[data-action="${action}"]`);
+  return element;
 }
 
-function renderControls(snapshot: StatusSnapshot): void {
-  for (const button of controlButtons()) {
-    const action = button.dataset.action as ControlAction;
-    button.disabled = pending !== null || !serviceReachable || !isAllowed(action, snapshot);
-    if (action === "light") {
-      const text = snapshot.light === "on" ? "Light off" : snapshot.light === "off" ? "Light on" : "Light";
-      if (button.textContent !== text) button.textContent = text;
-    }
+function renderButton(action: "light" | "pause" | "resume", button: ButtonView): void {
+  const element = controlButton(action);
+  element.disabled = button.disabled;
+  setAttr(element, "data-look", button.look);
+  setText(`${action}Label`, button.label);
+}
+
+function renderControls(dashboard: DashboardView): void {
+  const { message, light } = dashboard;
+  const slot = field("message");
+  slot.hidden = message === null;
+  if (message !== null) {
+    setAttr(slot, "data-tone", message.tone);
+    setAttr(slot, "data-retry", message.retry ? "" : null);
+    setAttr(field("messageMark"), "data-mark", message.mark);
+    setText("messageTitle", message.title);
+    setText("messageSub", message.sub);
+    field("messageRetry").hidden = !message.retry;
+    field("messageDismiss").hidden = !message.retry;
+    field("messageBar").hidden = !message.pending;
   }
+
+  renderButton("light", light);
+  setAttr(controlButton("light"), "aria-pressed", String(light.pressed));
+  setAttr(field("lightDot"), "data-dot", light.dot);
+  renderButton("pause", dashboard.pause);
+  renderButton("resume", dashboard.resume);
+  controlButton("stop").disabled = dashboard.slide.disabled || dashboard.slide.pending;
 }
 
-function showMessage(text: string, kind: "info" | "error"): void {
-  const element = field("commandMessage");
-  element.dataset.kind = kind;
-  element.textContent = text;
-}
-
-/** One line for a command's result, and whether it is a failure. */
-function describeResult(result: CommandResult): [string, "info" | "error"] {
-  const name = ACTION_LABELS[result.action];
-  switch (result.outcome) {
-    case "acknowledged":
-      return [`${name}: the printer accepted it.`, "info"];
-    case "failed":
-      return [`${name} failed: the printer refused it${result.code === null ? "" : ` (code ${result.code})`}.`, "error"];
-    case "timeout":
-      return [`${name} timed out: the printer didn't answer within 10 seconds.`, "error"];
+function setCommand(next: CommandState | null): void {
+  clearTimeout(ackTimer);
+  command = next;
+  if (next !== null && next.status === "ack") {
+    ackTimer = setTimeout(() => {
+      if (command === next) setCommand(null);
+    }, ACK_CLEAR_MS);
   }
-}
-
-async function sendCommand(action: ControlAction, body: Record<string, unknown>): Promise<void> {
-  pending = action;
   render();
-  showMessage(`${ACTION_LABELS[action]}: sending…`, "info");
+}
+
+/** The service's error message as a sentence for the sub-line. */
+function reasonOf(payload: unknown, status: number): string {
+  const message = (payload as { error?: { message?: unknown } } | null)?.error?.message;
+  const text = typeof message === "string" && message !== "" ? message : `the service answered HTTP ${status}`;
+  return `${text[0]!.toUpperCase()}${text.slice(1)}.`;
+}
+
+/** Sends one command and follows it through pending to its outcome; ignored while another is in flight. */
+async function sendCommand(action: ControlAction, body: Record<string, unknown>): Promise<void> {
+  if (command?.status === "pending") return;
+  commandBody = body;
+  setCommand({ action, status: "pending" });
+  const abort = new AbortController();
+  const safety = setTimeout(() => abort.abort(), COMMAND_ABORT_MS);
   try {
     const response = await apiFetch("/api/command", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: abort.signal,
     });
-    const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | CommandResult | null;
-    if (response.ok && payload !== null && "outcome" in payload) {
-      showMessage(...describeResult(payload));
+    const payload = (await response.json().catch(() => null)) as unknown;
+    if (response.ok && payload !== null && typeof payload === "object" && "outcome" in payload) {
+      const result = payload as CommandResult;
+      if (result.outcome === "acknowledged") setCommand({ action, status: "ack" });
+      else if (result.outcome === "failed") setCommand({ action, status: "failed", code: result.code });
+      else setCommand({ action, status: "timeout" });
     } else {
-      const reason = (payload !== null && "error" in payload && payload.error?.message) || `HTTP ${response.status}`;
-      showMessage(`${ACTION_LABELS[action]} failed: ${reason}.`, "error");
+      setCommand({ action, status: "failed", code: null, reason: reasonOf(payload, response.status) });
       if (response.status === 401) void connect();
     }
   } catch {
-    showMessage(`${ACTION_LABELS[action]} failed: the service can't be reached.`, "error");
+    if (abort.signal.aborted) setCommand({ action, status: "timeout" });
+    else setCommand({ action, status: "failed", code: null, reason: "The service can’t be reached." });
   } finally {
-    pending = null;
-    render();
+    clearTimeout(safety);
   }
 }
 
@@ -248,20 +281,21 @@ function setUpControls(): void {
   dialog.addEventListener("close", () => {
     if (dialog.returnValue === "stop") void sendCommand("stop", { action: "stop", confirm: true });
   });
-  for (const button of controlButtons()) {
-    button.addEventListener("click", () => {
-      const action = button.dataset.action as ControlAction;
-      if (action === "stop") {
-        // Stop is sent only from the dialog's "Stop print" button.
-        dialog.returnValue = "";
-        dialog.showModal();
-      } else if (action === "light") {
-        void sendCommand("light", { action: "light", on: latest?.light !== "on" });
-      } else {
-        void sendCommand(action, { action });
-      }
-    });
-  }
+  controlButton("stop").addEventListener("click", () => {
+    // Stop is sent only from the dialog's "Stop print" button.
+    dialog.returnValue = "";
+    dialog.showModal();
+  });
+  controlButton("light").addEventListener("click", () => void sendCommand("light", { action: "light", on: latest?.light !== "on" }));
+  controlButton("pause").addEventListener("click", () => void sendCommand("pause", { action: "pause" }));
+  controlButton("resume").addEventListener("click", () => void sendCommand("resume", { action: "resume" }));
+  field("messageRetry").addEventListener("click", () => {
+    if (command === null || commandBody === null) return;
+    const { action } = command;
+    setCommand(null);
+    void sendCommand(action, commandBody);
+  });
+  field("messageDismiss").addEventListener("click", () => setCommand(null));
 }
 
 // ---- Camera (design D11) ----

@@ -74,13 +74,19 @@
         <div class="rows" data-field="rows"></div>
 
         <div class="sheet__foot">
-          <div class="controls">
-            <button type="button" class="button" data-action="pause" disabled>Pause</button>
-            <button type="button" class="button" data-action="resume" disabled>Resume</button>
-            <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
-            <button type="button" class="button button--secondary" data-action="light" disabled>Light</button>
+          <div class="msg" data-field="message" data-tone="info" role="status" hidden>
+            <span class="msg__mark" data-field="messageMark" aria-hidden="true"></span>
+            <div class="msg__body"><div class="msg__title" data-field="messageTitle"></div><div class="msg__sub" data-field="messageSub"></div></div>
+            <button type="button" class="msg__retry" data-field="messageRetry">Retry</button>
+            <button type="button" class="msg__dismiss" data-field="messageDismiss" aria-label="Dismiss">×</button>
+            <div class="indet" data-field="messageBar" aria-hidden="true"><div></div></div>
           </div>
-          <p class="message" data-field="commandMessage" aria-live="polite"></p>
+          <div class="ctls">
+            <button type="button" class="ctl" data-action="light" data-look="disabled" aria-pressed="false" disabled><span class="ctl__dot" data-field="lightDot" aria-hidden="true"></span><span data-field="lightLabel">Light —</span></button>
+            <button type="button" class="ctl" data-action="pause" data-look="disabled" disabled><span class="ctl__pause" aria-hidden="true"><span></span><span></span></span><span data-field="pauseLabel">Pause</span></button>
+            <button type="button" class="ctl" data-action="resume" data-look="disabled" disabled><span class="ctl__play" aria-hidden="true"></span><span data-field="resumeLabel">Resume</span></button>
+          </div>
+          <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
         </div>
       </section>
 
