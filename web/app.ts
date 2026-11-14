@@ -187,6 +187,8 @@ function renderRows(rows: Row[]): void {
 
 const commands = new Commands({
   fetch: apiFetch,
+  snapshot: () => latest,
+  streamOpen: () => serviceReachable,
   changed: () => render(),
   unauthorized: () => void connect(),
 });

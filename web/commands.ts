@@ -4,7 +4,8 @@
 // `node --test` drives it with a stub fetch and mock timers.
 import type { ControlAction } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
-import { ACK_CLEAR_MS, type CommandState } from "./view.js";
+import type { StatusSnapshot } from "../src/status-store.ts";
+import { ACK_CLEAR_MS, type CommandState, canRetry } from "./view.js";
 
 /** The page aborts a command request after this long and shows it as timed out (the service's own limit is 10 s). */
 export const COMMAND_ABORT_MS = 15_000;
@@ -13,6 +14,10 @@ export const COMMAND_ABORT_MS = 15_000;
 export interface CommandHost {
   /** Fetch with the access token. */
   fetch(path: string, init: RequestInit): Promise<Response>;
+  /** The latest status snapshot, for the control rules. */
+  snapshot(): StatusSnapshot | null;
+  /** Whether the event stream to the service is open. */
+  streamOpen(): boolean;
   /** The command state changed: render again. */
   changed(): void;
   /** The service answered 401: check the token again. */
@@ -86,9 +91,10 @@ export class Commands {
     return this.send("stop", { action: "stop", confirm: true });
   }
 
-  /** Re-sends the last command's own request. */
+  /** Re-sends the last command's own request, when Retry is shown (`canRetry`). */
   retry(): Promise<void> {
     if (this.state === null || this.#body === null) return Promise.resolve();
+    if (!canRetry(this.state, this.#host.snapshot(), this.#host.streamOpen())) return Promise.resolve();
     const { action } = this.state;
     const body = this.#body;
     this.#set(null);
