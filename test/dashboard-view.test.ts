@@ -22,6 +22,7 @@ import {
   slideMax,
   slideReleased,
   statusView,
+  tokenView,
 } from "../web/view.ts";
 
 /** The references' "now": 2026-11-13 21:20:00 (UTC here). */
@@ -497,5 +498,33 @@ describe("stop slide steps", () => {
     const held = { x: 136, dragging: false, max: MAX };
     assert.equal(settleSlide(held, true, true), false);
     assert.equal(held.x, 136);
+  });
+});
+
+describe("tokenView", () => {
+  it("first run (d1): connect title, masked, no error", () => {
+    assert.deepEqual(tokenView({ rejected: false, edited: false, shown: false }), {
+      title: "Connect to printer",
+      body: "The printer service needs an access token. Paste it from the service config.",
+      error: false,
+      inputType: "password",
+      showLabel: "Show",
+    });
+  });
+
+  it("rejected (d2): error until the field is edited, title kept", () => {
+    const rejected = tokenView({ rejected: true, edited: false, shown: false });
+    assert.equal(rejected.title, "Token not accepted");
+    assert.equal(rejected.body, "The service rejected the saved token. It may have changed. Paste the current one.");
+    assert.equal(rejected.error, true);
+    const edited = tokenView({ rejected: true, edited: true, shown: false });
+    assert.equal(edited.error, false);
+    assert.equal(edited.title, "Token not accepted");
+  });
+
+  it("Show reveals the token and the button reads Hide", () => {
+    const shown = tokenView({ rejected: false, edited: false, shown: true });
+    assert.equal(shown.inputType, "text");
+    assert.equal(shown.showLabel, "Hide");
   });
 });
