@@ -510,6 +510,16 @@ export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, 
   };
 }
 
+/**
+ * The dashboard the page renders: a disabled slide, or a released one whose
+ * thumb is not `held` (dragged or focused), first drops its progress in
+ * `page.slide`, so it never carries to a later stop.
+ */
+export function settledDashboardView(snapshot: StatusSnapshot | null, page: PageState, now: number, held: boolean): DashboardView {
+  const view = dashboardView(snapshot, page, now);
+  return settleSlide(page.slide, !view.slide.disabled, held) ? dashboardView(snapshot, page, now) : view;
+}
+
 // ---- Token screen ----
 
 export interface TokenPageState {

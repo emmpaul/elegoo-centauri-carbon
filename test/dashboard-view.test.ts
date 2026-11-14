@@ -17,6 +17,7 @@ import {
   duration,
   isLive,
   settleSlide,
+  settledDashboardView,
   slideDrag,
   slideKey,
   slideMax,
@@ -523,6 +524,19 @@ describe("stop slide steps", () => {
     const held = { x: 136, dragging: false, max: MAX };
     assert.equal(settleSlide(held, true, true), false);
     assert.equal(held.x, 136);
+  });
+
+  it("the rendered dashboard settles the slide first: a released, unfocused or disabled thumb starts over", () => {
+    const released = page(null, { x: 136 });
+    const v = settledDashboardView(PRESETS.a1, released, NOW, false);
+    assert.equal(released.slide.x, 0, "the progress is dropped from the page state");
+    assert.deepEqual([v.slide.thumbLeft, v.slide.pct], ["3px", 0]);
+    const focused = page(null, { x: 136 });
+    assert.equal(settledDashboardView(PRESETS.a1, focused, NOW, true).slide.pct, 50);
+    assert.equal(focused.slide.x, 136, "a focused thumb keeps its progress");
+    const ended = page(null, { x: 204 });
+    settledDashboardView(PRESETS.a5, ended, NOW, true);
+    assert.equal(ended.slide.x, 0, "a disabled slide drops it even while held");
   });
 });
 

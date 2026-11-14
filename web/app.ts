@@ -7,7 +7,7 @@
 import type { ControlAction } from "../src/control-rules.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { type ButtonView, type DashboardView, dashboardView, type Row, settleSlide, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
+import { type ButtonView, type DashboardView, type Row, settledDashboardView, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
 import { attachStopSlide } from "./stop-slide.js";
 import { Commands } from "./commands.js";
 
@@ -94,11 +94,8 @@ let latest: StatusSnapshot | null = null;
 function render(): void {
   const snapshot = latest;
   const thumb = field<HTMLButtonElement>("slideThumb");
-  let dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command: commands.state, slide }, Date.now());
-  // A disabled or released, unfocused slide drops its progress (it never carries to a later stop).
-  if (settleSlide(slide, !dashboard.slide.disabled, slide.dragging || document.activeElement === thumb)) {
-    dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command: commands.state, slide }, Date.now());
-  }
+  const held = slide.dragging || document.activeElement === thumb;
+  const dashboard = settledDashboardView(snapshot, { streamOpen: serviceReachable, command: commands.state, slide }, Date.now(), held);
   const status = dashboard.status;
   renderHeader(status.printerName, status.online);
   updateCamera(status.online);
