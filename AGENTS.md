@@ -26,8 +26,9 @@ node scripts/visual-check.ts a1 c3 # shoots the dashboard per design state and d
 API per state id (a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2; none means all),
 shoots each in both themes, and writes reference | actual | diff with the share of
 differing pixels to `scratch/visual/index.html`. It needs `pnpm fonts:fetch` first and
-a Chromium (`CHROMIUM_PATH`, else Playwright's lookup); `--all-widths` adds the other
-width. The references are `docs/design/reference/`; the ids and env are listed at the
+a full Chromium (`CHROMIUM_PATH`, else Playwright's own, `pnpm exec playwright-core
+install chromium`); it refuses the headless shell, whose text rendering moves every
+share by several percent. `--all-widths` adds the other width. The references are `docs/design/reference/`; the ids and env are listed at the
 top of the script.
 
 `pnpm start:fake` is how to see the dashboard without a printer. Its env vars and signals

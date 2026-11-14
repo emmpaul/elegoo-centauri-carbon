@@ -23,7 +23,16 @@
 // in any channel between the reference and the shot in the reference's theme.
 //
 // Environment:
-//   CHROMIUM_PATH  Chromium executable (default: playwright-core's own lookup)
+//   CHROMIUM_PATH  a full Chromium executable (default: Playwright's own Chromium,
+//                  channel "chromium"; `pnpm exec playwright-core install chromium`)
+//
+// The shots are deterministic for one browser build and font setup. The
+// headless shell (Playwright's default for headless Chromium) rasterises text
+// differently and shifts every share by several percent, so the harness never
+// uses it and refuses a CHROMIUM_PATH that names it. The references' file name
+// and clocks use the platform monospace font that `ui-monospace, …, monospace`
+// resolves to; the harness prints that font and warns when it is not the one
+// the references show (REFERENCE_MONO).
 //
 // Needs the fonts (`pnpm fonts:fetch`): without them the page falls back to
 // system fonts and nothing can match, so the harness refuses to run.
@@ -46,8 +55,21 @@ const FONTS = ["satoshi-400", "satoshi-500", "satoshi-700", "cabinet-grotesk-800
 const NOW = Date.UTC(2026, 10, 13, 21, 20, 0);
 /** Per-channel difference above which a pixel counts as differing. */
 const TOLERANCE = 8;
-/** Where CSS animations are frozen (ms): puts c3's indeterminate bar where the reference shows it. */
-const ANIMATION_TIME_MS = 275;
+/** Where CSS animations are frozen (ms), per id: puts the indeterminate bar where each reference shows it. */
+const ANIMATION_TIME_MS: Record<string, number> = { c2: 184, c3: 275 };
+/** The component's maxX() before its track is mounted (360 and 1280 wide), which the references show. */
+const FALLBACK_TRAVEL = { 360: 272, 1280: 334 } as const;
+/**
+ * Where the references' frame sits below the pixel grid (px). The design canvas
+ * placed each card at a fractional y: a static Chromium render of
+ * PrinterScreen.dc.html matches every reference only with its frame moved down
+ * by 0.375 to 0.42 px (24/64 to 27/64 layout units; a7 rules out more), and is 1 px off where an
+ * edge lands on a fraction (b1's sheet, a8's note, d2's token screen) at 0. The
+ * harness puts the page at the same offset; the page itself sits on the grid.
+ */
+const REFERENCE_FRAME_Y = 0.40625;
+/** The platform font the references' monospace text (file name, clocks) was drawn in. */
+const REFERENCE_MONO = "WenQuanYi Zen Hei Mono";
 /** Time limit for one interaction step, so a missing control is reported quickly. */
 const STEP_MS = 2000;
 /** localStorage key of the access token (web/app.ts). */
@@ -269,7 +291,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (path === "/camera") {
     if (state.camera === "down") return void json(res, 502, { error: { code: "camera-unavailable", message: "camera unavailable" } });
-    const frame = frames.get(state.width) ?? Buffer.alloc(0);
+    // The frame for the width being shot (the vwidth cookie), so --all-widths shots get their own box size.
+    const width = Number(/(?:^|;\s*)vwidth=(\d+)/.exec(req.headers.cookie ?? "")?.[1] ?? state.width);
+    const frame = frames.get(width) ?? Buffer.alloc(0);
     res.writeHead(200, { "Content-Type": "multipart/x-mixed-replace; boundary=frame", "Cache-Control": "no-store" });
     res.write(Buffer.concat([Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`), frame, Buffer.from("\r\n")]));
     return hold(res);
@@ -321,7 +345,7 @@ function freezeAnimations(time: number): void {
 }
 
 /** Runs the state's interaction by role; returns a note when the control is not there. */
-async function interact(page: Page, state: VisualState): Promise<string | null> {
+async function interact(page: Page, state: VisualState, width: 360 | 1280): Promise<string | null> {
   if (state.interaction === null) return null;
   try {
     if (state.interaction === "pause") {
@@ -342,8 +366,9 @@ async function interact(page: Page, state: VisualState): Promise<string | null> 
       const t = track.getBoundingClientRect();
       return { x: isTrack ? t.left + 1 + 3 + 24 : r.left + r.width / 2, y: r.top + r.height / 2, max: track.clientWidth - 2 - 6 - 48 };
     });
-    // The component's maxX(); c1 holds at round(0.74 × max) like preset slide 0.74.
-    const dx = state.interaction === "slide-hold" ? Math.round(0.74 * geo.max) : geo.max;
+    // c1 holds where the reference shows the thumb: the preset's slide 0.74 of the
+    // component's fallback travel (maxX() before its track is measured: 272, wide 334).
+    const dx = state.interaction === "slide-hold" ? Math.min(geo.max, Math.round(0.74 * FALLBACK_TRAVEL[width])) : geo.max;
     await page.mouse.move(geo.x, geo.y);
     await page.mouse.down();
     await page.mouse.move(geo.x + dx, geo.y, { steps: 12 });
@@ -359,7 +384,7 @@ async function shoot(browser: Browser, base: string, state: VisualState, theme: 
   const viewport = width === 360 ? { width: 360, height: 780 } : { width: 1280, height: 660 };
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1, timezoneId: "UTC", locale: "en-GB", colorScheme: theme, serviceWorkers: "block" });
   try {
-    await context.addCookies([{ name: "vstate", value: state.id, url: base }]);
+    await context.addCookies([{ name: "vstate", value: state.id, url: base }, { name: "vwidth", value: String(width), url: base }]);
     await context.addInitScript(
       ({ theme, key, token }: { theme: Theme; key: string; token: string | null }) => {
         const storage = (globalThis as any).localStorage;
@@ -373,9 +398,15 @@ async function shoot(browser: Browser, base: string, state: VisualState, theme: 
     await page.goto(`${base}/`, { waitUntil: "load" });
     await page.evaluate(() => (globalThis as any).document.fonts.ready.then(() => true));
     await page.waitForTimeout(800);
-    const note = await interact(page, state);
+    const interaction = await interact(page, state, width);
     await page.waitForTimeout(500);
-    await page.evaluate(freezeAnimations, ANIMATION_TIME_MS);
+    const overflow = await page.evaluate(() => {
+      const root = (globalThis as any).document.documentElement;
+      return root.scrollWidth - root.clientWidth;
+    });
+    const note = [interaction, overflow > 0 ? `horizontal scroll at ${width} px (${theme}): ${overflow} px` : null].filter((n) => n !== null).join("; ") || null;
+    await page.evaluate(freezeAnimations, ANIMATION_TIME_MS[state.id] ?? 275);
+    await page.addStyleTag({ content: `html{position:relative;top:${REFERENCE_FRAME_Y}px}` });
     if (width === 360) await page.evaluate(overlayClock, { onToken: state.unauthorized, theme });
     await page.screenshot({ path: new URL(file, OUT).pathname, caret: "hide" });
     return note;
@@ -402,6 +433,10 @@ interface CompareInput {
   h: number;
   /** Count only these rectangles (g1's icons); the whole image when absent. */
   regions?: Array<{ x: number; y: number; w: number; h: number }>;
+  /** Count only where these layers, drawn alone, are fully opaque (g1: the icons' own shape, not the sheet's shadow). */
+  opaque?: Layer[];
+  /** Leave out these rings (g1: the sheet's dashed safe-zone circle drawn over the 512 icon). */
+  rings?: Array<{ cx: number; cy: number; r0: number; r1: number }>;
   tolerance: number;
 }
 interface CompareOutput {
@@ -434,6 +469,7 @@ async function compareInBrowser(input: CompareInput): Promise<CompareOutput> {
   };
   const ref = await compose(input.ref);
   const act = await compose(input.actual);
+  const mask = input.opaque === undefined ? null : (await compose(input.opaque)).data.data;
   const out = doc.createElement("canvas");
   out.width = input.w;
   out.height = input.h;
@@ -441,7 +477,13 @@ async function compareInBrowser(input: CompareInput): Promise<CompareOutput> {
   const diff = og.createImageData(input.w, input.h);
   const a = ref.data.data;
   const b = act.data.data;
-  const inRegion = (x: number, y: number) => input.regions === undefined || input.regions.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+  const inRegion = (x: number, y: number) =>
+    (input.regions === undefined || input.regions.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)) &&
+    (mask === null || mask[(y * input.w + x) * 4 + 3] === 255) &&
+    !(input.rings ?? []).some((r) => {
+      const d = Math.hypot(x + 0.5 - r.cx, y + 0.5 - r.cy);
+      return d >= r.r0 && d <= r.r1;
+    });
   let counted = 0;
   let differing = 0;
   for (let y = 0; y < input.h; y++) {
@@ -486,8 +528,17 @@ async function iconInput(id: string): Promise<{ input: Omit<CompareInput, "toler
     const actual: Layer[] = [{ src: "/__ref/g1.png", x: 0, y: 0 }];
     for (const box of G1_BOXES) actual.push({ fill: G1_SHEET, x: box.x, y: box.y, w: box.w, h: box.h }, { src: `/__icons/${box.src}`, x: box.x, y: box.y, w: box.w, h: box.h });
     return {
-      input: { ref: [{ src: "/__ref/g1.png", x: 0, y: 0 }], actual, w: 450, h: 353, regions: G1_BOXES.map(({ x, y, w, h }) => ({ x, y, w, h })) },
-      note: "rendered icons placed on the reference sheet; share counts the three icon boxes only (the dashed safe-zone circle is the sheet's)",
+      input: {
+        ref: [{ src: "/__ref/g1.png", x: 0, y: 0 }],
+        actual,
+        w: 450,
+        h: 353,
+        regions: G1_BOXES.map(({ x, y, w, h }) => ({ x, y, w, h })),
+        opaque: G1_BOXES.map((box) => ({ src: `/__icons/${box.src}`, x: box.x, y: box.y, w: box.w, h: box.h })),
+        // The 512 icon's safe zone: a dashed circle at an inset of 25.6 px of the 256 px tile.
+        rings: [{ cx: 128, cy: 30 + 128, r0: 100.5, r1: 103.5 }],
+      },
+      note: "rendered icons placed on the reference sheet; share counts the icons' opaque pixels only (the drop shadow and the dashed safe-zone circle are the sheet's)",
     };
   }
   // The splash drawn at its CSS size and centred on the 360 × 780 frame, as the phone shows it.
@@ -524,7 +575,7 @@ interface Result {
 const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&${({ "&": "amp", "<": "lt", ">": "gt", '"': "quot" } as Record<string, string>)[c]};`);
 const pct = (share: number | null) => (share === null ? "—" : `${(share * 100).toFixed(2)}%`);
 
-function indexHtml(results: Result[]): string {
+function indexHtml(results: Result[], setup: string): string {
   const rows = results.map((r) => `<tr><td><a href="#${r.id}">${r.id}</a></td><td>${esc(r.label)}</td><td>${r.theme ?? "—"}</td><td class="num">${pct(r.share)}</td><td>${esc(r.notes.join(" · "))}</td></tr>`).join("\n");
   const fig = (src: string, caption: string, w: number) => `<figure><img src="${src}" width="${w}" alt="${esc(caption)}"><figcaption>${esc(caption)}</figcaption></figure>`;
   const sections = results.map((r) => {
@@ -548,7 +599,8 @@ section{margin:0 0 40px}h2{font-size:16px;margin:0 0 8px}.share{font-variant-num
 figure{margin:0;flex:none}img{display:block;image-rendering:pixelated;outline:1px solid rgba(0,0,0,.2)}figcaption{font-size:12px;color:#555;margin-top:4px}
 </style></head><body>
 <h1>Visual check</h1>
-<p>Each row: the reference cropped to the shot's size, the page in the reference's theme and the other theme, and the diff (the shot in grey, pixels differing by more than ${TOLERANCE} in any channel in magenta, faint for small deltas such as font anti-aliasing, solid for large ones). Clock fixed at 2026-11-13 21:20:00 UTC.</p>
+<p>Each row: the reference cropped to the shot's size, the page in the reference's theme and the other theme, and the diff (the shot in grey, pixels differing by more than ${TOLERANCE} in any channel in magenta, faint for small deltas such as font anti-aliasing, solid for large ones). Clock fixed at 2026-11-13 21:20:00 UTC. The page is shot ${REFERENCE_FRAME_Y} px below the pixel grid, where the references' frame sits. The magenta corners (about 0.2 %) are the reference card's rounded corners, not page content.</p>
+<p>${esc(setup)}</p>
 <table><tr><th>id</th><th>state</th><th>ref theme</th><th>diff share</th><th>notes</th></tr>
 ${rows}
 </table>
@@ -587,9 +639,34 @@ const server = createServer((req, res) => {
 server.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const chromiumPath = process.env.CHROMIUM_PATH || undefined;
+if (chromiumPath !== undefined && /headless[-_]shell/.test(chromiumPath)) {
+  console.error(`visual-check: CHROMIUM_PATH names the headless shell (${chromiumPath}); it renders text differently from the references. Point it at a full Chromium, or unset it.`);
+  process.exit(1);
+}
+const browser = await chromium.launch(chromiumPath !== undefined ? { executablePath: chromiumPath } : { channel: "chromium" });
+
+/** The platform font the page's monospace stack resolves to (the file name and clocks). */
+async function monospaceFont(): Promise<string> {
+  const page = await browser.newPage();
+  try {
+    await page.setContent(`<span style="font-family:ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace">benchy.gcode 21:19:57</span>`);
+    const cdp = await page.context().newCDPSession(page);
+    const { root } = await cdp.send("DOM.getDocument");
+    const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "span" });
+    await cdp.send("CSS.enable");
+    const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+    return fonts.map((font) => font.familyName).join(", ");
+  } finally {
+    await page.close();
+  }
+}
 
 try {
+  const mono = await monospaceFont();
+  const setup = `Chromium ${browser.version()} (${chromiumPath ?? "Playwright channel chromium"}); monospace: ${mono}`;
+  console.log(`visual-check: ${setup}`);
+  if (mono !== REFERENCE_MONO) console.warn(`visual-check: warning: the references' monospace text is ${REFERENCE_MONO}; with ${mono} the file name and clocks will differ.`);
   frames.set(360, await renderFrame(browser, 360, 240, "88px 16px 44px"));
   frames.set(1280, await renderFrame(browser, 1280 - 24 - 468, 660 - 84 - 24, "16px"));
 
@@ -609,7 +686,8 @@ try {
       if (allWidths) {
         const other = state.width === 360 ? 1280 : 360;
         const extra = `${id}-${theme}-${other}.png`;
-        await shoot(browser, base, state, theme, other, extra);
+        const extraNote = await shoot(browser, base, state, theme, other, extra);
+        if (extraNote !== null && !result.notes.includes(extraNote)) result.notes.push(extraNote);
         result.extra.push(extra);
       }
     }
@@ -641,8 +719,8 @@ try {
   }
   await context.close();
 
-  await writeFile(new URL("index.html", OUT), indexHtml(results));
-  await writeFile(new URL("report.json", OUT), `${JSON.stringify(results.map(({ id, theme, share, notes }) => ({ id, theme, share, notes })), null, 2)}\n`);
+  await writeFile(new URL("index.html", OUT), indexHtml(results, setup));
+  await writeFile(new URL("report.json", OUT), `${JSON.stringify({ setup, results: results.map(({ id, theme, share, notes }) => ({ id, theme, share, notes })) }, null, 2)}\n`);
   for (const r of results) {
     const notes = r.notes.length > 0 ? `  (${r.notes.join("; ")})` : "";
     console.log(`${r.id.padEnd(3)} ${pct(r.share).padStart(7)} differ${notes}`);
