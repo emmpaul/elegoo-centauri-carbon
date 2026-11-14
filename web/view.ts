@@ -493,3 +493,36 @@ export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, 
     slide,
   };
 }
+
+// ---- Token screen ----
+
+export interface TokenPageState {
+  /** The service answered 401 to the token in the field. */
+  rejected: boolean;
+  /** The field was edited since the rejection. */
+  edited: boolean;
+  /** The token is shown in clear. */
+  shown: boolean;
+}
+
+export interface TokenView {
+  title: string;
+  body: string;
+  /** Red ring, aria-invalid, and the "Rejected (401)." alert. */
+  error: boolean;
+  inputType: "text" | "password";
+  showLabel: "Show" | "Hide";
+}
+
+/** The token screen's texts and looks (the component's token variants). */
+export function tokenView(page: TokenPageState): TokenView {
+  return {
+    title: page.rejected ? "Token not accepted" : "Connect to printer",
+    body: page.rejected
+      ? "The service rejected the saved token. It may have changed. Paste the current one."
+      : "The printer service needs an access token. Paste it from the service config.",
+    error: page.rejected && !page.edited,
+    inputType: page.shown ? "text" : "password",
+    showLabel: page.shown ? "Hide" : "Show",
+  };
+}

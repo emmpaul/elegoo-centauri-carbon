@@ -3,12 +3,12 @@
 // It shows the camera through the service's proxy and sends control commands,
 // enabling only those the service would accept in the current state.
 // The access token, when the service needs one, comes from `?token=` on the
-// first visit or from the token form, and is kept in localStorage.
+// first visit or from the token screen, and is kept in localStorage.
 import type { ControlAction } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, settleSlide, type SlideState, type SlideView, type StatusView } from "./view.js";
+import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, settleSlide, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
 import { attachStopSlide } from "./stop-slide.js";
 
 const TOKEN_KEY = "printer-token";
@@ -483,13 +483,56 @@ function setUpTheme(): void {
 let events: EventSource | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-function showTokenForm(message: string): void {
-  setText("tokenMessage", message);
+const tokenPage: TokenPageState = { rejected: false, edited: false, shown: false };
+
+/** The token screen from its page state (the component's token variants). */
+function renderToken(): void {
+  const look = tokenView(tokenPage);
+  setText("tokenTitle", look.title);
+  setText("tokenBody", look.body);
+  const input = field<HTMLInputElement>("tokenInput");
+  if (input.type !== look.inputType) input.type = look.inputType;
+  setAttr(input, "aria-invalid", String(look.error));
+  setAttr(input, "aria-describedby", look.error ? "token-error" : null);
+  field("tokenError").hidden = !look.error;
+  setText("tokenShow", look.showLabel);
+}
+
+/**
+ * Shows the token screen after a 401: empty on first run, or with the
+ * rejected token kept in the field so it can be corrected.
+ */
+function showTokenScreen(): void {
+  tokenPage.rejected = token !== null;
+  tokenPage.edited = false;
+  field<HTMLInputElement>("tokenInput").value = token ?? "";
+  renderToken();
   view("token").hidden = false;
   view("dashboard").hidden = true;
 }
 
+function setUpTokenScreen(): void {
+  const input = field<HTMLInputElement>("tokenInput");
+  input.addEventListener("input", () => {
+    tokenPage.edited = true;
+    renderToken();
+  });
+  field("tokenShow").addEventListener("click", () => {
+    tokenPage.shown = !tokenPage.shown;
+    renderToken();
+  });
+  field("tokenForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const given = input.value.trim();
+    if (given === "") return;
+    token = given;
+    storeToken(token);
+    void connect();
+  });
+}
+
 function showDashboard(): void {
+  field<HTMLInputElement>("tokenInput").value = "";
   view("token").hidden = true;
   view("dashboard").hidden = false;
 }
@@ -515,7 +558,7 @@ async function connect(): Promise<void> {
   if (response.status === 401) {
     serviceReachable = true;
     render();
-    showTokenForm(token === null ? "This service needs its access token." : "That token was not accepted.");
+    showTokenScreen();
     return;
   }
   if (!response.ok) {
@@ -562,14 +605,7 @@ function registerServiceWorker(): void {
 
 function start(): void {
   adoptTokenFromUrl();
-  view("token").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const input = (event.target as HTMLFormElement).elements.namedItem("token") as HTMLInputElement;
-    token = input.value.trim() || null;
-    storeToken(token);
-    input.value = "";
-    void connect();
-  });
+  setUpTokenScreen();
   setUpTheme();
   setUpControls();
   setUpCamera();

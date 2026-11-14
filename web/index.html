@@ -13,15 +13,27 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <div class="page" data-view="token" hidden>
-      <form class="token">
-        <h2>Access token</h2>
-        <p data-field="tokenMessage">This service needs its access token.</p>
-        <label class="token__label">
-          Token
-          <input type="password" name="token" autocomplete="current-password" required>
-        </label>
-        <button type="submit" class="button">Connect</button>
+    <div class="tok" data-view="token" hidden>
+      <div class="tok__band" aria-hidden="true"></div>
+      <form class="tok__body" data-field="tokenForm" novalidate>
+        <div class="tok__mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="tok__intro">
+          <h1 class="tok__title" data-field="tokenTitle">Connect to printer</h1>
+          <p class="tok__text" data-field="tokenBody">The printer service needs an access token. Paste it from the service config.</p>
+        </div>
+        <div class="tok__field">
+          <label class="tok__label" for="token-input">Access token</label>
+          <div class="tok__row">
+            <input class="tok__input" id="token-input" data-field="tokenInput" type="password" name="token" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Paste token" aria-invalid="false">
+            <button type="button" class="tok__show" data-field="tokenShow" aria-controls="token-input">Show</button>
+          </div>
+          <div class="tok__alert" id="token-error" data-field="tokenError" role="alert" hidden>
+            <span class="tok__alert-mark" aria-hidden="true"></span>
+            <span><b>Rejected (401).</b> Check for missing characters or spaces.</span>
+          </div>
+        </div>
+        <button type="submit" class="tok__connect">Connect</button>
+        <p class="tok__note">Stored on this device only.</p>
       </form>
     </div>
 
