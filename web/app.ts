@@ -8,12 +8,13 @@ import { type ControlAction, isAllowed } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot, Temperature } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
+import { isLive, statusView } from "./view.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
 const RETRY_MS = 5000;
-/** Wait before trying the camera again after it failed. */
-const CAMERA_RETRY_MS = 15_000;
+/** Wait before trying the camera again after it failed (design D11). */
+const CAMERA_RETRY_MS = 10_000;
 /** A camera stream that sends no frame for this long counts as failed. */
 const CAMERA_STALL_MS = 10_000;
 
@@ -140,12 +141,14 @@ let latest: StatusSnapshot | null = null;
 
 function render(): void {
   const snapshot = latest;
+  const status = statusView(snapshot, { streamOpen: serviceReachable, messageShown: false }, Date.now());
+  renderHeader(status.printerName, status.online);
+  updateCamera(isLive(snapshot, serviceReachable));
   renderConnection(snapshot);
   renderUpdatedAt(snapshot);
   if (snapshot === null) return;
 
-  const name = snapshot.printerName ?? "Printer";
-  setText("printerName", name);
+  const name = status.printerName;
   setText("printState", stateLabel(snapshot.printState));
   setText("machineState", stateLabel(snapshot.machineState));
   setText("fileName", snapshot.fileName ?? DASH);
@@ -173,16 +176,19 @@ function render(): void {
   if (document.title !== title) document.title = title;
 }
 
+/** Header: the printer's name and the Online/Offline mark (design D7, D9). */
+function renderHeader(name: string, online: boolean): void {
+  setText("printerName", name);
+  field("online").hidden = !online;
+  field("offline").hidden = online;
+}
+
 function renderConnection(snapshot: StatusSnapshot | null): void {
-  const badge = field("connection");
   let state: string;
-  let text: string;
-  if (!serviceReachable) [state, text] = ["unreachable", "Service unreachable"];
-  else if (snapshot === null || snapshot.connection === "connecting") [state, text] = ["connecting", "Connecting"];
-  else if (snapshot.connection === "online") [state, text] = ["online", "Online"];
-  else [state, text] = ["offline", "Offline"];
-  badge.dataset.state = state;
-  setText("connection", text);
+  if (!serviceReachable) state = "unreachable";
+  else if (snapshot === null || snapshot.connection === "connecting") state = "connecting";
+  else if (snapshot.connection === "online") state = "online";
+  else state = "offline";
 
   // No "… ago" here: the notice is a live region, and the footer shows the age.
   const notice = field("offlineNotice");
@@ -294,24 +300,36 @@ function setUpControls(): void {
   }
 }
 
-// ---- Camera ----
+// ---- Camera (design D11) ----
+
+type CameraState = "loading" | "live" | "unavailable" | "offline";
 
 /** The open camera stream; aborting it closes the connection. */
 let cameraAbort: AbortController | null = null;
 let cameraRetryTimer: ReturnType<typeof setTimeout> | undefined;
 /** Object URL of the frame on screen, revoked when the next one replaces it. */
 let frameUrl: string | null = null;
+/** Whether the stream should be open: the printer is online and the page visible. */
+let cameraWanted = false;
 
-function setCamera(state: "loading" | "live" | "unavailable" | "paused"): void {
-  field("camera").hidden = state !== "live";
-  field("cameraPlaceholder").hidden = state === "live";
+const CAMERA_TEXT: Record<CameraState, [title: string, sub: string]> = {
+  loading: ["", ""],
+  live: ["", ""],
+  unavailable: ["Camera unavailable", "Stream didn’t load. Status still live."],
+  offline: ["Camera offline", "Returns with the printer."],
+};
+
+function setCamera(state: CameraState): void {
+  field("camera").dataset.cam = state;
+  field("cameraImage").hidden = state !== "live";
   field("cameraRetry").hidden = state !== "unavailable";
-  const messages = { loading: "Loading camera…", live: "", unavailable: "Camera unavailable", paused: "Camera paused" };
-  setText("cameraMessage", messages[state]);
+  const [title, sub] = CAMERA_TEXT[state];
+  setText("cameraTitle", title);
+  setText("cameraSub", sub);
 }
 
 function showFrame(frame: Uint8Array): void {
-  const image = field<HTMLImageElement>("camera");
+  const image = field<HTMLImageElement>("cameraImage");
   const previous = frameUrl;
   frameUrl = URL.createObjectURL(new Blob([frame as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }));
   image.src = frameUrl;
@@ -356,7 +374,7 @@ async function readCamera(signal: AbortSignal): Promise<void> {
 }
 
 function startCamera(): void {
-  stopCamera();
+  closeCamera();
   const abort = new AbortController();
   cameraAbort = abort;
   setCamera("loading");
@@ -370,18 +388,72 @@ function startCamera(): void {
     });
 }
 
-/** Closes the stream, e.g. while the page is hidden, so it costs the printer nothing. */
-function stopCamera(): void {
+/** Closes the stream and stops retrying. */
+function closeCamera(): void {
   clearTimeout(cameraRetryTimer);
   const abort = cameraAbort;
   cameraAbort = null;
   abort?.abort();
-  setCamera("paused");
+}
+
+/**
+ * Opens the stream while the printer is online and the page visible, and
+ * closes it otherwise, so a hidden page or an offline printer costs nothing.
+ * Offline shows "Camera offline" (no Retry) until the printer is back.
+ */
+function updateCamera(online: boolean): void {
+  const want = online && !document.hidden;
+  if (!online) {
+    const state: CameraState = latest === null ? "loading" : "offline";
+    if (field("camera").dataset.cam !== state) setCamera(state);
+  }
+  if (want === cameraWanted) return;
+  cameraWanted = want;
+  if (want) startCamera();
+  else closeCamera();
 }
 
 function setUpCamera(): void {
   field("cameraRetry").addEventListener("click", startCamera);
-  document.addEventListener("visibilitychange", () => (document.hidden ? stopCamera() : startCamera()));
+  document.addEventListener("visibilitychange", render);
+}
+
+// ---- Theme (design D4) ----
+
+type Theme = "dark" | "light";
+const THEME_COLOR: Record<Theme, string> = { dark: "#0f0f0f", light: "#f3f3f1" };
+const prefersLight = matchMedia("(prefers-color-scheme: light)");
+
+/** The stored choice (applied by /theme.js as `data-theme`), else the system preference. */
+function themeInEffect(): Theme {
+  const chosen = document.documentElement.dataset.theme;
+  if (chosen === "dark" || chosen === "light") return chosen;
+  return prefersLight.matches ? "light" : "dark";
+}
+
+function renderTheme(): void {
+  const theme = themeInEffect();
+  const label = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  const toggle = field("themeToggle");
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme]);
+}
+
+/** The toggle stores the opposite of the theme in effect, so it is remembered on this device. */
+function setUpTheme(): void {
+  field("themeToggle").addEventListener("click", () => {
+    const next: Theme = themeInEffect() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      // Storage blocked: the choice lasts for this page only.
+    }
+    renderTheme();
+  });
+  prefersLight.addEventListener("change", renderTheme);
+  renderTheme();
 }
 
 // ---- Live updates ----
@@ -434,7 +506,6 @@ async function connect(): Promise<void> {
   serviceReachable = true;
   latest = (await response.json()) as StatusSnapshot;
   render();
-  if (!document.hidden) startCamera();
 
   const source = new EventSource(withToken("/api/events"));
   events = source;
@@ -471,12 +542,13 @@ function start(): void {
   adoptTokenFromUrl();
   view("token").addEventListener("submit", (event) => {
     event.preventDefault();
-    const input = (event.currentTarget as HTMLFormElement).elements.namedItem("token") as HTMLInputElement;
+    const input = (event.target as HTMLFormElement).elements.namedItem("token") as HTMLInputElement;
     token = input.value.trim() || null;
     storeToken(token);
     input.value = "";
     void connect();
   });
+  setUpTheme();
   setUpControls();
   setUpCamera();
   registerServiceWorker();
