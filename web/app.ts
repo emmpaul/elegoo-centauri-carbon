@@ -217,7 +217,7 @@ function renderControls(dashboard: DashboardView): void {
     setText("messageTitle", message.title);
     setText("messageSub", message.sub);
     field("messageRetry").hidden = !message.retry;
-    field("messageDismiss").hidden = !message.retry;
+    field("messageDismiss").hidden = !message.dismiss;
     field("messageBar").hidden = !message.pending;
   }
 
