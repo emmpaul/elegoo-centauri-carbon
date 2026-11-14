@@ -1,5 +1,5 @@
 // Visual harness (design D14): renders the real dashboard in Chromium for every
-// state of the design references (docs/design/reference/), in both themes.
+// state of the design references and compares each one with its reference PNG.
 // It never talks to a printer or the service: it starts its own HTTP server on
 // 127.0.0.1 that serves the dashboard files plus mocked /api/status,
 // /api/events (held open), /api/command, and /camera, chosen per browser
@@ -8,11 +8,19 @@
 // Usage:
 //   node scripts/visual-check.ts [ids…] [--all-widths]
 //
-//   ids           a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2 (default: all)
+//   ids           a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2 (default: all)
 //   --all-widths  also shoot each screen id at the other width (360 ↔ 1280)
 //
 // Output in scratch/visual/ (git-ignored):
 //   <id>-dark.png, <id>-light.png   the page in both themes (360 × 780; f1, f2 1280 × 660)
+//   <id>-ref.png                    the reference cropped to the same size
+//   <id>-diff.png                   the actual shot in grey, differing pixels in magenta
+//                                   (faint for small deltas such as anti-aliasing, solid for large ones)
+//   <id>-actual.png                 g1, g2 only: the rendered icons or splash composed for comparison
+//   index.html                      reference | actual | diff per id, with the diff share
+//   report.json                     the same results, machine-readable
+// For each id it prints the share of pixels whose colour differs by more than 8
+// in any channel between the reference and the shot in the reference's theme.
 //
 // Environment:
 //   CHROMIUM_PATH  Chromium executable (default: playwright-core's own lookup)
@@ -20,7 +28,7 @@
 // Needs the fonts (`pnpm fonts:fetch`): without them the page falls back to
 // system fonts and nothing can match, so the harness refuses to run.
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { type Browser, chromium, type Page } from "playwright-core";
@@ -29,10 +37,14 @@ import type { StatusSnapshot } from "../src/status-store.ts";
 
 const ROOT = new URL("../", import.meta.url);
 const OUT = new URL("scratch/visual/", ROOT);
+const REF = new URL("docs/design/reference/", ROOT);
+const ICONS = new URL("web/icons/", ROOT);
 const FONTS = ["satoshi-400", "satoshi-500", "satoshi-700", "cabinet-grotesk-800"];
 
 /** The references' fixed clock: 2026-11-13 21:20:00, read as UTC (the browser runs in UTC). */
 const NOW = Date.UTC(2026, 10, 13, 21, 20, 0);
+/** Per-channel difference above which a pixel counts as differing. */
+const TOLERANCE = 8;
 /** Where CSS animations are frozen (ms): puts c3's indeterminate bar where the reference shows it. */
 const ANIMATION_TIME_MS = 275;
 /** Time limit for one interaction step, so a missing control is reported quickly. */
@@ -196,6 +208,7 @@ function stateOf([id, variant, theme, width, label]: (typeof SCREENS)[number]): 
 }
 
 const STATES = new Map(SCREENS.map((row) => [row[0], stateOf(row)]));
+const ICON_IDS = ["g1", "g2"];
 
 // ---- Mock server ----
 
@@ -218,8 +231,18 @@ function hold(res: ServerResponse): void {
   res.on("close", () => open.delete(res));
 }
 
+async function serveFile(res: ServerResponse, dir: URL, name: string): Promise<void> {
+  if (!/^[\w.-]+\.png$/.test(name) || !existsSync(new URL(name, dir))) return void json(res, 404, { error: "not found" });
+  res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
+  res.end(await readFile(new URL(name, dir)));
+}
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+  if (path === "/__blank") return void res.end("<!doctype html><title>compare</title>");
+  if (path.startsWith("/__out/")) return serveFile(res, OUT, path.slice(7));
+  if (path.startsWith("/__ref/")) return serveFile(res, REF, path.slice(7));
+  if (path.startsWith("/__icons/")) return serveFile(res, ICONS, path.slice(9));
   if (files.has(path)) return files.serve(path, res);
 
   const state = stateFor(req);
@@ -360,18 +383,188 @@ async function shoot(browser: Browser, base: string, state: VisualState, theme: 
   }
 }
 
+// ---- Comparison (in the browser's canvas, so no image library is needed) ----
+
+/** One layer of an image composed in the canvas: an image (scaled when w/h are given) or a fill. */
+interface Layer {
+  src?: string;
+  fill?: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+}
+interface CompareInput {
+  ref: Layer[];
+  actual: Layer[];
+  w: number;
+  h: number;
+  /** Count only these rectangles (g1's icons); the whole image when absent. */
+  regions?: Array<{ x: number; y: number; w: number; h: number }>;
+  tolerance: number;
+}
+interface CompareOutput {
+  share: number;
+  ref: string;
+  actual: string;
+  diff: string;
+}
+
+async function compareInBrowser(input: CompareInput): Promise<CompareOutput> {
+  const doc = (globalThis as any).document;
+  const compose = async (layers: Layer[]) => {
+    const canvas = doc.createElement("canvas");
+    canvas.width = input.w;
+    canvas.height = input.h;
+    const g = canvas.getContext("2d");
+    for (const layer of layers) {
+      if (layer.fill !== undefined) {
+        g.fillStyle = layer.fill;
+        g.fillRect(layer.x, layer.y, layer.w, layer.h);
+        continue;
+      }
+      const img = new (globalThis as any).Image();
+      img.src = layer.src;
+      await img.decode();
+      if (layer.w === undefined) g.drawImage(img, layer.x, layer.y);
+      else g.drawImage(img, layer.x, layer.y, layer.w, layer.h);
+    }
+    return { canvas, data: g.getImageData(0, 0, input.w, input.h) };
+  };
+  const ref = await compose(input.ref);
+  const act = await compose(input.actual);
+  const out = doc.createElement("canvas");
+  out.width = input.w;
+  out.height = input.h;
+  const og = out.getContext("2d");
+  const diff = og.createImageData(input.w, input.h);
+  const a = ref.data.data;
+  const b = act.data.data;
+  const inRegion = (x: number, y: number) => input.regions === undefined || input.regions.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+  let counted = 0;
+  let differing = 0;
+  for (let y = 0; y < input.h; y++) {
+    for (let x = 0; x < input.w; x++) {
+      const i = (y * input.w + x) * 4;
+      const lum = 0.299 * b[i] + 0.587 * b[i + 1] + 0.114 * b[i + 2];
+      const grey = 150 + lum * 0.4;
+      let delta = 0;
+      if (inRegion(x, y)) {
+        counted++;
+        for (let c = 0; c < 4; c++) delta = Math.max(delta, Math.abs(a[i + c] - b[i + c]));
+        if (delta > input.tolerance) differing++;
+      }
+      // Differing pixels in magenta, faint for small deltas (anti-aliasing), solid from 90 up.
+      const t = delta > input.tolerance ? Math.min(1, 0.3 + delta / 128) : 0;
+      diff.data[i] = grey + (255 - grey) * t;
+      diff.data[i + 1] = grey * (1 - t);
+      diff.data[i + 2] = grey + (170 - grey) * t;
+      diff.data[i + 3] = 255;
+    }
+  }
+  og.putImageData(diff, 0, 0);
+  return { share: counted === 0 ? 0 : differing / counted, ref: ref.canvas.toDataURL("image/png"), actual: act.canvas.toDataURL("image/png"), diff: out.toDataURL("image/png") };
+}
+
+function png(dataUrl: string): Buffer {
+  return Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+}
+
+// g1 (450 × 353): where the reference sheet shows the icon at 512 (drawn at 256), 180 (at 90), and 48.
+const G1_BOXES = [
+  { x: 0, y: 30, w: 256, h: 256, src: "icon-512.png" },
+  { x: 284, y: 196, w: 90, h: 90, src: "apple-touch-icon.png" },
+  { x: 402, y: 238, w: 48, h: 48, src: "icon-192.png" },
+];
+const G1_SHEET = "#f0eee6";
+
+/** g1/g2 layers, or null while their PNGs do not exist yet. */
+async function iconInput(id: string): Promise<{ input: Omit<CompareInput, "tolerance">; note: string } | null> {
+  if (id === "g1") {
+    if (!G1_BOXES.every((box) => existsSync(new URL(box.src, ICONS)))) return null;
+    const actual: Layer[] = [{ src: "/__ref/g1.png", x: 0, y: 0 }];
+    for (const box of G1_BOXES) actual.push({ fill: G1_SHEET, x: box.x, y: box.y, w: box.w, h: box.h }, { src: `/__icons/${box.src}`, x: box.x, y: box.y, w: box.w, h: box.h });
+    return {
+      input: { ref: [{ src: "/__ref/g1.png", x: 0, y: 0 }], actual, w: 450, h: 353, regions: G1_BOXES.map(({ x, y, w, h }) => ({ x, y, w, h })) },
+      note: "rendered icons placed on the reference sheet; share counts the three icon boxes only (the dashed safe-zone circle is the sheet's)",
+    };
+  }
+  const splashes = (await readdir(ICONS)).filter((name) => /^splash-\d+x\d+\.png$/.test(name));
+  if (splashes.length === 0) return null;
+  // The splash whose aspect is closest to the 360 × 780 frame, scaled to it.
+  const aspect = (name: string) => {
+    const [w, h] = name.match(/\d+/g)!.map(Number) as [number, number];
+    return Math.abs(w / h - 360 / 780);
+  };
+  const best = splashes.sort((p, q) => aspect(p) - aspect(q))[0]!;
+  return {
+    input: { ref: [{ src: "/__ref/g2.png", x: 0, y: 0 }], actual: [{ src: `/__icons/${best}`, x: 0, y: 0, w: 360, h: 780 }], w: 360, h: 780 },
+    note: `${best} scaled to 360 × 780; the reference's rounded corners are its card's`,
+  };
+}
+
+// ---- Report ----
+
+interface Result {
+  id: string;
+  label: string;
+  theme: Theme | null;
+  width: number;
+  height: number;
+  share: number | null;
+  notes: string[];
+  shots: string[];
+  extra: string[];
+}
+
+const esc = (text: string) => text.replace(/[&<>"]/g, (c) => `&${({ "&": "amp", "<": "lt", ">": "gt", '"': "quot" } as Record<string, string>)[c]};`);
+const pct = (share: number | null) => (share === null ? "—" : `${(share * 100).toFixed(2)}%`);
+
+function indexHtml(results: Result[]): string {
+  const rows = results.map((r) => `<tr><td><a href="#${r.id}">${r.id}</a></td><td>${esc(r.label)}</td><td>${r.theme ?? "—"}</td><td class="num">${pct(r.share)}</td><td>${esc(r.notes.join(" · "))}</td></tr>`).join("\n");
+  const fig = (src: string, caption: string, w: number) => `<figure><img src="${src}" width="${w}" alt="${esc(caption)}"><figcaption>${esc(caption)}</figcaption></figure>`;
+  const sections = results.map((r) => {
+    const compared = r.share !== null;
+    const figures = [
+      compared ? fig(`${r.id}-ref.png`, `reference (${r.theme})`, r.width) : "",
+      ...(compared && r.id.startsWith("g") ? [fig(`${r.id}-actual.png`, "actual", r.width)] : []),
+      ...r.shots.map((shot) => fig(shot, `actual ${shot.replace(/^\w+-|\.png$/g, "")}`, r.width)),
+      compared ? fig(`${r.id}-diff.png`, `diff · ${pct(r.share)} differ (tolerance ${TOLERANCE})`, r.width) : "",
+      ...r.extra.map((shot) => fig(shot, `other width ${shot.replace(/^\w+-|\.png$/g, "")}`, Number(/-(\d+)\.png$/.exec(shot)?.[1] ?? 360))),
+    ].filter(Boolean);
+    return `<section id="${r.id}"><h2>${r.id} · ${esc(r.label)} <span class="share">${pct(r.share)}</span></h2>${r.notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}<div class="row${r.width > 400 ? " wide" : ""}">${figures.join("")}</div></section>`;
+  });
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Visual check</title>
+<style>
+body{margin:0;padding:24px;background:#e9e8e4;color:#161616;font:14px/1.45 system-ui,sans-serif}
+table{border-collapse:collapse;margin-bottom:32px}td,th{padding:4px 10px;border-bottom:1px solid #ccc;text-align:left}.num{text-align:right;font-variant-numeric:tabular-nums}
+section{margin:0 0 40px}h2{font-size:16px;margin:0 0 8px}.share{font-variant-numeric:tabular-nums;color:#a0006b}.note{margin:0 0 8px;color:#6b4500}
+.row{display:flex;gap:16px;align-items:flex-start;overflow-x:auto}.row.wide{flex-direction:column}
+figure{margin:0;flex:none}img{display:block;image-rendering:pixelated;outline:1px solid rgba(0,0,0,.2)}figcaption{font-size:12px;color:#555;margin-top:4px}
+</style></head><body>
+<h1>Visual check</h1>
+<p>Each row: the reference cropped to the shot's size, the page in the reference's theme and the other theme, and the diff (the shot in grey, pixels differing by more than ${TOLERANCE} in any channel in magenta, faint for small deltas such as font anti-aliasing, solid for large ones). Clock fixed at 2026-11-13 21:20:00 UTC.</p>
+<table><tr><th>id</th><th>state</th><th>ref theme</th><th>diff share</th><th>notes</th></tr>
+${rows}
+</table>
+${sections.join("\n")}
+</body></html>
+`;
+}
+
 // ---- Main ----
 
 function usage(message: string): never {
-  console.error(`${message}\nusage: node scripts/visual-check.ts [${[...STATES.keys()].join(" ")}] [--all-widths]`);
+  console.error(`${message}\nusage: node scripts/visual-check.ts [${[...STATES.keys(), ...ICON_IDS].join(" ")}] [--all-widths]`);
   process.exit(2);
 }
 
 const args = process.argv.slice(2);
 const allWidths = args.includes("--all-widths");
 const ids = args.filter((arg) => arg !== "--all-widths");
-for (const id of ids) if (!STATES.has(id)) usage(`unknown id or option: ${id}`);
-const selected = ids.length > 0 ? ids : [...STATES.keys()];
+for (const id of ids) if (!STATES.has(id) && !ICON_IDS.includes(id)) usage(`unknown id or option: ${id}`);
+const selected = ids.length > 0 ? ids : [...STATES.keys(), ...ICON_IDS];
 
 const missingFonts = FONTS.filter((name) => !existsSync(new URL(`web/fonts/${name}.woff2`, ROOT)));
 if (missingFonts.length > 0) {
@@ -396,18 +589,61 @@ try {
   frames.set(360, await renderFrame(browser, 360, 240, "88px 16px 44px"));
   frames.set(1280, await renderFrame(browser, 1280 - 24 - 468, 660 - 84 - 24, "16px"));
 
+  const results: Result[] = [];
   for (const id of selected) {
-    const state = STATES.get(id)!;
+    const state = STATES.get(id);
+    if (state === undefined) {
+      results.push({ id, label: id === "g1" ? "App icon" : "Splash", theme: null, width: id === "g1" ? 450 : 360, height: id === "g1" ? 353 : 780, share: null, notes: [], shots: [], extra: [] });
+      continue;
+    }
+    const result: Result = { id, label: state.label, theme: state.theme, width: state.width, height: state.width === 360 ? 780 : 660, share: null, notes: [], shots: [], extra: [] };
     for (const theme of [state.theme, state.theme === "dark" ? "light" : "dark"] as Theme[]) {
-      const shots = [{ file: `${id}-${theme}.png`, width: state.width }];
-      if (allWidths) shots.push({ file: `${id}-${theme}-${state.width === 360 ? 1280 : 360}.png`, width: state.width === 360 ? 1280 : 360 });
-      for (const shot of shots) {
-        const note = await shoot(browser, base, state, theme, shot.width, shot.file);
-        console.log(`${shot.file}${note === null ? "" : `  (${note})`}`);
+      const file = `${id}-${theme}.png`;
+      const note = await shoot(browser, base, state, theme, state.width, file);
+      if (note !== null && !result.notes.includes(note)) result.notes.push(note);
+      result.shots.push(file);
+      if (allWidths) {
+        const other = state.width === 360 ? 1280 : 360;
+        const extra = `${id}-${theme}-${other}.png`;
+        await shoot(browser, base, state, theme, other, extra);
+        result.extra.push(extra);
       }
     }
+    results.push(result);
   }
-  console.log(`\nshots in ${OUT.pathname}`);
+
+  // Compare in one blank page on the harness origin, so the canvas is never tainted.
+  const context = await browser.newContext({ serviceWorkers: "block" });
+  const page = await context.newPage();
+  await page.goto(`${base}/__blank`);
+  for (const result of results) {
+    let input: Omit<CompareInput, "tolerance">;
+    if (result.theme === null) {
+      const icon = await iconInput(result.id);
+      if (icon === null) {
+        result.notes.push(result.id === "g1" ? "no rendered icons in web/icons/ yet" : "no web/icons/splash-<w>x<h>.png yet (task 7.2)");
+        continue;
+      }
+      input = icon.input;
+      result.notes.push(icon.note);
+    } else {
+      input = { ref: [{ src: `/__ref/${result.id}.png`, x: 0, y: 0 }], actual: [{ src: `/__out/${result.id}-${result.theme}.png`, x: 0, y: 0 }], w: result.width, h: result.height };
+    }
+    const out = await page.evaluate(compareInBrowser, { ...input, tolerance: TOLERANCE });
+    result.share = out.share;
+    await writeFile(new URL(`${result.id}-ref.png`, OUT), png(out.ref));
+    await writeFile(new URL(`${result.id}-diff.png`, OUT), png(out.diff));
+    if (result.theme === null) await writeFile(new URL(`${result.id}-actual.png`, OUT), png(out.actual));
+  }
+  await context.close();
+
+  await writeFile(new URL("index.html", OUT), indexHtml(results));
+  await writeFile(new URL("report.json", OUT), `${JSON.stringify(results.map(({ id, theme, share, notes }) => ({ id, theme, share, notes })), null, 2)}\n`);
+  for (const r of results) {
+    const notes = r.notes.length > 0 ? `  (${r.notes.join("; ")})` : "";
+    console.log(`${r.id.padEnd(3)} ${pct(r.share).padStart(7)} differ${notes}`);
+  }
+  console.log(`\nsee ${new URL("index.html", OUT).pathname}`);
 } finally {
   await browser.close();
   for (const res of open) res.destroy();

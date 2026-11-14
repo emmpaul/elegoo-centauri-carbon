@@ -19,7 +19,16 @@ node --test --test-name-pattern "pauses" test/print-control.test.ts   # one test
 pnpm start:fake                    # whole service against a fake printer + camera on 127.0.0.1:8080
 pnpm start                         # real service, reads config.json (see config.example.json)
 pnpm notify:test                   # sends one test notification to the configured ntfy topic
+node scripts/visual-check.ts a1 c3 # shoots the dashboard per design state and diffs it with its reference
 ```
+
+`scripts/visual-check.ts` is the visual harness: it serves the dashboard with a mocked
+API per state id (a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2; none means all),
+shoots each in both themes, and writes reference | actual | diff with the share of
+differing pixels to `scratch/visual/index.html`. It needs `pnpm fonts:fetch` first and
+a Chromium (`CHROMIUM_PATH`, else Playwright's lookup); `--all-widths` adds the other
+width. The references are `docs/design/reference/`; the ids and env are listed at the
+top of the script.
 
 `pnpm start:fake` is how to see the dashboard without a printer. Its env vars and signals
 (`FAKE_CAMERA=down`, `FAKE_REPLIES=129=silent,131=2`, `SIGUSR1` camera down/up, `SIGUSR2`
