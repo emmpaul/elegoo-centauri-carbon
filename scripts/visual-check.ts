@@ -28,11 +28,12 @@
 // Needs the fonts (`pnpm fonts:fetch`): without them the page falls back to
 // system fonts and nothing can match, so the harness refuses to run.
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { dashboardFiles } from "../src/dashboard-files.ts";
+import { SPLASHES, splashFile } from "./render-icons.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 
 const ROOT = new URL("../", import.meta.url);
@@ -489,17 +490,20 @@ async function iconInput(id: string): Promise<{ input: Omit<CompareInput, "toler
       note: "rendered icons placed on the reference sheet; share counts the three icon boxes only (the dashed safe-zone circle is the sheet's)",
     };
   }
-  const splashes = (await readdir(ICONS)).filter((name) => /^splash-\d+x\d+\.png$/.test(name));
-  if (splashes.length === 0) return null;
-  // The splash whose aspect is closest to the 360 × 780 frame, scaled to it.
-  const aspect = (name: string) => {
-    const [w, h] = name.match(/\d+/g)!.map(Number) as [number, number];
-    return Math.abs(w / h - 360 / 780);
-  };
-  const best = splashes.sort((p, q) => aspect(p) - aspect(q))[0]!;
+  // The splash drawn at its CSS size and centred on the 360 × 780 frame, as the phone shows it.
+  // Picks the screen nearest the frame whose margins are whole pixels, so nothing is resampled
+  // apart from the device-pixel downscale.
+  const present = SPLASHES.filter((s) => existsSync(new URL(splashFile(s), ICONS)) && (s.width - 360) % 2 === 0 && (s.height - 780) % 2 === 0);
+  if (present.length === 0) return null;
+  const best = present.sort((p, q) => Math.abs(p.width - 360) + Math.abs(p.height - 780) - (Math.abs(q.width - 360) + Math.abs(q.height - 780)))[0]!;
   return {
-    input: { ref: [{ src: "/__ref/g2.png", x: 0, y: 0 }], actual: [{ src: `/__icons/${best}`, x: 0, y: 0, w: 360, h: 780 }], w: 360, h: 780 },
-    note: `${best} scaled to 360 × 780; the reference's rounded corners are its card's`,
+    input: {
+      ref: [{ src: "/__ref/g2.png", x: 0, y: 0 }],
+      actual: [{ src: `/__icons/${splashFile(best)}`, x: (360 - best.width) / 2, y: (780 - best.height) / 2, w: best.width, h: best.height }],
+      w: 360,
+      h: 780,
+    },
+    note: `${splashFile(best)} at ${best.width} × ${best.height} CSS px, centred on the 360 × 780 frame; the reference's rounded corners are its card's`,
   };
 }
 
@@ -621,7 +625,7 @@ try {
     if (result.theme === null) {
       const icon = await iconInput(result.id);
       if (icon === null) {
-        result.notes.push(result.id === "g1" ? "no rendered icons in web/icons/ yet" : "no web/icons/splash-<w>x<h>.png yet (task 7.2)");
+        result.notes.push(result.id === "g1" ? "no rendered icons in web/icons/ yet" : "no web/icons/splash-<w>x<h>.png yet (node scripts/render-icons.ts)");
         continue;
       }
       input = icon.input;

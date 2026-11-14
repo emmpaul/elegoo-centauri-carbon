@@ -36,6 +36,18 @@ const FILES: Record<string, PublicFile> = {
   "/icons/icon-512.png": { source: "icons/icon-512.png", type: "image/png" },
   "/icons/icon-maskable-512.png": { source: "icons/icon-maskable-512.png", type: "image/png" },
   "/icons/apple-touch-icon.png": { source: "icons/apple-touch-icon.png", type: "image/png" },
+  // iOS launch screens, one per iPhone portrait size (scripts/render-icons.ts, design D13).
+  "/icons/splash-750x1334.png": { source: "icons/splash-750x1334.png", type: "image/png" },
+  "/icons/splash-828x1792.png": { source: "icons/splash-828x1792.png", type: "image/png" },
+  "/icons/splash-1125x2436.png": { source: "icons/splash-1125x2436.png", type: "image/png" },
+  "/icons/splash-1242x2688.png": { source: "icons/splash-1242x2688.png", type: "image/png" },
+  "/icons/splash-1170x2532.png": { source: "icons/splash-1170x2532.png", type: "image/png" },
+  "/icons/splash-1284x2778.png": { source: "icons/splash-1284x2778.png", type: "image/png" },
+  "/icons/splash-1179x2556.png": { source: "icons/splash-1179x2556.png", type: "image/png" },
+  "/icons/splash-1290x2796.png": { source: "icons/splash-1290x2796.png", type: "image/png" },
+  "/icons/splash-1206x2622.png": { source: "icons/splash-1206x2622.png", type: "image/png" },
+  "/icons/splash-1260x2736.png": { source: "icons/splash-1260x2736.png", type: "image/png" },
+  "/icons/splash-1320x2868.png": { source: "icons/splash-1320x2868.png", type: "image/png" },
   // Fetched by the operator with `pnpm fonts:fetch`, never committed (design D2).
   "/fonts/satoshi-400.woff2": { source: "fonts/satoshi-400.woff2", type: WOFF2, optional: true },
   "/fonts/satoshi-500.woff2": { source: "fonts/satoshi-500.woff2", type: WOFF2, optional: true },
