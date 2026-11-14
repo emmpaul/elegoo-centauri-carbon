@@ -513,6 +513,18 @@ describe("HTTP API dashboard files", () => {
     assert.match(styles.headers.get("content-type") ?? "", /^text\/css/);
   });
 
+  it("serves every iOS splash image the page links, without the token, as image/png", async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    const links = [...html.matchAll(/<link rel="apple-touch-startup-image" href="([^"]+)" media="([^"]+)">/g)];
+    assert.ok(links.length > 0, "the page links splash images");
+    for (const [, href = "", media = ""] of links) {
+      assert.match(media, /\(orientation: portrait\)/, href);
+      const response = await fetch(new URL(href, `${base}/`));
+      assert.equal(response.status, 200, href);
+      assert.equal(response.headers.get("content-type"), "image/png", href);
+    }
+  });
+
   it("serves nothing else from the web directory, and the API still needs the token", async () => {
     for (const path of ["/app.ts", "/index.html", "/tsconfig.json", "/../package.json"]) {
       assert.equal((await fetch(`${base}${path}`)).status, 401, path);

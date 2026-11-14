@@ -45,7 +45,7 @@ anti-aliasing explains.
 ## 7. Install assets
 
 - [x] 7.1 Redraw `web/icons/icon.svg` as the g1 mark and add `scripts/render-icons.ts` (D13) that renders `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, and `apple-touch-icon.png` from it, then commit the PNGs; verify the existing manifest test passes, and harness check g1 against the rendered icons
-- [ ] 7.2 Extend `scripts/render-icons.ts` to render the g2 splash at the current iPhone portrait sizes into `web/icons/splash-<w>x<h>.png`, add them to `src/dashboard-files.ts` and as `apple-touch-startup-image` links with media queries in `web/index.html`; extend `test/http-server.test.ts` so every `apple-touch-startup-image` link in the page is served as `image/png`; verify `pnpm typecheck && pnpm test` and harness check g2
+- [x] 7.2 Extend `scripts/render-icons.ts` to render the g2 splash at the current iPhone portrait sizes into `web/icons/splash-<w>x<h>.png`, add them to `src/dashboard-files.ts` and as `apple-touch-startup-image` links with media queries in `web/index.html`; extend `test/http-server.test.ts` so every `apple-touch-startup-image` link in the page is served as `image/png`; verify `pnpm typecheck && pnpm test` and harness check g2
 - [ ] 7.3 Update `web/manifest.webmanifest` to the g3 values (D13), the `theme-color` meta, and `web/sw.ts` (cache `dashboard-v2`, new shell files, fonts cached on first load only); extend the manifest test for name, colours, and display; verify `pnpm typecheck && pnpm test` and that the manifest matches g3 field for field
 
 ## 8. Integration check
