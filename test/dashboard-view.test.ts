@@ -413,6 +413,20 @@ describe("dashboardView: controls, message, and slide", () => {
     }
   });
 
+  it("Retry in the slot only while the service would accept the command, × always", () => {
+    const failed: CommandState = { action: "pause", status: "failed", code: 2 };
+    const timeout: CommandState = { action: "pause", status: "timeout" };
+    for (const cmd of [failed, timeout]) {
+      // The printer paused anyway: pause is no longer allowed.
+      const paused = dashboardView(PRESETS.a4, page(cmd), NOW).message;
+      assert.deepEqual([paused?.retry, paused?.dismiss], [false, true], `${cmd.status} after the printer paused`);
+      const offline = dashboardView(PRESETS.a1, page(cmd, {}, false), NOW).message;
+      assert.deepEqual([offline?.retry, offline?.dismiss], [false, true], `${cmd.status} with the stream closed`);
+      assert.equal(dashboardView(PRESETS.b1, page(cmd), NOW).message?.retry, false, `${cmd.status} with the printer offline`);
+      assert.equal(dashboardView(PRESETS.a1, page(cmd), NOW).message?.retry, true, `${cmd.status} while printing`);
+    }
+  });
+
   it("states every disabled reason on the stop track", () => {
     const reason = (snap: StatusSnapshot, p = page()) => {
       const v = dashboardView(snap, p, NOW).slide;
