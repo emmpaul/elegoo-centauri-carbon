@@ -1,6 +1,7 @@
 // The stop slide's event wiring (web/stop-slide.ts) on stand-in elements:
 // only a drag to the end of the track, or the fourth → press, sends stop, and
-// it goes out with the confirmation flag; an early release sends nothing.
+// it goes out with the confirmation flag; an early release sends nothing, and
+// keyboard progress is dropped when the thumb loses focus.
 /// <reference lib="dom" />
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -103,5 +104,19 @@ describe("stop slide wiring", () => {
     assert.equal(press.defaultPrevented, true);
     assert.deepEqual(bodies, [{ action: "stop", confirm: true }]);
     assert.equal(slide.x, 0);
+  });
+
+  it("drops keyboard progress when the thumb loses focus", () => {
+    const { bodies, slide, thumb, changes } = setUp();
+    thumb.dispatchEvent(key("ArrowRight"));
+    thumb.dispatchEvent(key("ArrowRight"));
+    const before = changes();
+    thumb.dispatchEvent(new Event("blur"));
+    assert.equal(slide.x, 0);
+    assert.equal(changes(), before + 1, "the page renders the reset");
+    // Two more presses after focus returns do not reach the end.
+    thumb.dispatchEvent(key("ArrowRight"));
+    thumb.dispatchEvent(key("ArrowRight"));
+    assert.deepEqual(bodies, []);
   });
 });
