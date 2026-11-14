@@ -1,8 +1,10 @@
 // Presentation rules of the dashboard (design D1, D10): a pure function of the
 // status snapshot, the page's own state, and the time, returning the values the
 // page writes into the DOM. The rules follow `renderVals()` in
-// docs/design/reference/PrinterScreen.dc.html, string for string. It imports
-// only types, so `node --test` tests it and the browser loads it as /view.js.
+// docs/design/reference/PrinterScreen.dc.html, string for string. Besides
+// types it imports only the shared control rules, so `node --test` tests it
+// and the browser loads it as /view.js.
+import { type ControlAction, isAllowed } from "../src/control-rules.ts";
 import type { PrintStateName, StatusSnapshot, Temperature } from "../src/status-store.ts";
 
 /** Header name when the printer has not reported one (design D9). */
@@ -234,5 +236,249 @@ export function statusView(snapshotOrNull: StatusSnapshot | null, page: StatusPa
         ? `State code ${snap.printState.code ?? NONE} not recognised · machine: ${snap.machineState.name} (${snap.machineState.code ?? NONE}). Pause, resume, stop off.`
         : null,
     rows,
+  };
+}
+
+// ---- Controls, message slot, and stop slide (design D8, D12) ----
+
+/** An acknowledged command's message clears itself after this long. */
+export const ACK_CLEAR_MS = 2600;
+
+/** The command in flight or last answered; one at a time (design D8). */
+export interface CommandState {
+  action: ControlAction;
+  status: "pending" | "ack" | "failed" | "timeout";
+  /** The printer's code for a failed command; null or absent when there is none. */
+  code?: number | null;
+  /** Why the request itself failed (HTTP error, network); replaces the sub-line. */
+  reason?: string;
+}
+
+/** The stop thumb: offset in px from the start, the drag in progress, and the track's travel. */
+export interface SlideState {
+  x: number;
+  dragging: boolean;
+  /** Travel in px, `slideMax(track width)`. */
+  max: number;
+}
+
+export interface PageState {
+  streamOpen: boolean;
+  command: CommandState | null;
+  slide: SlideState;
+}
+
+/** enabled: the control's own fill; disabled: dashed, no fill; pending: blue ring; failed: Retry in the bad tone. */
+export type ControlLook = "enabled" | "disabled" | "pending" | "failed";
+
+export interface ButtonView {
+  look: ControlLook;
+  label: string;
+  disabled: boolean;
+}
+
+export interface LightView extends ButtonView {
+  /** Filled while the light is on and the button usable, else a hollow ring. */
+  dot: "filled" | "hollow";
+  /** `aria-pressed`. */
+  pressed: boolean;
+}
+
+export interface MessageView {
+  tone: Exclude<Tone, "neutral">;
+  /** The 8 px mark: round (50 %) or a square with 2 px corners. */
+  mark: "round" | "square";
+  title: string;
+  sub: string;
+  /** Shows Retry and the × dismiss button. */
+  retry: boolean;
+  /** Shows the indeterminate bar. */
+  pending: boolean;
+}
+
+export interface SlideView {
+  /** The track reads "Stopping…" with a blue ring instead of the thumb. */
+  pending: boolean;
+  look: Exclude<ControlLook, "pending">;
+  disabled: boolean;
+  label: string;
+  /** Label ink: the bad tone, full text past half the track, or muted when disabled. */
+  labelInk: "bad" | "text" | "muted";
+  thumbLeft: string;
+  fillWidth: string;
+  labelLeft: string;
+  labelRight: string;
+  labelPadLeft: string;
+  /** `aria-valuenow`, 0–100. */
+  pct: number;
+  /** Spring-back transition on (off while dragging). */
+  animate: boolean;
+}
+
+export interface DashboardView {
+  status: StatusView;
+  message: MessageView | null;
+  light: LightView;
+  pause: ButtonView;
+  resume: ButtonView;
+  slide: SlideView;
+}
+
+const VERB: Record<ControlAction, string> = { pause: "Pause", resume: "Resume", stop: "Stop", light: "Light" };
+const PENDING_LABEL: Record<Exclude<ControlAction, "stop">, string> = { pause: "Pausing…", resume: "Resuming…", light: "Light…" };
+const ACK_TEXT: Record<ControlAction, string> = {
+  pause: "Printer is pausing.",
+  resume: "Printer is resuming.",
+  stop: "Printer is stopping.",
+  light: "Chamber light switched.",
+};
+
+/** The thumb's travel on a track `trackWidth` px wide (1 px border, 3 px inset, 48 px thumb). */
+export function slideMax(trackWidth: number): number {
+  return trackWidth - 2 - 6 - 48;
+}
+
+/** Thumb offset while dragging from `start` by `dx` px. */
+export function slideDrag(start: number, dx: number, max: number): number {
+  return Math.max(0, Math.min(max, start + dx));
+}
+
+/** A release at this offset sends the stop. */
+export function slideReleased(x: number, max: number): boolean {
+  return x >= max - 2;
+}
+
+/**
+ * Keyboard on the thumb: → moves a quarter of the track and the fourth press
+ * sends stop (the thumb returns to the start); ← and Esc reset. Null for any
+ * other key, or when the slide is disabled.
+ */
+export function slideKey(key: string, x: number, max: number, enabled: boolean): { x: number; send: boolean } | null {
+  if (!enabled) return null;
+  if (key === "ArrowRight") {
+    const next = Math.min(max, x + max / 4);
+    return next >= max ? { x: 0, send: true } : { x: next, send: false };
+  }
+  if (key === "ArrowLeft" || key === "Escape") return { x: 0, send: false };
+  return null;
+}
+
+function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSnapshot | null): MessageView | null {
+  if (dragShown) {
+    return {
+      tone: "bad",
+      mark: "square",
+      title: `Stops ${snap?.fileName || "the job"} at ${snap?.progress ?? NONE}%`,
+      sub: "Can’t be resumed. Release at the end to confirm.",
+      retry: false,
+      pending: false,
+    };
+  }
+  if (cmd === null || (cmd.action === "stop" && cmd.status === "pending")) return null;
+  const verb = VERB[cmd.action];
+  const retry = cmd.action !== "stop";
+  switch (cmd.status) {
+    case "pending":
+      return { tone: "info", mark: "round", title: `Sending ${verb.toLowerCase()}…`, sub: "Waiting for printer · up to 10 s", retry: false, pending: true };
+    case "ack":
+      return { tone: "ok", mark: "round", title: `${verb} acknowledged`, sub: ACK_TEXT[cmd.action], retry: false, pending: false };
+    case "failed":
+      return {
+        tone: "bad",
+        mark: "square",
+        title: `${verb} failed${cmd.code == null ? "" : ` · code ${cmd.code}`}`,
+        sub: cmd.reason ?? "Printer rejected it. Nothing changed.",
+        retry,
+        pending: false,
+      };
+    case "timeout":
+      return { tone: "warn", mark: "round", title: `${verb} timed out`, sub: cmd.reason ?? "No reply in 10 s. Check state first.", retry, pending: false };
+  }
+}
+
+/** The whole dashboard: status, message slot, buttons, and stop slide. */
+export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, now: number): DashboardView {
+  const snap = snapshot ?? EMPTY;
+  const online = isLive(snapshot, page.streamOpen);
+  const cmd = page.command;
+  const pending = cmd !== null && cmd.status === "pending";
+  const failedAct = cmd !== null && (cmd.status === "failed" || cmd.status === "timeout") ? cmd.action : null;
+  const ok = (action: ControlAction): boolean => online && !pending && isAllowed(action, snap);
+
+  const button = (action: Exclude<ControlAction, "stop">, label: string): ButtonView => {
+    if (pending && cmd?.action === action) return { look: "pending", label: PENDING_LABEL[action], disabled: true };
+    if (!ok(action)) return { look: "disabled", label, disabled: true };
+    if (failedAct === action) return { look: "failed", label: "Retry", disabled: false };
+    return { look: "enabled", label, disabled: false };
+  };
+  const lightKnown = snap.light === "on" || snap.light === "off";
+  const lightButton = button("light", lightKnown ? `Light ${snap.light}` : "Light —");
+  const light: LightView = {
+    ...lightButton,
+    dot: snap.light === "on" && !lightButton.disabled ? "filled" : "hollow",
+    pressed: snap.light === "on",
+  };
+
+  const okStop = ok("stop");
+  const { max, dragging } = page.slide;
+  const x = Math.max(0, Math.min(max, page.slide.x));
+  const frac = max ? x / max : 0;
+  const dragShown = okStop && frac > 0.02;
+  const pname = snap.printState.name;
+  let reason = "No print to stop";
+  if (!online) reason = "Stop unavailable offline";
+  else if (pname === "unknown") reason = "Stop off · unknown state";
+  else if (["pausing", "restoring", "stopping", "preparing"].includes(pname) && !okStop) reason = "Wait for the printer";
+  else if (pending) reason = "Waiting for printer…";
+
+  let label = reason;
+  let look: SlideView["look"] = "disabled";
+  let labelInk: SlideView["labelInk"] = "muted";
+  if (okStop) {
+    labelInk = "bad";
+    if (failedAct === "stop") {
+      look = "failed";
+      label = cmd?.status === "failed" ? `Stop failed${cmd.code == null ? "" : ` · code ${cmd.code}`} · again` : "Stop timed out · again";
+    } else {
+      look = "enabled";
+      label = "Slide to stop print";
+    }
+  }
+  let labelLeft = "0px";
+  let labelRight = "0px";
+  let labelPadLeft = "52px";
+  if (dragShown && frac >= 0.5) {
+    labelRight = `${max + 54 - (x + 3)}px`;
+    labelPadLeft = "0px";
+    label = "Release to stop";
+    labelInk = "text";
+  } else if (dragShown) {
+    labelLeft = `${x + 51}px`;
+    labelPadLeft = "0px";
+    label = "Keep sliding";
+  }
+  const slide: SlideView = {
+    pending: pending && cmd?.action === "stop",
+    look,
+    disabled: !okStop,
+    label,
+    labelInk,
+    thumbLeft: `${3 + x}px`,
+    fillWidth: dragShown ? `${x + 54}px` : "0px",
+    labelLeft,
+    labelRight,
+    labelPadLeft,
+    pct: Math.round(frac * 100),
+    animate: !dragging,
+  };
+
+  const message = messageOf(cmd, dragShown, snapshot);
+  return {
+    status: statusView(snapshot, { streamOpen: page.streamOpen, messageShown: message !== null }, now),
+    message,
+    light,
+    pause: button("pause", "Pause"),
+    resume: button("resume", "Resume"),
+    slide,
   };
 }
