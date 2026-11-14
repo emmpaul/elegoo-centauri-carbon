@@ -1032,8 +1032,123 @@ body {
   border-left: 10px solid currentColor;
 }
 
+/* Stop slide (design D12): a track the full width of the sheet; the 48 px thumb
+   is dragged to the end. data-look: enabled, failed (red ring), disabled (dashed, with the reason). */
+.slide {
+  position: relative;
+  height: 56px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--track);
+  border: 1px solid transparent;
+  box-shadow: var(--track-shadow);
+}
+
+.slide[data-look="failed"] {
+  box-shadow: inset 0 0 0 2px var(--bad), inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.slide[data-look="disabled"] {
+  background: transparent;
+  border: 1px dashed var(--dash);
+  box-shadow: none;
+}
+
+.slide__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--bad);
+  opacity: 0.22;
+}
+
+.slide__label {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding-left: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 700;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--bad-text);
+}
+
+.slide__label[data-ink="text"] {
+  color: var(--text);
+}
+
+.slide__label[data-ink="muted"] {
+  color: var(--text-3);
+}
+
+.slide__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+  background: var(--thumb);
+  box-shadow: var(--thumb-shadow);
+}
+
+.slide__thumb > span {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--on-thumb);
+}
+
+.slide__thumb:disabled {
+  background: var(--raise);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.slide__thumb:disabled > span {
+  background: var(--text-4);
+}
+
+/* Spring-back when released; none while the thumb follows the pointer. */
+.slide:not([data-dragging]) .slide__fill,
+.slide:not([data-dragging]) .slide__thumb {
+  transition: left 0.25s ease, width 0.25s ease;
+}
+
+/* The track once stop is sent: blue ring, "Stopping…", and the indeterminate bar. */
+.slide-pending {
+  position: relative;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--btn);
+  box-shadow: inset 0 0 0 2px var(--info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
 /* ---- Previous page parts, kept working until their redesign replaces them
-   (controls 5.1–5.2, token 6.1). ---- */
+   (token 6.1). ---- */
 .page {
   display: grid;
   gap: 16px;
@@ -1103,18 +1218,6 @@ h2 {
   cursor: pointer;
 }
 
-.button--secondary {
-  background: var(--btn);
-  box-shadow: var(--btn-shadow);
-  color: var(--text);
-}
-
-.button--danger {
-  background: var(--thumb);
-  box-shadow: var(--thumb-shadow);
-  color: var(--on-thumb);
-}
-
 .button:disabled {
   background: transparent;
   box-shadow: none;
@@ -1124,30 +1227,3 @@ h2 {
   cursor: not-allowed;
 }
 
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.controls .button {
-  flex: 1 1 6rem;
-}
-
-.dialog {
-  width: min(24rem, calc(100% - 32px));
-  padding: 16px;
-  border: none;
-  border-radius: 20px;
-  background: var(--sheet);
-  box-shadow: var(--sheet-shadow);
-  color: var(--text);
-}
-
-.dialog::backdrop {
-  background: rgb(0 0 0 / 0.5);
-}
-
-.dialog__form p {
-  margin: 0 0 16px;
-}

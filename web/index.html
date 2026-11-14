@@ -86,20 +86,14 @@
             <button type="button" class="ctl" data-action="pause" data-look="disabled" disabled><span class="ctl__pause" aria-hidden="true"><span></span><span></span></span><span data-field="pauseLabel">Pause</span></button>
             <button type="button" class="ctl" data-action="resume" data-look="disabled" disabled><span class="ctl__play" aria-hidden="true"></span><span data-field="resumeLabel">Resume</span></button>
           </div>
-          <button type="button" class="button button--danger" data-action="stop" disabled>Stop</button>
+          <div class="slide-pending" data-field="slidePending" role="status" hidden>Stopping…<div class="indet" aria-hidden="true"><div></div></div></div>
+          <div class="slide" data-field="slide" data-look="disabled">
+            <div class="slide__fill" data-field="slideFill"></div>
+            <div class="slide__label" data-field="slideLabel" data-ink="muted">No print to stop</div>
+            <button type="button" class="slide__thumb" data-field="slideThumb" role="slider" aria-label="Slide to stop print" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" disabled><span aria-hidden="true"></span></button>
+          </div>
         </div>
       </section>
-
-      <dialog class="dialog" data-view="stopConfirm" aria-labelledby="stop-heading">
-        <form method="dialog" class="dialog__form">
-          <h2 id="stop-heading">Stop the print?</h2>
-          <p>A stopped print can't be resumed.</p>
-          <div class="controls">
-            <button type="submit" class="button button--secondary" value="cancel" autofocus>Keep printing</button>
-            <button type="submit" class="button button--danger" value="stop">Stop print</button>
-          </div>
-        </form>
-      </dialog>
     </main>
   </body>
 </html>

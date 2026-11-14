@@ -8,7 +8,8 @@ import type { ControlAction } from "../src/control-rules.ts";
 import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, type SlideState, type StatusView } from "./view.js";
+import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, type SlideState, type SlideView, type StatusView } from "./view.js";
+import { attachStopSlide } from "./stop-slide.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
@@ -223,7 +224,27 @@ function renderControls(dashboard: DashboardView): void {
   setAttr(field("lightDot"), "data-dot", light.dot);
   renderButton("pause", dashboard.pause);
   renderButton("resume", dashboard.resume);
-  controlButton("stop").disabled = dashboard.slide.disabled || dashboard.slide.pending;
+  renderSlide(dashboard.slide);
+}
+
+/** The stop slide's track, thumb, fill, and label (design D12). */
+function renderSlide(view: SlideView): void {
+  field("slidePending").hidden = !view.pending;
+  const track = field("slide");
+  track.hidden = view.pending;
+  setAttr(track, "data-look", view.look);
+  setAttr(track, "data-dragging", view.animate ? null : "");
+  const thumb = field<HTMLButtonElement>("slideThumb");
+  thumb.disabled = view.disabled;
+  setAttr(thumb, "aria-valuenow", String(view.pct));
+  thumb.style.left = view.thumbLeft;
+  field("slideFill").style.width = view.fillWidth;
+  const label = field("slideLabel");
+  setText("slideLabel", view.label);
+  setAttr(label, "data-ink", view.labelInk);
+  label.style.left = view.labelLeft;
+  label.style.right = view.labelRight;
+  label.style.paddingLeft = view.labelPadLeft;
 }
 
 function setCommand(next: CommandState | null): void {
@@ -277,14 +298,12 @@ async function sendCommand(action: ControlAction, body: Record<string, unknown>)
 }
 
 function setUpControls(): void {
-  const dialog = view("stopConfirm") as HTMLDialogElement;
-  dialog.addEventListener("close", () => {
-    if (dialog.returnValue === "stop") void sendCommand("stop", { action: "stop", confirm: true });
-  });
-  controlButton("stop").addEventListener("click", () => {
-    // Stop is sent only from the dialog's "Stop print" button.
-    dialog.returnValue = "";
-    dialog.showModal();
+  // Stop is sent only from the slide, dragged to its end or completed from the keyboard.
+  attachStopSlide(field("slide"), field<HTMLButtonElement>("slideThumb"), {
+    slide,
+    enabled: () => !field<HTMLButtonElement>("slideThumb").disabled,
+    changed: render,
+    stop: () => void sendCommand("stop", { action: "stop", confirm: true }),
   });
   controlButton("light").addEventListener("click", () => void sendCommand("light", { action: "light", on: latest?.light !== "on" }));
   controlButton("pause").addEventListener("click", () => void sendCommand("pause", { action: "pause" }));
