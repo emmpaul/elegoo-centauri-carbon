@@ -106,6 +106,45 @@
   --head-bad: #f6a5a5;
   --hbtn-bg: rgba(20, 20, 20, 0.5);
   --hbtn-sh: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --sh-w: auto;
+}
+
+/* Laptop layout (the component's `layout`, wide; design D6): the header on the
+   page, the camera in the free width at full height, the sheet a 420 px panel
+   on the right. Heights follow the viewport. */
+@media (min-width: 960px) {
+  :root {
+    --pad: 24px;
+    --cam-l: 24px;
+    --cam-r: 468px;
+    --cam-t: 84px;
+    --cam-h: calc(100vh - 108px);
+    --cam-rad: 16px;
+    --cam-inset: 16px;
+    --cam-shade: 0;
+    --sh-l: auto;
+    --sh-r: 24px;
+    --sh-t: 84px;
+    --sh-b: 24px;
+    --sh-w: 420px;
+    --sh-rad: 20px;
+    --head-t: 20px;
+    --head-c: var(--text);
+    --head-bad: var(--bad-text);
+    --hbtn-bg: var(--btn);
+    --hbtn-sh: var(--btn-shadow);
+  }
+
+  @supports (height: 100dvh) {
+    :root {
+      --cam-h: calc(100dvh - 108px);
+    }
+  }
+
+  /* No phone status bar to leave room for. */
+  .tok__band {
+    display: none;
+  }
 }
 
 /* Light palette: chosen on this device, or the system's preference with no choice stored.
@@ -425,9 +464,10 @@ body {
 .sheet {
   position: relative;
   flex: 1 0 auto;
+  width: var(--sh-w);
   margin: var(--sh-t) var(--sh-r) var(--sh-b) var(--sh-l);
-  min-height: calc(100vh - var(--sh-t));
-  min-height: calc(100dvh - var(--sh-t));
+  min-height: calc(100vh - var(--sh-t) - var(--sh-b));
+  min-height: calc(100dvh - var(--sh-t) - var(--sh-b));
   box-sizing: border-box;
   background: var(--sheet);
   border-radius: var(--sh-rad);

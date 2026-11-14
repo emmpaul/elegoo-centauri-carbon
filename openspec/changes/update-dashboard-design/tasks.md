@@ -40,7 +40,7 @@ anti-aliasing explains.
 ## 6. Token screen and laptop layout
 
 - [x] 6.1 Replace the token form with the component's token screen (app mark, title and body per first run or rejected, labelled field with Show/Hide, red ring and "Rejected (401)." alert keeping the rejected value, Connect, "Stored on this device only."), editing the field clears the error; verify `pnpm typecheck && pnpm test`, `ACCESS_TOKEN=t pnpm start:fake` with a wrong stored token shows the rejected screen and the right token connects, and harness check d1, d2, e4
-- [ ] 6.2 Add the laptop layout at `min-width: 960px` (D6): header on the page, camera in the free width, 420 px panel, laptop radii and insets, theme button look; verify `pnpm typecheck && pnpm test`, no horizontal scroll from 360 to 1440 px in the harness, and harness check f1, f2
+- [x] 6.2 Add the laptop layout at `min-width: 960px` (D6): header on the page, camera in the free width, 420 px panel, laptop radii and insets, theme button look; verify `pnpm typecheck && pnpm test`, no horizontal scroll from 360 to 1440 px in the harness, and harness check f1, f2
 
 ## 7. Install assets
 
