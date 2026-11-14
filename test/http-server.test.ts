@@ -474,9 +474,11 @@ describe("HTTP API dashboard files", () => {
       assert.match(module.headers.get("content-type") ?? "", /^text\/javascript/, path);
       assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b|: StatusPageState\b/, `${path}: types are stripped`);
     }
-    const viewSource = await (await fetch(`${base}/view.js`)).text();
+    // The browser resolves view.js's import of the rules against the page; here it points at the served copy.
+    const rulesUrl = `data:text/javascript,${encodeURIComponent(await (await fetch(`${base}/src/control-rules.ts`)).text())}`;
+    const viewSource = (await (await fetch(`${base}/view.js`)).text()).replace('"../src/control-rules.ts"', JSON.stringify(rulesUrl));
     const viewModule = (await import(`data:text/javascript,${encodeURIComponent(viewSource)}`)) as Record<string, unknown>;
-    assert.equal(typeof viewModule.statusView, "function", "the stripped view module loads in plain JavaScript");
+    assert.equal(typeof viewModule.dashboardView, "function", "the stripped view module loads in plain JavaScript");
 
     const worker = await fetch(`${base}/sw.js`);
     assert.equal(worker.status, 200);
