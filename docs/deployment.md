@@ -53,7 +53,7 @@ clone:
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `PRINTER_IP` | yes | Printer address, e.g. `192.0.2.10`. |
-| `ACCESS_TOKEN` | yes | Token for the dashboard and API. The service refuses to start without one, because it listens on `0.0.0.0` inside the container. |
+| `ACCESS_TOKEN` | yes | Token for the dashboard and API; generate it as shown below. The example leaves it empty, and the service refuses to start without one, because it listens on `0.0.0.0` inside the container. |
 | `NTFY_URL` | no | ntfy server (default `https://ntfy.sh`). |
 | `NTFY_TOPIC` | no | ntfy topic; unset means no notifications. See [notifications.md](notifications.md). |
 | `NOTIFY_EVENTS` | no | Comma-separated events that notify, or `none` (default: all). |
@@ -63,7 +63,9 @@ container's port 8080. A config file works too: mount it and set
 `CONFIG_PATH` to its path in the container. The settings are the ones in the
 README's [Configure](../README.md#configure) table.
 
-Generate the token with:
+Generate the token with the command below and set `ACCESS_TOKEN` in
+`printer.env` to its output. Don't reuse a token from the repository or
+from this guide:
 
 ```sh
 openssl rand -hex 32

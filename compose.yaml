@@ -1,7 +1,8 @@
 # Runs the printer service on the home node, next to the printer (design D6
 # of add-docker-deployment; setup in docs/deployment.md).
 #
-#   cp printer.env.example printer.env   # then set PRINTER_IP and ACCESS_TOKEN
+#   cp printer.env.example printer.env   # then set PRINTER_IP, and
+#                                        # ACCESS_TOKEN from: openssl rand -hex 32
 #   docker compose up -d
 #
 # Variables read from the shell (or a .env file next to this one) when compose

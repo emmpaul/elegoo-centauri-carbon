@@ -208,7 +208,7 @@ docker run -d --name printer --restart unless-stopped \
 Or with the compose file in this repository, which reads `printer.env`:
 
 ```sh
-cp printer.env.example printer.env   # set PRINTER_IP and ACCESS_TOKEN
+cp printer.env.example printer.env   # set PRINTER_IP, and ACCESS_TOKEN to the output of: openssl rand -hex 32
 docker compose up -d
 ```
 
