@@ -86,6 +86,32 @@ echo IMAGE_TAG=1.2.0 > .env
 Leave `PUBLISH_ADDR` at its default until [Tailscale](#tailscale-between-the-vm-and-the-home-node)
 is set up.
 
+### Dashboard fonts
+
+Optional. The dashboard's typefaces may not be redistributed, so the image
+does not contain them and the page falls back to system fonts. To use them,
+fetch your own copy in a clone of the repository (any machine with Node 26
+and pnpm) and copy the folder next to `compose.yaml`:
+
+```sh
+pnpm install && pnpm fonts:fetch          # in the clone: writes web/fonts/*.woff2
+scp -r web/fonts <home node>:~/printer/fonts
+```
+
+Then mount it read-only at `/app/web/fonts` with a `compose.override.yaml`
+next to `compose.yaml`, which `docker compose` merges in on its own:
+
+```yaml
+services:
+  printer:
+    volumes:
+      - ./fonts:/app/web/fonts:ro
+```
+
+The files must be readable by the container's `node` user (the default
+`0644` is). `curl -fsI http://127.0.0.1:8080/fonts/satoshi-500.woff2`
+answers `200` once they are served, `404` without them.
+
 ### Image access
 
 The image is `ghcr.io/emmpaul/elegoo-centauri-carbon`, built for

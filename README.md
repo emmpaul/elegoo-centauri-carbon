@@ -225,6 +225,31 @@ the home screen, but Android won't offer to install it. For the install prompt
 on Android, serve the dashboard over HTTPS, for example with `tailscale serve`
 or a reverse proxy. Details in [docs/api.md](docs/api.md#dashboard).
 
+### Dashboard fonts
+
+The dashboard is designed in Satoshi and Cabinet Grotesk. Their licence, the
+[ITF Free Font License](https://www.fontshare.com/licenses/itf-ffl), lets you
+self-host your own copy but not redistribute it, so the font files are not in
+this repository or in the image. Download them once from Fontshare into
+`web/fonts/` (git ignores it):
+
+```sh
+pnpm fonts:fetch
+```
+
+The service serves them from there, and the page never contacts Fontshare.
+Without them the dashboard works the same in the system's fonts. For the
+container, mount the fetched folder (see
+[docs/deployment.md](docs/deployment.md#dashboard-fonts)):
+
+```sh
+docker run -d --name printer --restart unless-stopped \
+  -p 127.0.0.1:8080:8080 \
+  -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
+  -v "$PWD/web/fonts:/app/web/fonts:ro" \
+  ghcr.io/emmpaul/elegoo-centauri-carbon:latest
+```
+
 ## Security
 
 - **Do not expose the service to the internet.** It can pause and stop
