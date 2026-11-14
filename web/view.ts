@@ -349,6 +349,17 @@ export function slideReleased(x: number, max: number): boolean {
 }
 
 /**
+ * Progress on the thumb lasts only while stop is allowed and the thumb is held
+ * (dragged or focused): otherwise it returns to the start, so partial → presses
+ * never count toward a later stop. Mutates `slide`; true when it moved.
+ */
+export function settleSlide(slide: SlideState, enabled: boolean, held: boolean): boolean {
+  if (slide.x === 0 || (enabled && held)) return false;
+  slide.x = 0;
+  return true;
+}
+
+/**
  * Keyboard on the thumb: → moves a quarter of the track and the fourth press
  * sends stop (the thumb returns to the start); ← and Esc reset. Null for any
  * other key, or when the slide is disabled.
@@ -421,7 +432,7 @@ export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, 
 
   const okStop = ok("stop");
   const { max, dragging } = page.slide;
-  const x = Math.max(0, Math.min(max, page.slide.x));
+  const x = okStop ? Math.max(0, Math.min(max, page.slide.x)) : 0;
   const frac = max ? x / max : 0;
   const dragShown = okStop && frac > 0.02;
   const pname = snap.printState.name;
