@@ -1,7 +1,11 @@
 import { strict as assert } from "node:assert";
 import { EventEmitter, once } from "node:events";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import { connect, type AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { dashboardFiles } from "../src/dashboard-files.ts";
 import { createApiServer } from "../src/http-server.ts";
@@ -499,5 +503,40 @@ describe("HTTP API dashboard files", () => {
       assert.equal((await fetch(`${base}${path}`, { headers: { Authorization: "Bearer secret" } })).status, 404, path);
     }
     assert.equal((await fetch(`${base}/api/status`)).status, 401);
+  });
+});
+
+describe("HTTP API optional font files", () => {
+  let server: Server;
+  let base: string;
+  let webDir: string;
+
+  beforeEach(async () => {
+    webDir = await mkdtemp(join(tmpdir(), "ecc-web-"));
+    await mkdir(join(webDir, "fonts"));
+    await writeFile(join(webDir, "fonts", "satoshi-500.woff2"), "wOF2 test font");
+    const store = new StatusStore();
+    const control = new PrintControl({ send: () => Promise.reject(new NotConnectedError()) }, store);
+    const dashboard = dashboardFiles(pathToFileURL(webDir));
+    server = createApiServer({ store, control, token: "secret", dashboard, logger: quiet });
+    base = await listen(server);
+  });
+
+  afterEach(async () => {
+    await closeServer(server);
+    await rm(webDir, { recursive: true, force: true });
+  });
+
+  it("answers 404 without the token for a font the operator has not fetched", async () => {
+    for (const path of ["/fonts/satoshi-400.woff2", "/fonts/satoshi-700.woff2", "/fonts/cabinet-grotesk-800.woff2"]) {
+      assert.equal((await fetch(`${base}${path}`)).status, 404, path);
+    }
+  });
+
+  it("serves a fetched font without the token as font/woff2", async () => {
+    const font = await fetch(`${base}/fonts/satoshi-500.woff2`);
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get("content-type"), "font/woff2");
+    assert.equal(await font.text(), "wOF2 test font");
   });
 });
