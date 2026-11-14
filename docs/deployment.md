@@ -88,7 +88,10 @@ is set up.
 
 ### Image access
 
-The image is `ghcr.io/emmpaul/elegoo-centauri-carbon`. A package GitHub
+The image is `ghcr.io/emmpaul/elegoo-centauri-carbon`, built for
+`linux/amd64` and `linux/arm64`. Each release tag `vX.Y.Z` publishes it as
+`X.Y.Z` and `latest`; a prerelease tag with a `-` suffix (`v1.3.0-rc.1`)
+publishes only `1.3.0-rc.1` and leaves `latest` alone. A package GitHub
 creates on first push is private. Either make it public (the repository is
 public): on GitHub, the package's **Package settings** → **Change
 visibility** → **Public**; or log the home node in with a personal access

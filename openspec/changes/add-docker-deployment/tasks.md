@@ -27,7 +27,7 @@
 ## 5. Release workflow image job
 
 - [x] 5.1 Add an `image` job to `.github/workflows/release.yml` (design D4): `needs: verify`, job-level `permissions: contents: read, packages: write`, `timeout-minutes: 30`, checkout with `persist-credentials: false`, QEMU and Buildx setup, GHCR login with `github.actor` and `secrets.GITHUB_TOKEN`, a shell step deriving `ghcr.io/emmpaul/elegoo-centauri-carbon:X.Y.Z` plus `:latest` only when the version has no `-`, and `docker/build-push-action` for `linux/amd64,linux/arm64` with `push: true` and OCI source/version/revision labels; workflow-level permissions stay `contents: read`. Verify by review: `actionlint .github/workflows/release.yml` (or `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint`) reports nothing, the tag step run locally as a shell snippet with `GITHUB_REF_NAME=v1.2.0` gives both tags and with `v1.3.0-rc.1` gives only `1.3.0-rc.1`, and `docker buildx build --platform linux/amd64,linux/arm64 .` succeeds locally (when QEMU is available) or the amd64 build from 3.2 is cited.
-- [ ] 5.2 Mention the image in the release docs: `.claude/skills/release/SKILL.md` (where it lists what a pushed tag starts in `release.yml`) and `docs/deployment.md` state that a `vX.Y.Z` tag publishes `X.Y.Z` and `latest` (no `latest` for `-` tags); verify by reading the updated text against the job from 5.1.
+- [x] 5.2 Mention the image in the release docs: `.claude/skills/release/SKILL.md` (where it lists what a pushed tag starts in `release.yml`) and `docs/deployment.md` state that a `vX.Y.Z` tag publishes `X.Y.Z` and `latest` (no `latest` for `-` tags); verify by reading the updated text against the job from 5.1.
 
 ## 6. Integration check
 

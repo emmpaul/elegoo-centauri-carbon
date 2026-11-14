@@ -18,7 +18,9 @@ How the pieces fit:
 - Pushing a `vX.Y.Z` tag starts `.github/workflows/release.yml`. It re-runs the checks,
   verifies the tag equals `v` + `package.json` version and sits on `main`, then creates
   the GitHub release with generated notes. Tags with a `-` suffix (`v1.2.0-rc.1`)
-  become prereleases.
+  become prereleases. In parallel, its `image` job pushes the container image
+  `ghcr.io/emmpaul/elegoo-centauri-carbon` as `X.Y.Z`, and as `latest` only for a
+  tag with no `-` suffix.
 
 ## Usage
 
