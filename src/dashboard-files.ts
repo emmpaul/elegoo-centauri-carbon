@@ -28,6 +28,7 @@ const FILES: Record<string, PublicFile> = {
   "/theme.js": { source: "theme.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/view.js": { source: "view.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/stop-slide.js": { source: "stop-slide.ts", type: "text/javascript; charset=utf-8", typescript: true },
+  "/commands.js": { source: "commands.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/style.css": { source: "style.css", type: "text/css; charset=utf-8" },
   "/sw.js": { source: "sw.ts", type: "text/javascript; charset=utf-8", typescript: true },
   "/manifest.webmanifest": { source: "manifest.webmanifest", type: "application/manifest+json; charset=utf-8" },

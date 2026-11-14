@@ -18,6 +18,7 @@ const SHELL = [
   "/theme.js",
   "/view.js",
   "/stop-slide.js",
+  "/commands.js",
   "/src/control-rules.ts",
   "/style.css",
   "/manifest.webmanifest",

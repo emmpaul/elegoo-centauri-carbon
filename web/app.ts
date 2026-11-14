@@ -5,11 +5,11 @@
 // The access token, when the service needs one, comes from `?token=` on the
 // first visit or from the token screen, and is kept in localStorage.
 import type { ControlAction } from "../src/control-rules.ts";
-import type { CommandResult } from "../src/print-control.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 import { delimiterOf, MjpegParser } from "./mjpeg.js";
-import { ACK_CLEAR_MS, type ButtonView, type CommandState, type DashboardView, dashboardView, type Row, settleSlide, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
+import { type ButtonView, type DashboardView, dashboardView, type Row, settleSlide, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
 import { attachStopSlide } from "./stop-slide.js";
+import { Commands } from "./commands.js";
 
 const TOKEN_KEY = "printer-token";
 /** Wait before reopening the event stream after the service closed it. */
@@ -94,10 +94,10 @@ let latest: StatusSnapshot | null = null;
 function render(): void {
   const snapshot = latest;
   const thumb = field<HTMLButtonElement>("slideThumb");
-  let dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command, slide }, Date.now());
+  let dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command: commands.state, slide }, Date.now());
   // A disabled or released, unfocused slide drops its progress (it never carries to a later stop).
   if (settleSlide(slide, !dashboard.slide.disabled, slide.dragging || document.activeElement === thumb)) {
-    dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command, slide }, Date.now());
+    dashboard = dashboardView(snapshot, { streamOpen: serviceReachable, command: commands.state, slide }, Date.now());
   }
   const status = dashboard.status;
   renderHeader(status.printerName, status.online);
@@ -185,14 +185,11 @@ function renderRows(rows: Row[]): void {
 
 // ---- Controls and message slot (design D8) ----
 
-/** The page aborts a command request after this long and shows it as timed out (the service's own limit is 10 s). */
-const COMMAND_ABORT_MS = 15_000;
-
-/** The command in flight or last answered; one at a time. */
-let command: CommandState | null = null;
-/** The request body of `command`, re-sent by Retry. */
-let commandBody: Record<string, unknown> | null = null;
-let ackTimer: ReturnType<typeof setTimeout> | undefined;
+const commands = new Commands({
+  fetch: apiFetch,
+  changed: () => render(),
+  unauthorized: () => void connect(),
+});
 /** The stop thumb (design D12). */
 const slide: SlideState = { x: 0, dragging: false, max: 0 };
 
@@ -252,74 +249,19 @@ function renderSlide(view: SlideView): void {
   label.style.paddingLeft = view.labelPadLeft;
 }
 
-function setCommand(next: CommandState | null): void {
-  clearTimeout(ackTimer);
-  command = next;
-  if (next !== null && next.status === "ack") {
-    ackTimer = setTimeout(() => {
-      if (command === next) setCommand(null);
-    }, ACK_CLEAR_MS);
-  }
-  render();
-}
-
-/** The service's error message as a sentence for the sub-line. */
-function reasonOf(payload: unknown, status: number): string {
-  const message = (payload as { error?: { message?: unknown } } | null)?.error?.message;
-  const text = typeof message === "string" && message !== "" ? message : `the service answered HTTP ${status}`;
-  return `${text[0]!.toUpperCase()}${text.slice(1)}.`;
-}
-
-/** Sends one command and follows it through pending to its outcome; ignored while another is in flight. */
-async function sendCommand(action: ControlAction, body: Record<string, unknown>): Promise<void> {
-  if (command?.status === "pending") return;
-  commandBody = body;
-  setCommand({ action, status: "pending" });
-  const abort = new AbortController();
-  const safety = setTimeout(() => abort.abort(), COMMAND_ABORT_MS);
-  try {
-    const response = await apiFetch("/api/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: abort.signal,
-    });
-    const payload = (await response.json().catch(() => null)) as unknown;
-    if (response.ok && payload !== null && typeof payload === "object" && "outcome" in payload) {
-      const result = payload as CommandResult;
-      if (result.outcome === "acknowledged") setCommand({ action, status: "ack" });
-      else if (result.outcome === "failed") setCommand({ action, status: "failed", code: result.code });
-      else setCommand({ action, status: "timeout" });
-    } else {
-      setCommand({ action, status: "failed", code: null, reason: reasonOf(payload, response.status) });
-      if (response.status === 401) void connect();
-    }
-  } catch {
-    if (abort.signal.aborted) setCommand({ action, status: "timeout" });
-    else setCommand({ action, status: "failed", code: null, reason: "The service can’t be reached." });
-  } finally {
-    clearTimeout(safety);
-  }
-}
-
 function setUpControls(): void {
   // Stop is sent only from the slide, dragged to its end or completed from the keyboard.
   attachStopSlide(field("slide"), field<HTMLButtonElement>("slideThumb"), {
     slide,
     enabled: () => !field<HTMLButtonElement>("slideThumb").disabled,
     changed: render,
-    stop: () => void sendCommand("stop", { action: "stop", confirm: true }),
+    stop: () => void commands.stop(),
   });
-  controlButton("light").addEventListener("click", () => void sendCommand("light", { action: "light", on: latest?.light !== "on" }));
-  controlButton("pause").addEventListener("click", () => void sendCommand("pause", { action: "pause" }));
-  controlButton("resume").addEventListener("click", () => void sendCommand("resume", { action: "resume" }));
-  field("messageRetry").addEventListener("click", () => {
-    if (command === null || commandBody === null) return;
-    const { action } = command;
-    setCommand(null);
-    void sendCommand(action, commandBody);
-  });
-  field("messageDismiss").addEventListener("click", () => setCommand(null));
+  controlButton("light").addEventListener("click", () => void commands.send("light", { action: "light", on: latest?.light !== "on" }));
+  controlButton("pause").addEventListener("click", () => void commands.send("pause", { action: "pause" }));
+  controlButton("resume").addEventListener("click", () => void commands.send("resume", { action: "resume" }));
+  field("messageRetry").addEventListener("click", () => void commands.retry());
+  field("messageDismiss").addEventListener("click", () => commands.dismiss());
 }
 
 // ---- Camera (design D11) ----
