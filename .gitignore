@@ -5,3 +5,4 @@ captures/
 *.pcap
 *.pcapng
 printer.env
+web/fonts/

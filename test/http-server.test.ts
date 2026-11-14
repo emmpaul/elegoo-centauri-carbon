@@ -538,5 +538,10 @@ describe("HTTP API optional font files", () => {
     assert.equal(font.status, 200);
     assert.equal(font.headers.get("content-type"), "font/woff2");
     assert.equal(await font.text(), "wOF2 test font");
+
+    const head = await fetch(`${base}/fonts/satoshi-500.woff2`, { method: "HEAD" });
+    assert.equal(head.status, 200, "HEAD answers like GET, so curl -I can check a font");
+    assert.equal(head.headers.get("content-type"), "font/woff2");
+    assert.equal(await head.text(), "");
   });
 });

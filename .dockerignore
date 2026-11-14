@@ -6,3 +6,5 @@
 !src/
 !web/
 !scripts/healthcheck.ts
+# Fonts fetched with `pnpm fonts:fetch` may not be redistributed; mount them instead.
+web/fonts/

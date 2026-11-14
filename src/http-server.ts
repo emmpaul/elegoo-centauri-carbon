@@ -97,7 +97,8 @@ export function createApiServer(options: ApiServerOptions): Server {
     void (async () => {
       const url = parseTarget(req.url);
       path = url.pathname;
-      if (options.dashboard?.has(url.pathname) && req.method === "GET") {
+      // HEAD too, so `curl -I` checks a file; Node sends the headers without the body.
+      if (options.dashboard?.has(url.pathname) && (req.method === "GET" || req.method === "HEAD")) {
         await options.dashboard.serve(url.pathname, res);
         return;
       }
