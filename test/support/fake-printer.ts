@@ -1,4 +1,5 @@
 // Test-only fake SDCP printer: a WebSocket server on ws://127.0.0.1:<port>/websocket
+// (host and port can be fixed, for scripts that stand in for the real printer)
 // that answers requests like the real printer, replays recorded fixtures, and
 // records every frame it receives. It never talks to a real printer.
 import { readFileSync } from "node:fs";
@@ -43,6 +44,10 @@ export type Reply = number | "silent" | ((data: Record<string, unknown>) => Reco
 export interface FakePrinterOptions {
   /** Per-command reply; commands not listed are answered with `Ack: 0`. */
   replies?: Record<number, Reply>;
+  /** Address to listen on. 127.0.0.1 by default. */
+  host?: string;
+  /** Port to listen on. A free port by default. */
+  port?: number;
 }
 
 export class FakePrinter {
@@ -51,9 +56,11 @@ export class FakePrinter {
   private readonly server: WebSocketServer;
   private readonly frameListeners = new Set<(frame: ReceivedFrame) => void>();
   private silent = false;
+  private readonly host: string;
 
   private constructor(server: WebSocketServer, options: FakePrinterOptions) {
     this.server = server;
+    this.host = urlHost(options.host ?? "127.0.0.1");
     this.replies = new Map(Object.entries(options.replies ?? {}).map(([cmd, reply]) => [Number(cmd), reply]));
     server.on("connection", (socket) => {
       socket.on("message", (data, isBinary) => {
@@ -66,9 +73,9 @@ export class FakePrinter {
     });
   }
 
-  /** Starts a fake printer on a free port on 127.0.0.1. */
+  /** Starts a fake printer, by default on a free port on 127.0.0.1. */
   static async start(options: FakePrinterOptions = {}): Promise<FakePrinter> {
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: "/websocket" });
+    const server = new WebSocketServer({ host: options.host ?? "127.0.0.1", port: options.port ?? 0, path: "/websocket" });
     await new Promise<void>((resolve, reject) => {
       server.once("listening", resolve);
       server.once("error", reject);
@@ -81,7 +88,7 @@ export class FakePrinter {
   }
 
   get url(): string {
-    return `ws://127.0.0.1:${this.port}/websocket`;
+    return `ws://${this.host}:${this.port}/websocket`;
   }
 
   /** Number of open client connections. */
@@ -186,6 +193,12 @@ export class FakePrinter {
       }),
     );
   }
+}
+
+/** Host for a URL to a server listening on `host`: loopback for a wildcard address. */
+export function urlHost(host: string): string {
+  if (host === "0.0.0.0" || host === "::") return "127.0.0.1";
+  return host.includes(":") ? `[${host}]` : host;
 }
 
 function parse(text: string): unknown {

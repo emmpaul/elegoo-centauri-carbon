@@ -60,3 +60,50 @@ jobs:
           flags=(--verify-tag --generate-notes --title "$GITHUB_REF_NAME")
           case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease);; esac
           gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+
+  image:
+    name: publish image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # vX.Y.Z publishes X.Y.Z and latest; a prerelease (any '-') leaves latest alone.
+      - name: Image tags
+        id: tags
+        env:
+          IMAGE: ghcr.io/emmpaul/elegoo-centauri-carbon
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tags="$IMAGE:$version"
+          case "$version" in *-*) ;; *) tags="$tags,$IMAGE:latest";; esac
+          {
+            echo "version=$version"
+            echo "tags=$tags"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}

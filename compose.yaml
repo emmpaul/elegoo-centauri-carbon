@@ -1,0 +1,22 @@
+# Runs the printer service on the home node, next to the printer (design D6
+# of add-docker-deployment; setup in docs/deployment.md).
+#
+#   cp printer.env.example printer.env   # then set PRINTER_IP, and
+#                                        # ACCESS_TOKEN from: openssl rand -hex 32
+#   docker compose up -d
+#
+# Variables read from the shell (or a .env file next to this one) when compose
+# runs, not passed to the service:
+#   IMAGE_TAG      image version to run, e.g. 1.2.0 (default latest)
+#   PUBLISH_ADDR   host address the dashboard port is published on (default
+#                  127.0.0.1; the home node's tailnet IP behind the Dokploy VM)
+services:
+  printer:
+    image: ghcr.io/emmpaul/elegoo-centauri-carbon:${IMAGE_TAG:-latest}
+    # PRINTER_IP and ACCESS_TOKEN are required: UDP discovery does not cross
+    # the bridge network, and the service refuses to listen on 0.0.0.0
+    # without a token.
+    env_file: printer.env
+    restart: unless-stopped
+    ports:
+      - "${PUBLISH_ADDR:-127.0.0.1}:8080:8080"

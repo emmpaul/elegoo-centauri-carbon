@@ -4,3 +4,4 @@ scratch/
 captures/
 *.pcap
 *.pcapng
+printer.env

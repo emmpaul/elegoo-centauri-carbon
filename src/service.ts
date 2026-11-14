@@ -5,6 +5,7 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { CameraProxy } from "./camera-proxy.ts";
+import { listenAuthError } from "./config.ts";
 import { dashboardFiles } from "./dashboard-files.ts";
 import { EventDetector, type PrintEvent } from "./event-detector.ts";
 import { createApiServer } from "./http-server.ts";
@@ -43,8 +44,15 @@ export function cameraUrl(host: string): string {
   return `http://${host}:3031/video`;
 }
 
-/** Starts the printer session and the HTTP API; resolves once listening. */
+/**
+ * Starts the printer session and the HTTP API; resolves once listening.
+ * Rejects before opening any socket when the listen host is not loopback
+ * and no token is set.
+ */
 export async function startService(options: ServiceOptions): Promise<Service> {
+  // Checked here too, not only in main.ts, so no caller can start the service exposed without a token.
+  const refusal = listenAuthError(options.listen, options.token);
+  if (refusal !== null) throw new Error(refusal);
   const logger = options.logger ?? console;
   const session = new PrinterSession({ url: options.printerUrl, logger });
   const store = new StatusStore();

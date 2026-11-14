@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
-import { EVENT_TYPES, defaultConfig, loadConfig } from "../src/config.ts";
+import { EVENT_TYPES, defaultConfig, listenAuthError, loadConfig } from "../src/config.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "ecc-config-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -45,7 +45,9 @@ describe("loadConfig", () => {
   it("loads config.example.json", () => {
     const config = loadConfig({ path: "config.example.json", env: {} });
     assert.equal(config.printerIp, "192.168.0.96");
-    assert.deepEqual(config.listen, { host: "0.0.0.0", port: 8080 });
+    assert.deepEqual(config.listen, { host: "127.0.0.1", port: 8080 });
+    assert.equal(config.token, null);
+    assert.equal(listenAuthError(config.listen, config.token), null);
   });
 
   it("lets env variables override file values", () => {
@@ -101,4 +103,47 @@ describe("loadConfig", () => {
     assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { LISTEN_PORT: "abc" } }), /LISTEN_PORT/);
     assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { NOTIFY_EVENTS: "finished,bogus" } }), /unknown event/);
   });
+});
+
+describe("listenAuthError", () => {
+  const exposed = ["0.0.0.0", "::", "192.0.2.10", "printer.example"];
+  const loopback = ["127.0.0.1", "127.1.2.3", "localhost", "::1"];
+
+  for (const host of exposed) {
+    it(`refuses ${host} without a token`, () => {
+      const message = listenAuthError({ host }, null);
+      assert.ok(message !== null);
+      assert.ok(message.includes(host));
+      for (const name of ["token", "ACCESS_TOKEN", "listen.host", "LISTEN_HOST"]) assert.ok(message.includes(name), name);
+    });
+
+    it(`allows ${host} with a token`, () => {
+      assert.equal(listenAuthError({ host }, "secret"), null);
+    });
+
+    for (const blank of ["", " ", "\t\n "]) {
+      it(`refuses ${host} with the blank token ${JSON.stringify(blank)}`, () => {
+        const message = listenAuthError({ host }, blank);
+        assert.ok(message !== null);
+        assert.ok(message.includes("ACCESS_TOKEN"));
+      });
+    }
+  }
+
+  it("refuses an exposed host when ACCESS_TOKEN or the config token is whitespace only", () => {
+    const fromEnv = loadConfig({ path: join(dir, "missing.json"), env: { LISTEN_HOST: "0.0.0.0", ACCESS_TOKEN: " " } });
+    assert.notEqual(listenAuthError(fromEnv.listen, fromEnv.token), null);
+    const fromFile = loadConfig({ path: writeConfig("blank-token.json", { listen: { host: "0.0.0.0" }, token: "  " }), env: {} });
+    assert.notEqual(listenAuthError(fromFile.listen, fromFile.token), null);
+  });
+
+  for (const host of loopback) {
+    it(`allows ${host} without a token`, () => {
+      assert.equal(listenAuthError({ host }, null), null);
+    });
+
+    it(`allows ${host} with a token`, () => {
+      assert.equal(listenAuthError({ host }, "secret"), null);
+    });
+  }
 });

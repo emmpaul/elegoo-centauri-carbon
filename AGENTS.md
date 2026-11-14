@@ -25,6 +25,22 @@ pnpm notify:test                   # sends one test notification to the configur
 (`FAKE_CAMERA=down`, `FAKE_REPLIES=129=silent,131=2`, `SIGUSR1` camera down/up, `SIGUSR2`
 printer offline/online) are listed at the top of `scripts/run-fake-service.ts`.
 
+Container image (`Dockerfile`, allow-list `.dockerignore`; deployment in `docs/deployment.md`).
+`scripts/run-fake-printer.ts` runs only the fake printer and camera on the real ports 3030
+and 3031 (`FAKE_HOST`, default `127.0.0.1`); `scripts/healthcheck.ts` is the image's
+`HEALTHCHECK`. Check the image against the fake printer (Linux Docker Engine, host network),
+then remove the container:
+
+```bash
+docker build -t ecc:dev .
+node scripts/run-fake-printer.ts &
+docker run -d --name ecc-check --network host -e PRINTER_IP=127.0.0.1 -e ACCESS_TOKEN=t -e LISTEN_PORT=18080 ecc:dev
+curl -fsS -H "Authorization: Bearer t" http://127.0.0.1:18080/api/status   # the snapshot
+docker inspect -f '{{.State.Health.Status}}' ecc-check                      # healthy after ~30 s
+docker run --rm ecc:dev                    # no token: exits non-zero with the refusal message
+docker rm -f ecc-check; kill %1
+```
+
 ## Architecture
 
 One process, wired in `src/service.ts`:

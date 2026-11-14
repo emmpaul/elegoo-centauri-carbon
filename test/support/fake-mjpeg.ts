@@ -1,10 +1,12 @@
 // Test-only fake MJPEG camera: an HTTP server on http://127.0.0.1:<port>/video
 // that streams `multipart/x-mixed-replace` parts like the printer's camera on
-// port 3031, and counts the connections it gets. It never talks to a real
+// port 3031, and counts the connections it gets (host and port can be fixed,
+// for scripts that stand in for the real camera). It never talks to a real
 // printer.
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { urlHost } from "./fake-printer.ts";
 
 export const FAKE_BOUNDARY = "fakeframe";
 
@@ -25,6 +27,10 @@ export interface FakeMjpegOptions {
   framePadBytes?: number;
   /** Body of part `n`; fakeJpeg (not a decodable image) by default. */
   frame?: (n: number) => Buffer;
+  /** Address to listen on. 127.0.0.1 by default. */
+  host?: string;
+  /** Port to listen on. A free port by default. */
+  port?: number;
 }
 
 export class FakeMjpegSource {
@@ -38,9 +44,11 @@ export class FakeMjpegSource {
   private readonly framePadBytes: number;
   private readonly frame: ((n: number) => Buffer) | undefined;
   private readonly closeListeners = new Set<() => void>();
+  private readonly host: string;
 
   private constructor(server: Server, options: FakeMjpegOptions) {
     this.server = server;
+    this.host = urlHost(options.host ?? "127.0.0.1");
     this.status = options.status ?? 200;
     this.frameIntervalMs = options.frameIntervalMs ?? 20;
     this.framePadBytes = options.framePadBytes ?? 0;
@@ -50,13 +58,13 @@ export class FakeMjpegSource {
 
   static async start(options: FakeMjpegOptions = {}): Promise<FakeMjpegSource> {
     const server = createServer();
-    server.listen(0, "127.0.0.1");
+    server.listen(options.port ?? 0, options.host ?? "127.0.0.1");
     await once(server, "listening");
     return new FakeMjpegSource(server, options);
   }
 
   get url(): string {
-    return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}/video`;
+    return `http://${this.host}:${(this.server.address() as AddressInfo).port}/video`;
   }
 
   /** Resolves once no stream is open. */
