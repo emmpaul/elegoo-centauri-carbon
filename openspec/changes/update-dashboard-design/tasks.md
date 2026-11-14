@@ -35,7 +35,7 @@ anti-aliasing explains.
 ## 5. Controls
 
 - [x] 5.1 Replace the controls card with the message slot and the Light, Pause, Resume buttons (component markup and looks), the command lifecycle of D8 (pending ring and indeterminate bar, 2.6 s ack clear, failed/timeout with Retry and ×, HTTP errors, 15 s safety abort), keeping the old stop button and dialog working until 5.2; verify `pnpm typecheck && pnpm test`, `FAKE_REPLIES=129=silent,131=2 pnpm start:fake` shows the timeout and "failed · code 2" messages, and harness check c3, c4, c5
-- [ ] 5.2 Replace the stop button and dialog with the stop slide in `web/stop-slide.ts` served as `/stop-slide.js` (D12): pointer drag with capture, spring-back, send at the end with `confirm: true`, keyboard steps, disabled reasons, "Stopping…" pending track, failed/timed-out labels; add the file to the service worker shell; update `docs/api.md` (stop is confirmed by the slide); verify `pnpm typecheck && pnpm test`, in `pnpm start:fake` an early release sends nothing and a full drag or four → presses stops the print, and harness check a1, c1, c2, b1 (controls area)
+- [x] 5.2 Replace the stop button and dialog with the stop slide in `web/stop-slide.ts` served as `/stop-slide.js` (D12): pointer drag with capture, spring-back, send at the end with `confirm: true`, keyboard steps, disabled reasons, "Stopping…" pending track, failed/timed-out labels; add the file to the service worker shell; update `docs/api.md` (stop is confirmed by the slide); verify `pnpm typecheck && pnpm test`, in `pnpm start:fake` an early release sends nothing and a full drag or four → presses stops the print, and harness check a1, c1, c2, b1 (controls area)
 
 ## 6. Token screen and laptop layout
 

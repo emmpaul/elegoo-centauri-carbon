@@ -13,6 +13,7 @@ const SHELL = [
   "/",
   "/app.js",
   "/mjpeg.js",
+  "/stop-slide.js",
   "/src/control-rules.ts",
   "/style.css",
   "/manifest.webmanifest",

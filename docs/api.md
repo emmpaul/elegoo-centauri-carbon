@@ -224,11 +224,13 @@ and shows "Camera unavailable" with a retry button when the stream can't be
 opened, ends, or sends no frame for 10 seconds (it tries again every 10
 seconds). While the printer is offline it closes the stream and shows
 "Camera offline", and opens the stream again when the printer is back. Its pause, resume, stop, and light buttons are enabled by the same
-rules `POST /api/command` applies (`src/control-rules.ts`); stop asks for
-confirmation first, and a failed or timed-out command is shown under the
-buttons.
+rules `POST /api/command` applies (`src/control-rules.ts`). Stop is a slide:
+it sends `{"action":"stop","confirm":true}` only once the thumb is dragged to
+the end of the track (or moved there with four presses of →), and an early
+release sends nothing. Each command's result (pending, acknowledged, failed
+with its code, or timed out) is shown in a message line above the buttons.
 
-Its files are `/`, `/app.js`, `/theme.js`, `/view.js`, `/mjpeg.js`, `/src/control-rules.ts`,
+Its files are `/`, `/app.js`, `/theme.js`, `/view.js`, `/stop-slide.js`, `/mjpeg.js`, `/src/control-rules.ts`,
 `/style.css`, `/sw.js` (the service worker), `/manifest.webmanifest`, the
 icons under `/icons/`, and the fonts `/fonts/satoshi-{400,500,700}.woff2` and
 `/fonts/cabinet-grotesk-800.woff2`. The fonts are optional: they are served
