@@ -1,7 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#2563eb"/>
-  <rect x="112" y="112" width="288" height="288" rx="24" fill="none" stroke="#ffffff" stroke-width="28"/>
-  <path d="M216 168h80v40l-40 44-40-44z" fill="#ffffff"/>
-  <rect x="176" y="316" width="160" height="28" rx="8" fill="#ffffff"/>
-  <rect x="216" y="276" width="80" height="40" rx="6" fill="#bfdbfe"/>
+  <!-- App mark (design g1): three print layers, the top one still in progress.
+       The attributes draw the 512 design. Like the design, small sizes are drawn
+       with their own geometry: the media queries below switch to the 180 design
+       (drawn at 90 px) and the 48 design, in 512-unit space.
+       scripts/render-icons.ts renders the PNG icons from this file. -->
+  <style>
+    @media (max-width: 160px) {
+      .tile { rx: 113.778px; ry: 113.778px; }
+      .cut { y: 5.689px; }
+      .bar { x: 125.156px; height: 51.2px; rx: 11.378px; ry: 11.378px; }
+      .bar-1 { y: 159.289px; width: 151.779px; }
+      .bar-2 { y: 244.622px; width: 261.689px; fill: #6fd7a8; }
+      .bar-3 { y: 329.956px; width: 261.689px; fill: #6fd7a8; }
+    }
+    @media (max-width: 64px) {
+      .tile { rx: 117.333px; ry: 117.333px; }
+      .highlight { display: none; }
+      .bar { x: 117.333px; height: 53.333px; rx: 10.667px; ry: 10.667px; }
+      .bar-1 { y: 160px; width: 160.853px; }
+      .bar-2 { y: 245.333px; width: 277.333px; }
+      .bar-3 { y: 330.667px; width: 277.333px; }
+    }
+  </style>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#222222"/>
+      <stop offset="1" stop-color="#0f0f0f"/>
+    </linearGradient>
+    <linearGradient id="layer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#86e3b9"/>
+      <stop offset="1" stop-color="#5cc492"/>
+    </linearGradient>
+    <!-- The tile's top edge highlight (inset 0 1px 0 white at 10 %): the tile minus itself moved down. -->
+    <mask id="edge">
+      <rect class="tile" width="512" height="512" rx="112" fill="#fff"/>
+      <rect class="tile cut" y="2" width="512" height="512" rx="112" fill="#000"/>
+    </mask>
+  </defs>
+  <rect class="tile" width="512" height="512" rx="112" fill="url(#tile)"/>
+  <rect class="highlight" width="512" height="512" fill="#fff" fill-opacity="0.1" mask="url(#edge)"/>
+  <rect class="bar bar-1" x="128" y="172" width="148.48" height="48" rx="12" fill="#8b8b8b"/>
+  <rect class="bar bar-2" x="128" y="252" width="256" height="48" rx="12" fill="url(#layer)"/>
+  <rect class="bar bar-3" x="128" y="332" width="256" height="48" rx="12" fill="url(#layer)"/>
 </svg>
