@@ -198,12 +198,18 @@ that is not up yet with `sysctl net.ipv4.ip_nonlocal_bind=1` (persist it in
    entry point and resolver names are Dokploy's defaults; check
    `/etc/dokploy/traefik/traefik.yml` if yours differ.
 3. Check that the Traefik container reaches the home node over the tailnet
-   (the container is named `dokploy-traefik` in a default install; `401`
-   means it is reached and the token is checked):
+   (the container is named `dokploy-traefik` in a default install). The
+   command prints one line and gives up after 5 seconds:
 
    ```sh
-   docker exec dokploy-traefik wget -S -O /dev/null http://100.64.0.10:8080/api/status 2>&1 | head -n 1
+   docker exec dokploy-traefik wget -T 5 -S -O /dev/null http://100.64.0.10:8080/api/status 2>&1 | grep -m 1 -e 'HTTP/' -e 'wget:'
    ```
+
+   `HTTP/1.1 401 Unauthorized` means the service is reached and checks the
+   token. A `wget:` line is a failure: `can't connect to remote host` means
+   the address is reached but nothing listens on the port (check
+   `PUBLISH_ADDR`), and `download timed out` means the address is not
+   reached.
 
    If it times out, the container cannot route to tailnet addresses: check
    the ACL above, that `tailscale status` on the VM shows the home node, and
