@@ -499,9 +499,25 @@ describe("HTTP API dashboard files", () => {
     const manifest = await fetch(`${base}/manifest.webmanifest`);
     assert.equal(manifest.status, 200);
     assert.match(manifest.headers.get("content-type") ?? "", /^application\/manifest\+json/);
-    const { icons, start_url, display } = (await manifest.json()) as { icons: { src: string; type: string }[]; start_url: string; display: string };
+    const { name, short_name, icons, start_url, display, background_color, theme_color } = (await manifest.json()) as {
+      name: string;
+      short_name: string;
+      icons: { src: string; sizes: string; type: string; purpose?: string }[];
+      start_url: string;
+      display: string;
+      background_color: string;
+      theme_color: string;
+    };
+    assert.equal(name, "Printer");
+    assert.equal(short_name, "Printer");
     assert.equal(start_url, "/");
     assert.equal(display, "standalone");
+    assert.equal(background_color, "#0f0f0f");
+    assert.equal(theme_color, "#0f0f0f");
+    assert.deepEqual(
+      icons.map(({ sizes, purpose }) => `${sizes} ${purpose ?? "any"}`),
+      ["192x192 any", "512x512 any", "512x512 maskable"],
+    );
     for (const icon of icons) {
       const response = await fetch(`${base}${icon.src}`);
       assert.equal(response.status, 200, icon.src);
