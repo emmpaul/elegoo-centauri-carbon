@@ -589,3 +589,40 @@ describe("HTTP API optional font files", () => {
     assert.equal(await head.text(), "");
   });
 });
+
+describe("HTTP API dashboard files that can't be read", () => {
+  let server: Server;
+  let base: string;
+  let webDir: string;
+  let errors: string[];
+
+  beforeEach(async () => {
+    webDir = await mkdtemp(join(tmpdir(), "ecc-web-"));
+    // A directory where a font file belongs: reading it fails with EISDIR, not ENOENT.
+    await mkdir(join(webDir, "fonts", "satoshi-700.woff2"), { recursive: true });
+    errors = [];
+    const logger: Logger = { ...quiet, error: (message: string) => void errors.push(message) };
+    const store = new StatusStore();
+    const control = new PrintControl({ send: () => Promise.reject(new NotConnectedError()) }, store);
+    server = createApiServer({ store, control, token: "secret", dashboard: dashboardFiles(pathToFileURL(webDir)), logger });
+    base = await listen(server);
+  });
+
+  afterEach(async () => {
+    await closeServer(server);
+    await rm(webDir, { recursive: true, force: true });
+  });
+
+  it("answers 500 for a missing required file, never 404", async () => {
+    const page = await fetch(`${base}/`);
+    assert.equal(page.status, 500);
+    assert.equal(((await page.json()) as { error: { code: string } }).error.code, "internal");
+    assert.equal(errors.length, 1, "the failure is logged");
+  });
+
+  it("answers 404 for an optional file only when it is missing, and 500 for any other read error", async () => {
+    assert.equal((await fetch(`${base}/fonts/satoshi-400.woff2`)).status, 404);
+    assert.equal((await fetch(`${base}/fonts/satoshi-700.woff2`)).status, 500);
+    assert.equal(errors.length, 1);
+  });
+});
