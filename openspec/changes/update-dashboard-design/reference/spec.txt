@@ -1,0 +1,322 @@
+Spec · Centauri Carbon dashboard · v1
+Components, tokens, decisions
+
+This spec covers the screens in Printer States and the prototype. It is meant to be built as plain HTML and CSS plus a small TypeScript module. Token names map one to one to CSS custom properties.
+
+1 · Order at 360 px
+01
+Camera
+The top 240 px, full-bleed. The printer name, connection and theme toggle sit over it.
+02
+Status line
+Shape glyph, state in words, file name, last update time.
+03
+Time left and %
+The largest type on the page. Answers "how long?".
+04
+Layer ticks
+Progress drawn as layers. Its colour follows the state.
+05
+Alerts
+Only when needed: print error, unknown state. The offline banner goes at the top of the sheet.
+06
+Readings
+Layer, elapsed, nozzle, bed, chamber. One aligned column.
+07
+Controls
+A message slot, then Light, Pause, Resume, then the stop slide. All in the thumb zone.
+2 · Components and their states
+Header
+.hdr
+Printer name (a service setting, default "Centauri Carbon"), connection, theme toggle (44 × 44). On phone it sits over the camera in fixed light ink; on laptop it sits on the page background.
+States: online (glowing dot + "Online"); offline (hollow ring + "Offline" in red).
+Camera box
+.cam
+An <img> pointed at the MJPEG URL, object-fit: contain on #121212, so any aspect ratio fits. Vignette and top shade keep the header readable.
+States: live; unavailable (img error → dashed box, "Camera unavailable", Retry, retries every 10 s on its own); offline (dashed box, "Camera offline", no retry).
+Status line
+.status
+Glyph + label + file name (mono, ellipsis) + last update time. Glyph shape carries state together with the words.
+States: filled dot (printing), ring + dot (preparing, checking, pausing, resuming, stopping), two bars (paused), square (stopped), check (complete), ring (idle), ? ring (unknown), dashed ring + "Last known: …" (stale).
+Headline
+.headline
+Time left in Cabinet Grotesk 46/800, % on the right in 24/800, one sub-line below.
+States: running (time left · done at); paused ("timer held"); preparing ("estimated · heating up"); completed (total time + "Done"); idle ("Ready"); stopped ("Stopped"); stale ("left at 21:13 · last known").
+Layer ticks
+.ticks
+3 px ticks every 6 px, 22 px tall. Fill width = progress. Has role=progressbar.
+States: green + glow (printing); amber (pausing, paused); blue (preparing, resuming); full green (complete); empty (idle); grey, no glow (stale).
+Reading row
+.row
+Label, value (bold, tabular), and a 52 px target column so values line up. 36 px tall.
+States: at target "/ 210°"; heating or cooling "→ 210°"; target 0 "off"; chamber always "—" (no target); stale (dashed dividers, secondary ink).
+Alert block
+.alert
+Tinted block, 12 px radius, square glyph for errors.
+States: print error (red, raw code; 45 adds "filament low"); offline (amber, time + minutes ago); unknown state (neutral, shows the print code and the machine state).
+Message slot
+.msg
+A single inline strip directly above the controls. Not a floating toast, so it never covers the buttons.
+States: pending (blue, indeterminate bar); acknowledged (green, auto-clears); failed (red, code, Retry, ×); timeout (amber, Retry, ×); stop consequence while dragging (red).
+Control row
+.controls
+Light, Pause, Resume, each 56 px tall. Pause and Resume are both always visible.
+States: see section 3: enabled, disabled, pending, failed.
+Stop slide
+.stop
+A track the full width of the sheet with a 48 px thumb. You must drag it to the end; let go early and it springs back. Keyboard: → moves it in four steps, ← or Esc resets.
+States: rest; dragging (red fill, consequence in the message slot, "Release to stop" past 80%); sent (blue ring, "Stopping…"); failed (red ring, code); disabled with a reason.
+Token screen
+.token
+App mark, title, one line of help, labelled token field with Show/Hide, Connect (56 px). The token is stored in localStorage.
+States: empty; filled, masked or shown; wrong token 401 (red field ring, alert, input kept so it can be edited).
+3 · Controls: enabled, disabled, pending, failed
+Enabled
+Disabled
+Pending
+Failed / timed out
+Light
+Light on
+Light —
+Light…
+Retry
+Pause
+Pause
+Pause
+Pausing…
+Retry
+Resume
+Resume
+Resume
+Resuming…
+Retry
+Stop
+Slide to stop
+No print
+Stopping…
+Failed · code 2
+Enabled when: Pause: preparing, file-checking or printing. Resume: paused. Stop: preparing, file-checking, printing or paused. Light: light state is on or off. Every control is disabled while offline or while a command is in flight.
+Disabled looks different by shape, not only colour: a dashed outline, no fill and grey text. The slide track writes out the reason ("Stop unavailable offline", "No print to stop", "Wait for the printer").
+Command lifecycle: pending (2 px blue ring plus an indeterminate bar in the message slot), then acknowledged (green message, clears after 2.6 s), failed (with code), or timeout after 10 s. Failed and timed-out messages stay until the user retries or dismisses them, and the button reads "Retry".
+4 · Tokens
+Colour. Dark is the default, under :root. Light goes under [data-theme=light], and also applies when prefers-color-scheme: light matches and no theme has been chosen.
+Token
+Dark
+Light
+Use
+--bg
+#0f0f0f
+#f3f3f1
+Page
+--surface
+#191919
+#ffffff
+Sheet / panel base
+--raise
+#262626
+#e4e4e0
+Disabled thumb, wells
+--text
+#ececec
+#161616
+Primary ink
+--text-2
+#b4b4b4
+#3f3f3f
+Secondary ink, stale values
+--text-3
+#8b8b8b
+#595959
+Labels, disabled text
+--text-4
+#5c5c5c
+#9a9a96
+Separators only, never text
+--line
+rgba(255,255,255,0.07)
+rgba(0,0,0,0.08)
+Hairlines
+--dash
+#3d3d3d
+#b5b5b0
+Disabled outlines, stale dividers
+--tick
+#2e2e2e
+#e4e4e0
+Unfilled layer ticks
+--ok
+#6fd7a8
+#1a8a5b
+Printing, complete, Resume
+--ok-text
+#a9e5c9
+#14603f
+Text in ok tone
+--warn
+#f0c36b
+#946000
+Paused, pausing, light on
+--warn-text
+#f3d79b
+#6b4500
+Offline banner text
+--bad
+#f28b8b
+#c94a4a
+Stop, errors, offline mark
+--bad-text
+#f6a5a5
+#b42323
+Error text
+--info
+#7aa7ff
+#2f6fe0
+Command in flight
+--on-solid
+#0f0f0f
+#ffffff
+Text on primary button
+--on-go
+#0b1f12
+#ffffff
+Text on Resume
+--input-bg
+#121212
+#ffffff
+Token field
+Type
+--font-ui
+Satoshi 500/700, self-hosted
+--font-display
+Cabinet Grotesk 800, self-hosted
+--font-mono
+ui-monospace, SF Mono, Cascadia Code, Consolas
+--fs-hero
+46 / 1.0 · 800 · -0.03em
+--fs-hero-2
+24 · 800 · -0.01em
+--fs-title
+30 / 1.1 · 800 (token screen)
+--fs-body
+15 / 1.5 · 500
+--fs-row
+14.5 label · 15 value 700
+--fs-meta
+13.5 / 1.45
+--fs-small
+13
+--fs-mono
+12.5 (file names, times)
+Spacing, sizes, radii
+--sp-1 … --sp-5
+4 · 8 · 12 · 16 · 24
+--edge
+16 phone · 24 laptop
+--row-h
+36
+--hit
+44 minimum target
+--control-h
+56
+--thumb
+48
+--cam-h
+240 phone (sheet overlaps 28)
+--panel-w
+420 laptop
+--r-label
+4
+--r-thumb
+9
+--r-control
+12 (buttons, inputs, alerts)
+--r-sheet
+20 (phone: top corners only)
+Depth (dark values)
+--sheet
+linear-gradient(180deg,#1d1d1d,#161616 40%)
+--sheet-shadow
+inset 0 1px 0 rgba(255,255,255,.08), 0 -18px 40px rgba(0,0,0,.6)
+--btn
+linear-gradient(180deg,#2a2a2a,#1f1f1f)
+--btn-shadow
+inset 0 1px 0 rgba(255,255,255,.07), 0 1px 2px rgba(0,0,0,.6)
+--solid-shadow
+inset 0 1px 0 #fff9, 0 1px 2px #0009, 0 8px 18px #0006
+--track-shadow
+inset 0 0 0 1px rgba(242,139,139,.3), inset 0 2px 6px rgba(0,0,0,.45)
+--tick-glow
+drop-shadow(0 0 6px tone @ .45), dark only
+5 · Decisions
+What comes first on a 360 px screen, and why?
+
+The camera, then the state in words directly under it, at about 230 px, still inside the first screen. A notification tap needs confirmation that the print is fine, and the picture answers that faster than any number: spaghetti or a bare bed is obvious at a glance. The status line names the state in text, so the notified state is confirmed within the top third. Time left is the largest type because it answers the second question. Controls are last because they are needed least, and that also puts them in the thumb zone.
+
+Why does Stop sit where it does?
+
+Stop is a slide track on its own row below Pause and Resume, the full width of the sheet. It sits low, so it is reachable one-handed, but a tap or a short swipe cannot trigger it: you have to drag the thumb to the far end. While you drag, the message slot spells out the consequence ("Stops benchy.gcode at 42%. Can’t be resumed."). Letting go early springs it back. The separate row, red colour and different shape keep it visually apart from Pause and Resume, which are plain buttons.
+
+Why show Pause and Resume both, instead of one toggle?
+
+A button that changes meaning under your thumb is dangerous during a transition: a tap meant for Pause could land after it has become Resume. With both always visible, the unavailable one is dashed and grey, and you can see what the printer accepts right now without reading a label.
+
+How is staleness shown?
+
+In six ways, none of them colour alone: an amber banner at the top of the sheet with the last update time and minutes since; the status glyph becomes a dashed ring and the label reads "Last known: printing"; the sub-line says "left at 21:13 · last known"; values drop to secondary ink and row dividers turn dashed; the progress ticks go grey and lose their glow; and every control turns dashed, with the stop track saying "Stop unavailable offline". The camera is replaced by a dashed "Camera offline" box.
+
+Where do command results appear?
+
+In one message slot directly above the controls, where the eye already is after a tap. It is not a floating toast, so it never covers a button and doesn’t vanish before you read it. Pending puts a blue ring on the button that was tapped and an indeterminate bar in the message. An acknowledgement clears itself after 2.6 s. Failed and timeout messages stay until the user acts, and the tapped button becomes a red "Retry".
+
+How is colour used?
+
+Colour marks status only: green for running, amber for paused or needing attention, red for stop and errors, blue for a command in flight. Each is always paired with a glyph shape and words. Everything else is neutral, so a single colour change reads as news.
+
+How does the completed state work with an empty file name?
+
+The printer clears fileName and progress when a job ends, so the screen stops depending on them. The headline shows total print time with "Done", the ticks are full, and the sub-line gives the bed temperature with a reminder to let it cool. The file slot simply closes up.
+
+How does it scale to a laptop?
+
+Same parts, rearranged. The camera takes the free width at full height, the status sheet becomes a fixed 420 px panel on the right so line lengths stay the same, and the header moves off the camera onto the page. The reading order inside the panel is unchanged, so learning one layout teaches the other.
+
+Why these two typefaces?
+
+Cabinet Grotesk 800 is used only for the two numbers you read from across the room: time left and percent. Satoshi carries everything else and has clear tabular figures. Both are free to self-host. The service serves the woff2 files (about 60 KB in total), and system-ui is the fallback, so the page works with no internet.
+
+6 · Where every snapshot field appears
+connection
+Header (Online / Offline). Offline turns on the banner, the stale treatment and disabled controls.
+machineState.name / code
+Shown in the unknown-state note, to help diagnose it. Otherwise left out: it repeats printState and has no action attached.
+printState.name
+Status line label and glyph. Also drives which controls are enabled, the headline variant and the tick colour.
+printState.code
+Shown only for unknown, e.g. "Unknown state (7)". Left out elsewhere, because the name already says it.
+fileName
+Status line (mono, ellipsis) and the stop consequence message. The slot is hidden when empty.
+progress
+The % in the headline and the tick fill width. Replaced by "Done" once complete, because the printer resets it to 0.
+layer.current / total
+Layer row ("210 / 500"). Hidden when the total is 0.
+elapsed
+Elapsed row. On completion it becomes the headline (total print time).
+remaining
+Headline time left. Added to updatedAt to give "done at 22:42".
+temperatures.nozzle / bed
+Rows: current value, plus target as "/ 210°", "→ 210°" or "off".
+temperatures.chamber
+Row: current only, target column "—". The 0 target is never shown.
+light
+Light button: label "Light on" / "Light off", a filled or hollow dot, aria-pressed. Disabled as "Light —" when unknown.
+errorCode
+Error block with the raw code. 45 adds "filament low · load filament, then resume".
+updatedAt
+Status line time (hh:mm:ss), offline banner (time + minutes ago), stale sub-line, done-at calculation.
+7 · Build notes
+Live data: one EventSource or WebSocket. Render the whole snapshot on every message. Treat the page as offline if connection is "offline" or if no message has arrived for 10 s.
+Commands: POST, then show pending. Resolve on acknowledged or failed {code}; after 10 s with no reply, mark it timed out. Only one command at a time.
+Camera: <img src="/stream">. On error, show the placeholder and retry every 10 s with a cache-busting query string.
+Theme: read localStorage("theme"), otherwise prefers-color-scheme, otherwise dark. Set data-theme on <html> before first paint to avoid a flash.
+Motion: only the tick fill, the thumb spring-back and the indeterminate bar move. All of it is turned off under prefers-reduced-motion.
+PWA: manifest with standalone display, 192/512/maskable icons, theme_color #0f0f0f. iOS needs apple-touch-icon plus apple-touch-startup-image per device size. Use the splash on #0f0f0f.
