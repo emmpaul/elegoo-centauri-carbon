@@ -376,7 +376,17 @@ export function slideKey(key: string, x: number, max: number, enabled: boolean):
   return null;
 }
 
-function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSnapshot | null): MessageView | null {
+/**
+ * Whether Retry may re-send a failed or timed-out command: never for stop (it
+ * is sent from the slide again), and otherwise only while the service would
+ * accept it (online, and allowed by the control rules), as for the buttons.
+ */
+export function canRetry(cmd: CommandState | null, snapshot: StatusSnapshot | null, streamOpen: boolean): boolean {
+  if (cmd === null || (cmd.status !== "failed" && cmd.status !== "timeout") || cmd.action === "stop") return false;
+  return isLive(snapshot, streamOpen) && isAllowed(cmd.action, snapshot ?? EMPTY);
+}
+
+function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSnapshot | null, streamOpen: boolean): MessageView | null {
   if (dragShown) {
     return {
       tone: "bad",
@@ -390,7 +400,7 @@ function messageOf(cmd: CommandState | null, dragShown: boolean, snap: StatusSna
   }
   if (cmd === null || (cmd.action === "stop" && cmd.status === "pending")) return null;
   const verb = VERB[cmd.action];
-  const retry = cmd.action !== "stop";
+  const retry = canRetry(cmd, snap, streamOpen);
   switch (cmd.status) {
     case "pending":
       return { tone: "info", mark: "round", title: `Sending ${verb.toLowerCase()}…`, sub: "Waiting for printer · up to 10 s", retry: false, dismiss: false, pending: true };
@@ -489,7 +499,7 @@ export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, 
     animate: !dragging,
   };
 
-  const message = messageOf(cmd, dragShown, snapshot);
+  const message = messageOf(cmd, dragShown, snapshot, page.streamOpen);
   return {
     status: statusView(snapshot, { streamOpen: page.streamOpen, messageShown: message !== null }, now),
     message,
