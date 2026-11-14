@@ -16,6 +16,7 @@ import {
   dashboardView,
   duration,
   isLive,
+  settleSlide,
   slideDrag,
   slideKey,
   slideMax,
@@ -476,5 +477,25 @@ describe("stop slide steps", () => {
     assert.deepEqual(slideKey("Escape", 204, MAX, true), { x: 0, send: false });
     assert.equal(slideKey("Enter", 68, MAX, true), null);
     assert.equal(slideKey("ArrowRight", 0, MAX, false), null);
+  });
+
+  it("partial keyboard progress never carries to a later stop", () => {
+    // Three → presses, then the thumb loses focus: the progress is dropped.
+    const blurred = { x: 204, dragging: false, max: MAX };
+    assert.equal(settleSlide(blurred, true, false), true);
+    assert.equal(blurred.x, 0);
+    assert.deepEqual(slideKey("ArrowRight", blurred.x, MAX, true), { x: 68, send: false }, "one press after refocus does not send");
+    // Three → presses, then stop becomes disabled (the job ended): dropped too, and not drawn meanwhile.
+    const ended = { x: 204, dragging: false, max: MAX };
+    const idle = dashboardView(PRESETS.a5, page(null, ended), NOW);
+    assert.equal(idle.slide.disabled, true);
+    assert.equal(idle.slide.thumbLeft, "3px");
+    assert.equal(idle.slide.pct, 0);
+    assert.equal(settleSlide(ended, false, true), true);
+    assert.equal(ended.x, 0);
+    // Held and allowed: the progress stays.
+    const held = { x: 136, dragging: false, max: MAX };
+    assert.equal(settleSlide(held, true, true), false);
+    assert.equal(held.x, 136);
   });
 });
