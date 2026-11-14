@@ -17,7 +17,7 @@ anti-aliasing explains.
 
 ## 2. Visual verification harness
 
-- [ ] 2.1 Add `playwright-core` as an exact-version devDependency (D15) and record the version in `pnpm-lock.yaml`; verify `pnpm install --frozen-lockfile && pnpm typecheck` pass and `node -e "import('playwright-core')"` loads
+- [x] 2.1 Add `playwright-core` as an exact-version devDependency (D15) and record the version in `pnpm-lock.yaml`; verify `pnpm install --frozen-lockfile && pnpm typecheck` pass and `node -e "import('playwright-core')"` loads
 - [ ] 2.2 Add `scripts/visual-check.ts` (D14): its own 127.0.0.1 server with dashboard files and per-state mocked `/api/status`, `/api/events` (held open), `/api/command`, `/camera`, keyed by a `vstate` cookie; state table a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2 built from the component's `preset()` values and NOW 21:20:00 UTC; frozen clock, `timezoneId: "UTC"`; generated mock camera frame; role-based interactions for c1–c5 and d2; theme seeding; device-clock overlay (D5); `CHROMIUM_PATH` support; refuses to run without fonts; usage comment at the top listing ids, output folder, and env; verify `pnpm typecheck` passes and `node scripts/visual-check.ts a1 b2 d1` writes screenshots of the current page to `scratch/visual/` (an unreachable interaction is reported per id, not a crash)
 - [ ] 2.3 Add the comparison output to the harness: for ids with a reference, a side-by-side page with a diff overlay and the share of differing pixels (canvas, per-channel tolerance 8), printed per id; both themes shot for every id, g1/g2 compared once their PNGs exist; add the harness to the Commands section of `AGENTS.md`; verify a run prints a diff share for a1 and writes `scratch/visual/index.html`
 
