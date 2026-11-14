@@ -120,7 +120,22 @@ describe("listenAuthError", () => {
     it(`allows ${host} with a token`, () => {
       assert.equal(listenAuthError({ host }, "secret"), null);
     });
+
+    for (const blank of ["", " ", "\t\n "]) {
+      it(`refuses ${host} with the blank token ${JSON.stringify(blank)}`, () => {
+        const message = listenAuthError({ host }, blank);
+        assert.ok(message !== null);
+        assert.ok(message.includes("ACCESS_TOKEN"));
+      });
+    }
   }
+
+  it("refuses an exposed host when ACCESS_TOKEN or the config token is whitespace only", () => {
+    const fromEnv = loadConfig({ path: join(dir, "missing.json"), env: { LISTEN_HOST: "0.0.0.0", ACCESS_TOKEN: " " } });
+    assert.notEqual(listenAuthError(fromEnv.listen, fromEnv.token), null);
+    const fromFile = loadConfig({ path: writeConfig("blank-token.json", { listen: { host: "0.0.0.0" }, token: "  " }), env: {} });
+    assert.notEqual(listenAuthError(fromFile.listen, fromFile.token), null);
+  });
 
   for (const host of loopback) {
     it(`allows ${host} without a token`, () => {

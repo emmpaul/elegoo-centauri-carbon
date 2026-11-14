@@ -26,7 +26,8 @@ TOKEN=change-me
 A non-loopback listen address requires a token. When `listen.host` (or
 `LISTEN_HOST`) is anything but `localhost`, `::1`, or an address in
 `127.0.0.0/8` (so `0.0.0.0`, `::`, a LAN address, or a host name) and no
-token is set, the service refuses to start: it prints a message naming the
+token is set (a whitespace-only token counts as none), the service refuses
+to start: it prints a message naming the
 address, `token` / `ACCESS_TOKEN`, and `listen.host` / `LISTEN_HOST`, and
 exits with status 1 before it contacts the printer or opens the port. An
 install that listened on `0.0.0.0` without a token must set a token, or

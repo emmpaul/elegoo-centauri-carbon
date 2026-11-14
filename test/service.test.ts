@@ -61,6 +61,23 @@ describe("startService listen rule", () => {
     assert.equal(printer.clientCount, 0);
   });
 
+  it("rejects 0.0.0.0 with a whitespace-only token and opens no port", async () => {
+    const port = await freePort();
+    await assert.rejects(
+      startService({
+        printerUrl: printer.url,
+        cameraUrl: "http://127.0.0.1:9/video",
+        listen: { host: "0.0.0.0", port },
+        token: "  ",
+        logger: silentLogger(),
+      }),
+      /0\.0\.0\.0.*ACCESS_TOKEN/,
+    );
+    assert.equal(await listening(port), false);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(printer.clientCount, 0);
+  });
+
   it("starts on 127.0.0.1 without a token", async () => {
     service = await startService({
       printerUrl: printer.url,

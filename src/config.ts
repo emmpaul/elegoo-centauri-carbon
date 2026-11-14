@@ -58,10 +58,12 @@ export function loadConfig(options: LoadConfigOptions = {}): Config {
 /**
  * The start-up rule for exposure (design D1): a listen host other than
  * loopback (`localhost`, `::1`, or an IPv4 address in 127.0.0.0/8) needs an
- * access token. Returns the refusal message, or null when the service may start.
+ * access token. A blank or whitespace-only token counts as no token, since a
+ * client could match it with `?token=%20`. Returns the refusal message, or
+ * null when the service may start.
  */
 export function listenAuthError(listen: { host: string }, token: string | null): string | null {
-  if (token !== null || isLoopbackHost(listen.host)) return null;
+  if ((token !== null && token.trim() !== "") || isLoopbackHost(listen.host)) return null;
   return (
     `refusing to listen on ${listen.host} without an access token: ` +
     `set token in the config file or ACCESS_TOKEN, ` +
