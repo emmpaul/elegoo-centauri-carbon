@@ -228,10 +228,12 @@ confirmation first, and a failed or timed-out command is shown under the
 buttons.
 
 Its files are `/`, `/app.js`, `/mjpeg.js`, `/src/control-rules.ts`,
-`/style.css`, `/sw.js` (the service worker), `/manifest.webmanifest`, and the
-icons under `/icons/`. The scripts are the TypeScript sources in `web/` (and
+`/style.css`, `/sw.js` (the service worker), `/manifest.webmanifest`, the
+icons under `/icons/`, and the fonts `/fonts/satoshi-{400,500,700}.woff2` and
+`/fonts/cabinet-grotesk-800.woff2`. The fonts are optional: they are served
+once fetched with `pnpm fonts:fetch` and answer `404` otherwise. The scripts are the TypeScript sources in `web/` (and
 `src/control-rules.ts`) with their types stripped when served. They are
-served without the token.
+served without the token, on `GET` and `HEAD`.
 
 The page works at phone width (360 px) and can be installed as a web app.
 Browsers install a web app, and run its service worker, only from a secure
