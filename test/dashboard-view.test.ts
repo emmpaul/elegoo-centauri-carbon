@@ -305,8 +305,9 @@ describe("dashboardView: controls, message, and slide", () => {
     });
     assert.deepEqual(v.slide, {
       pending: false, look: "enabled", disabled: false, label: "Release to stop", labelInk: "text",
-      thumbLeft: "204px", fillWidth: "255px", labelLeft: "0px", labelRight: "122px", labelPadLeft: "0px", pct: 74, animate: false,
+      thumbLeft: "204px", fillWidth: "255px", labelLeft: "0px", labelRight: "124px", labelPadLeft: "0px", pct: 74, animate: false,
     });
+    assert.equal(328 - Number.parseFloat(v.slide.labelRight), 204, "the label ends at the thumb's left edge (track client width 328)");
     assert.equal(v.status.rows.some((r) => r.key === "Elapsed"), false, "the message hides the Elapsed row");
   });
 

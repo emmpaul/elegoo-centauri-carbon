@@ -459,7 +459,9 @@ export function dashboardView(snapshot: StatusSnapshot | null, page: PageState, 
   let labelRight = "0px";
   let labelPadLeft = "52px";
   if (dragShown && frac >= 0.5) {
-    labelRight = `${max + 54 - (x + 3)}px`;
+    // Ends at the thumb's left edge (track client width max + 56, less 3 + x), as the
+    // references show; the component's max + 54 assumes its unmeasured 272 px travel.
+    labelRight = `${max + 56 - (x + 3)}px`;
     labelPadLeft = "0px";
     label = "Release to stop";
     labelInk = "text";

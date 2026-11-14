@@ -50,7 +50,7 @@ anti-aliasing explains.
 
 ## 8. Integration check
 
-- [ ] 8.1 Run the full harness (every id, dark and light, 360 and 1280) with fonts installed, fix any remaining difference in the task's own files, and confirm every referenced id matches; also check with the keyboard that the theme toggle, buttons, Retry, ×, and the stop slide are reachable and work in tab order, and that 360 px has no horizontal scroll in any state; verify `pnpm typecheck && pnpm test` pass and the harness index shows every id
+- [x] 8.1 Run the full harness (every id, dark and light, 360 and 1280) with fonts installed, fix any remaining difference in the task's own files, and confirm every referenced id matches; also check with the keyboard that the theme toggle, buttons, Retry, ×, and the stop slide are reachable and work in tab order, and that 360 px has no horizontal scroll in any state; verify `pnpm typecheck && pnpm test` pass and the harness index shows every id
 
 ## Workflow follow-up
 
