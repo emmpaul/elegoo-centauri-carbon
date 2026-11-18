@@ -24,6 +24,43 @@ protocol and gives you, on your own network:
 
 Everything runs locally; nothing goes through Elegoo's cloud.
 
+## Quick start
+
+On Linux (or WSL2) with Docker and its compose plugin, paste this block into
+a terminal. Change `192.0.2.10` to your printer's address first:
+
+```sh
+mkdir -p ~/printer && cd ~/printer
+curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/printer.env.example
+cp printer.env.example printer.env && chmod 600 printer.env
+# set PRINTER_IP to your printer's address, and ACCESS_TOKEN to a new token:
+sed -i "s/^PRINTER_IP=.*/PRINTER_IP=192.0.2.10/; s/^ACCESS_TOKEN=.*/ACCESS_TOKEN=$(openssl rand -hex 32)/" printer.env
+# run the newest published version:
+tag=$(curl -fsSL 'https://api.github.com/repos/emmpaul/elegoo-centauri-carbon/releases?per_page=1' | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+if [ -n "$tag" ]; then
+  echo "IMAGE_TAG=$tag" > .env && docker compose up -d
+else
+  echo "Could not look up the newest release: put IMAGE_TAG=<version> in .env, then run docker compose up -d" >&2
+fi
+grep ACCESS_TOKEN printer.env   # the token the dashboard asks for
+```
+
+Then open <http://127.0.0.1:8080/> and enter the token. Give the printer a
+fixed address (a DHCP reservation on your router), since the container can't
+find it on its own.
+
+- **Version:** the block picks the newest release. You can also read a
+  version from the [Releases](https://github.com/emmpaul/elegoo-centauri-carbon/releases)
+  page and set it by hand in `.env` (for example `IMAGE_TAG=1.0.0-rc.5`).
+- **Update:** change `IMAGE_TAG` in `.env`, then
+  `docker compose pull && docker compose up -d`.
+- **macOS:** `sed -i` above is GNU syntax. Edit `PRINTER_IP` and
+  `ACCESS_TOKEN` (from `openssl rand -hex 32`) in `printer.env` by hand
+  instead.
+
+To run it without Docker, see [Install](#install) and [Run](#run).
+
 ## Requirements
 
 - **Node.js 26 or newer.** The service runs its TypeScript directly with
