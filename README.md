@@ -281,13 +281,19 @@ with a health check.
 docker run -d --name printer --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
-  ghcr.io/emmpaul/elegoo-centauri-carbon:latest
+  ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
 ```
 
-Or with the compose file in this repository, which reads `printer.env`:
+`<version>` is a version from the
+[Releases](https://github.com/emmpaul/elegoo-centauri-carbon/releases) page
+(for example `1.0.0-rc.5`).
+
+Or with the compose file in this repository, which reads `printer.env`, and
+`IMAGE_TAG` from the shell or a `.env` file next to it:
 
 ```sh
 cp printer.env.example printer.env   # set PRINTER_IP, and ACCESS_TOKEN to the output of: openssl rand -hex 32
+echo IMAGE_TAG=<version> > .env
 docker compose up -d
 ```
 
@@ -326,7 +332,7 @@ docker run -d --name printer --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
   -v "$PWD/web/fonts:/app/web/fonts:ro" \
-  ghcr.io/emmpaul/elegoo-centauri-carbon:latest
+  ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
 ```
 
 ## Security
