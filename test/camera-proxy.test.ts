@@ -30,8 +30,8 @@ class Viewer {
     this.request = request;
   }
 
-  static async open(url: string): Promise<Viewer> {
-    const request = get(url);
+  static async open(url: string, headers: Record<string, string> = {}): Promise<Viewer> {
+    const request = get(url, { headers });
     const viewer = new Viewer(request);
     request.on("error", () => {});
     [viewer.response] = (await once(request, "response")) as [IncomingMessage];
@@ -121,6 +121,16 @@ describe("CameraProxy with a fake MJPEG source", () => {
     }
     first.close();
     second.close();
+  });
+
+  it("sends the same parts as application/octet-stream to a viewer that accepts it (WebKit fetch)", async () => {
+    await start();
+    const viewer = await Viewer.open(`${base}/camera`, { Accept: "application/octet-stream" });
+    assert.equal(viewer.response.statusCode, 200);
+    assert.equal(viewer.response.headers["content-type"], `application/octet-stream; boundary=${FAKE_BOUNDARY}`);
+    await viewer.waitForParts(2);
+    assert.ok(viewer.text.startsWith(`--${FAKE_BOUNDARY}\r\n`), "starts with a whole part");
+    viewer.close();
   });
 
   it("keeps the upstream while a viewer remains and closes it when the last one leaves", async () => {
