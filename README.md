@@ -61,6 +61,43 @@ find it on its own.
 
 To run it without Docker, see [Install](#install) and [Run](#run).
 
+### Reach the dashboard
+
+Run the block above first: it writes `.env`, and the lines below add to it.
+Run these in `~/printer`.
+
+1. **This machine only** (the default): <http://127.0.0.1:8080/>.
+2. **Other devices on your home network:** publish the port on the host's
+   LAN address (or `0.0.0.0` for every interface):
+
+   ```sh
+   echo PUBLISH_ADDR=<host LAN IP> >> .env && docker compose up -d
+   ```
+
+   Open `http://<host LAN IP>:8080/`, and allow port 8080 in the host's
+   firewall if it has one. This is fine on a trusted home network because
+   the token is required. Don't forward the port on your router.
+3. **From anywhere, privately, with [Tailscale](https://tailscale.com):**
+   install Tailscale on the host and on your phone, then either publish on
+   the host's tailnet address and open `http://<tailnet IP or MagicDNS name>:8080/`:
+
+   ```sh
+   echo PUBLISH_ADDR=$(tailscale ip -4) >> .env && docker compose up -d
+   ```
+
+   or keep the default and let Tailscale serve it over HTTPS at
+   `https://<machine>.<tailnet>.ts.net/` (needs HTTPS turned on for your
+   tailnet). With HTTPS, Android also offers to install the dashboard as an
+   app. See [Tailscale Serve](https://tailscale.com/kb/1312/serve).
+
+   ```sh
+   tailscale serve --bg 8080
+   ```
+
+4. **Public HTTPS on your own domain:** put a reverse proxy in front of it
+   over a VPN, as in [docs/deployment.md](docs/deployment.md) (Dokploy and
+   Tailscale). Never expose port 8080 itself to the internet.
+
 ## Requirements
 
 - **Node.js 26 or newer.** The service runs its TypeScript directly with
