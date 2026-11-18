@@ -17,7 +17,7 @@
 
 ## 4. Integration check
 
-- [ ] 4.1 Run `pnpm typecheck` and `pnpm test` and verify both pass; verify `git diff --stat main...HEAD` touches only `README.md`, `docs/assets/`, and `openspec/changes/add-readme-banner/`, and that the `.dockerignore` allow-list does not include `docs/` (so the image build context is unchanged).
+- [x] 4.1 Run `pnpm typecheck` and `pnpm test` and verify both pass; verify `git diff --stat main...HEAD` touches only `README.md`, `docs/assets/`, and `openspec/changes/add-readme-banner/`, and that the `.dockerignore` allow-list does not include `docs/` (so the image build context is unchanged).
 
 ## Workflow follow-up
 
