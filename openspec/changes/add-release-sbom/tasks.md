@@ -12,7 +12,7 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Update `.claude/skills/release/SKILL.md`: the "How the pieces fit" paragraph says the `sbom` job runs after `release` and `image` and attaches one SPDX SBOM per platform plus a notes section; step 5 counts the release done only when `gh release view vX.Y.Z --json assets,body` shows both `.spdx.json` assets and the section, and reports a failed `sbom` job as a release without SBOM to re-run with `gh run rerun <run-id> --failed`. Verify by reading the text against the jobs from 2.1 and 2.2.
+- [x] 3.1 Update `.claude/skills/release/SKILL.md`: the "How the pieces fit" paragraph says the `sbom` job runs after `release` and `image` and attaches one SPDX SBOM per platform plus a notes section; step 5 counts the release done only when `gh release view vX.Y.Z --json assets,body` shows both `.spdx.json` assets and the section, and reports a failed `sbom` job as a release without SBOM to re-run with `gh run rerun <run-id> --failed`. Verify by reading the text against the jobs from 2.1 and 2.2.
 - [ ] 3.2 Add to the image section of `docs/deployment.md` where each release's SBOMs are (release assets `elegoo-centauri-carbon-X.Y.Z-linux-<arch>.spdx.json`, digest in the notes) and one example of using them (`grype sbom:<file>`); verify the file names match the job in 2.1 and Markdown links resolve.
 
 ## 4. Integration check
