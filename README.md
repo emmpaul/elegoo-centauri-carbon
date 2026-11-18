@@ -27,23 +27,25 @@ Everything runs locally; nothing goes through Elegoo's cloud.
 ## Quick start
 
 On Linux (or WSL2) with Docker and its compose plugin, paste this block into
-a terminal. Change `192.0.2.10` to your printer's address first:
+a terminal. Change `192.0.2.10` on its first line to your printer's address
+first. The block downloads `compose.yaml` and `printer.env.example` into
+`~/printer`, writes the printer address and a new access token into
+`printer.env`, starts the newest published version, and prints the token:
 
 ```sh
+printer_ip=192.0.2.10
 mkdir -p ~/printer && cd ~/printer
 curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/printer.env.example
 cp printer.env.example printer.env && chmod 600 printer.env
-# set PRINTER_IP to your printer's address, and ACCESS_TOKEN to a new token:
-sed -i "s/^PRINTER_IP=.*/PRINTER_IP=192.0.2.10/; s/^ACCESS_TOKEN=.*/ACCESS_TOKEN=$(openssl rand -hex 32)/" printer.env
-# run the newest published version:
+sed -i "s/^PRINTER_IP=.*/PRINTER_IP=$printer_ip/; s/^ACCESS_TOKEN=.*/ACCESS_TOKEN=$(openssl rand -hex 32)/" printer.env
 tag=$(curl -fsSL 'https://api.github.com/repos/emmpaul/elegoo-centauri-carbon/releases?per_page=1' | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 if [ -n "$tag" ]; then
   echo "IMAGE_TAG=$tag" > .env && docker compose up -d
 else
   echo "Could not look up the newest release: put IMAGE_TAG=<version> in .env, then run docker compose up -d" >&2
 fi
-grep ACCESS_TOKEN printer.env   # the token the dashboard asks for
+grep ACCESS_TOKEN printer.env
 ```
 
 Then open <http://127.0.0.1:8080/> and enter the token. Give the printer a
