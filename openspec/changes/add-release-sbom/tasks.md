@@ -2,7 +2,7 @@
 
 ## 1. Image digest and local SBOM check
 
-- [ ] 1.1 Give the `docker/build-push-action` step in the `image` job of `.github/workflows/release.yml` an `id: build` and add a job output `digest: ${{ steps.build.outputs.digest }}` (design D1); verify by review that nothing else in the `image` job changed, and that `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint` reports nothing.
+- [x] 1.1 Give the `docker/build-push-action` step in the `image` job of `.github/workflows/release.yml` an `id: build` and add a job output `digest: ${{ steps.build.outputs.digest }}` (design D1); verify by review that nothing else in the `image` job changed, and that `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint` reports nothing.
 - [ ] 1.2 Check the Syft command from design D1 against a local image: `docker build -t ecc:dev .`, then `docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/scratch:/out" anchore/syft scan docker:ecc:dev -o spdx-json=/out/ecc-dev.spdx.json`; verify the file parses as JSON with `spdxVersion` `SPDX-2.3`, and lists Debian packages (`dpkg`), a `node` binary package, and npm packages when any are installed (`jq '[.packages[].name]'`). Record which of these appear in the PR description; delete `scratch/ecc-dev.spdx.json` afterwards.
 
 ## 2. SBOM job

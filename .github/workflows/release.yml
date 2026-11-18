@@ -69,6 +69,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -98,6 +100,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: .
           platforms: linux/amd64,linux/arm64
