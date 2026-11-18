@@ -20,7 +20,10 @@ How the pieces fit:
   the GitHub release with generated notes. Tags with a `-` suffix (`v1.2.0-rc.1`)
   become prereleases. In parallel, its `image` job pushes the container image
   `ghcr.io/emmpaul/elegoo-centauri-carbon` as `X.Y.Z`, and as `latest` only for a
-  tag with no `-` suffix.
+  tag with no `-` suffix. Once both `release` and `image` have finished, its `sbom` job
+  scans the pushed image by digest and attaches one SPDX SBOM per platform
+  (`elegoo-centauri-carbon-X.Y.Z-linux-amd64.spdx.json` and `-linux-arm64.spdx.json`)
+  to the release, then appends a "Software bill of materials" section to the notes.
 
 ## Usage
 
@@ -112,9 +115,24 @@ gh run watch <run-id> --exit-status
 gh release view vX.Y.Z --json url,isPrerelease,tagName
 ```
 
-The release is done when `gh release view vX.Y.Z` returns its URL. A failed run leaves a
-tag with no release: report the failing job from `gh run view <run-id> --log-failed`
-and stop.
+```bash
+gh release view vX.Y.Z --json assets,body \
+  -q '[.assets[].name | select(endswith(".spdx.json"))], (.body | contains("## Software bill of materials"))'
+```
+
+The release is done when `gh release view vX.Y.Z` returns its URL **and**
+`gh release view vX.Y.Z --json assets,body` shows both
+`elegoo-centauri-carbon-X.Y.Z-linux-<arch>.spdx.json` assets (`amd64`, `arm64`) and the
+notes end with the "Software bill of materials" section.
+
+When the run fails, read the failing job from `gh run view <run-id> --log-failed`:
+
+- `verify`, `release`, or `image` failed: the tag may have no release or no image.
+  Report the failing job and stop.
+- Only `sbom` failed: the release and the image are published, but the release has no
+  SBOM. Report it as a release without SBOM, and that `gh run rerun <run-id> --failed`
+  re-runs the job (it replaces the assets and keeps one notes section). Do not re-run it
+  unasked.
 
 ## 6. Report
 
