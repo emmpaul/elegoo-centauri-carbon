@@ -190,6 +190,12 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 <img src="/camera?token=change-me" alt="Printer camera">
 ```
 
+A request with `Accept: application/octet-stream` gets the same bytes with
+`Content-Type: application/octet-stream; boundary=<boundary>` instead of
+`multipart/x-mixed-replace`. The dashboard reads the stream that way with
+`fetch()`, because WebKit (Safari, every iOS browser) splits a multipart response
+itself and `fetch()` never sees the part delimiters.
+
 The service keeps a single connection to the printer's camera, opened with the
 first viewer and closed when the last one leaves. When the camera can't be
 reached, or doesn't answer within 10 seconds, the answer is `502` with

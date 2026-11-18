@@ -29,6 +29,13 @@ interface Viewer {
   res: ServerResponse;
   /** True once the viewer gets bytes; it starts at a part boundary. */
   started: boolean;
+  /**
+   * Asked for `application/octet-stream`: the same bytes under that type.
+   * WebKit's network layer splits a `multipart/x-mixed-replace` response
+   * itself, so `fetch()` there never sees the stream as sent (the dashboard
+   * on iOS and Safari showed no frame); an `<img>` keeps the multipart type.
+   */
+  raw: boolean;
 }
 
 /** Shares one upstream MJPEG stream between any number of viewers. */
@@ -74,8 +81,9 @@ export class CameraProxy {
   }
 
   /** Attaches a viewer; answers 502 when the camera cannot be reached. */
-  handle(_req: IncomingMessage, res: ServerResponse): void {
-    const viewer: Viewer = { res, started: false };
+  handle(req: IncomingMessage, res: ServerResponse): void {
+    const raw = /\bapplication\/octet-stream\b/i.test(req.headers.accept ?? "");
+    const viewer: Viewer = { res, started: false, raw };
     this.viewers.add(viewer);
     res.on("close", () => this.detach(viewer));
     if (this.upstream !== undefined) this.sendHead(viewer, this.upstream.headers);
@@ -137,8 +145,9 @@ export class CameraProxy {
 
   private sendHead(viewer: Viewer, headers: IncomingHttpHeaders): void {
     if (viewer.res.headersSent) return;
+    const type = headers["content-type"] ?? "multipart/x-mixed-replace";
     viewer.res.writeHead(200, {
-      "Content-Type": headers["content-type"] ?? "multipart/x-mixed-replace",
+      "Content-Type": viewer.raw ? type.replace(/^[^;]*/, "application/octet-stream") : type,
       "Cache-Control": "no-cache, no-store",
       Connection: "close",
     });
