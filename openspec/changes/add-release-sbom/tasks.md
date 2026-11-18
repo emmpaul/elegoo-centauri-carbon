@@ -21,5 +21,6 @@
 
 ## Workflow follow-up
 
-- After merge, cut a prerelease with `/release` (for example `v1.0.0-rc.4`) and confirm the release has both `.spdx.json` assets, the notes end with one "Software bill of materials" section whose digest matches the GHCR `1.0.0-rc.4` image, and re-running the `sbom` job leaves one section.
+- After merge, cut a prerelease with `/release` (the next unused tag, for example `v1.0.0-rc.5`) and confirm the release has both `.spdx.json` assets, the notes end with one "Software bill of materials" section whose digest matches the GHCR `1.0.0-rc.5` image, and re-running the `sbom` job leaves one section.
+- In the same release, confirm each SBOM's subject is its own platform's image: for each `<arch>`, the described package's digest, `jq -r '.documentDescribes[0] as $id | .packages[] | select(.SPDXID == $id) | .versionInfo' elegoo-centauri-carbon-1.0.0-rc.5-linux-<arch>.spdx.json`, equals the `linux/<arch>` manifest digest from `docker buildx imagetools inspect ghcr.io/emmpaul/elegoo-centauri-carbon:1.0.0-rc.5`.
 - Archive the change after review.
