@@ -275,6 +275,8 @@ describe("delimiterOf", () => {
   it("reads plain and quoted boundaries", () => {
     assert.deepEqual(delimiterOf("multipart/x-mixed-replace; boundary=foo"), Buffer.from("--foo"));
     assert.deepEqual(delimiterOf('multipart/x-mixed-replace;boundary="a b"'), Buffer.from("--a b"));
+    // The printer's camera sends `boundary=--foo` and separates parts with `--foo`.
+    assert.deepEqual(delimiterOf("multipart/x-mixed-replace; boundary=--foo"), Buffer.from("--foo"));
     assert.equal(delimiterOf("image/jpeg"), null);
     assert.equal(delimiterOf(undefined), null);
   });

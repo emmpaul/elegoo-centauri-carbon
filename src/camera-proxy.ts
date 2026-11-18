@@ -210,5 +210,7 @@ export class CameraProxy {
 export function delimiterOf(contentType: string | undefined): Buffer | null {
   const match = contentType?.match(/;\s*boundary=(?:"([^"]+)"|([^\s;]+))/i);
   const boundary = match?.[1] ?? match?.[2];
-  return boundary === undefined ? null : Buffer.from(`--${boundary}`);
+  if (boundary === undefined) return null;
+  // The printer's camera already includes the leading dashes (`boundary=--foo`).
+  return Buffer.from(boundary.startsWith("--") ? boundary : `--${boundary}`);
 }
