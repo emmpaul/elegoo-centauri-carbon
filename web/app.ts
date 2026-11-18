@@ -316,7 +316,13 @@ async function readCamera(signal: AbortSignal): Promise<void> {
   };
   armStall();
   try {
-    const response = await apiFetch("/camera", { signal: stalled.signal, cache: "no-store" });
+    // Not multipart: WebKit (iOS, Safari) splits a multipart/x-mixed-replace
+    // response itself, and fetch() then never sees the parts' delimiters.
+    const response = await apiFetch("/camera", {
+      signal: stalled.signal,
+      cache: "no-store",
+      headers: { Accept: "application/octet-stream" },
+    });
     if (!response.ok || response.body === null) throw new Error(`camera answered HTTP ${response.status}`);
     const parser = new MjpegParser(delimiterOf(response.headers.get("content-type")));
     const reader = response.body.getReader();
