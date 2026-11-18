@@ -127,6 +127,20 @@ token that has `read:packages`:
 docker login ghcr.io -u <github user>
 ```
 
+Each release also carries a software bill of materials (SBOM) per platform,
+as release assets on its [GitHub release](https://github.com/emmpaul/elegoo-centauri-carbon/releases):
+`elegoo-centauri-carbon-X.Y.Z-linux-amd64.spdx.json` and
+`elegoo-centauri-carbon-X.Y.Z-linux-arm64.spdx.json` (SPDX 2.3 JSON, made by
+Syft from the pushed image). They list the image's Debian packages, the Node
+runtime, and its npm packages. The release notes end with a "Software bill
+of materials" section naming the image by the digest the SBOMs describe.
+To check one for known vulnerabilities, for example with
+[Grype](https://github.com/anchore/grype):
+
+```sh
+grype sbom:elegoo-centauri-carbon-1.2.0-linux-arm64.spdx.json
+```
+
 ### Start
 
 ```sh
