@@ -110,3 +110,39 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+  sbom:
+    name: publish sbom
+    needs: [release, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: anchore/sbom-action/download-syft@v0
+        id: syft
+
+      # One SPDX JSON SBOM per platform, scanned from the digest this run pushed.
+      - name: Generate and upload SBOMs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          IMAGE: ghcr.io/emmpaul/elegoo-centauri-carbon@${{ needs.image.outputs.digest }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          files=()
+          for arch in amd64 arm64; do
+            file="elegoo-centauri-carbon-$version-linux-$arch.spdx.json"
+            "$SYFT" scan "registry:$IMAGE" --platform "linux/$arch" -o "spdx-json=$file"
+            files+=("$file")
+          done
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
