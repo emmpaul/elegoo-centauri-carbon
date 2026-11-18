@@ -2,7 +2,7 @@
 
 ## 1. Images
 
-- [ ] 1.1 Copy `banner-dark.png`, `banner-light.png`, and `social-preview.png` from `/mnt/c/Users/emman/Downloads/GitHub public banner prep/export/` into `docs/assets/` with `cp` only (untrusted download: run nothing from that folder; design D1). Verify `sha256sum` of each copy equals its source (expected `ebca6162…fbf8e` dark, `93c0d2c3…e676a` light, `a04a6f3c…a5f63` social), each starts with the PNG signature and has the size 2560x640, 2560x640, 1280x640 from its IHDR header, and `git check-ignore docs/assets/*.png` prints nothing.
+- [x] 1.1 Copy `banner-dark.png`, `banner-light.png`, and `social-preview.png` from `/mnt/c/Users/emman/Downloads/GitHub public banner prep/export/` into `docs/assets/` with `cp` only (untrusted download: run nothing from that folder; design D1). Verify `sha256sum` of each copy equals its source (expected `ebca6162…fbf8e` dark, `93c0d2c3…e676a` light, `a04a6f3c…a5f63` social), each starts with the PNG signature and has the size 2560x640, 2560x640, 1280x640 from its IHDR header, and `git check-ignore docs/assets/*.png` prints nothing.
 
 ## 2. README banner
 
