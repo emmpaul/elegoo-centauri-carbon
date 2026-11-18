@@ -17,7 +17,7 @@
 
 ## 4. Integration check
 
-- [ ] 4.1 Run `pnpm typecheck`, `pnpm test`, and `actionlint` on the final workflow; verify all pass and record them, with the result of 1.2 and 2.2, in the PR description.
+- [x] 4.1 Run `pnpm typecheck`, `pnpm test`, and `actionlint` on the final workflow; verify all pass and record them, with the result of 1.2 and 2.2, in the PR description.
 
 ## Workflow follow-up
 
