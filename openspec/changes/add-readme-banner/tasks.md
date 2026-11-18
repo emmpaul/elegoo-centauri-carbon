@@ -6,7 +6,7 @@
 
 ## 2. README banner
 
-- [ ] 2.1 Add the `<picture>` banner from design D2 as the first lines of `README.md` (dark `<source media="(prefers-color-scheme: dark)">`, light `<img>` fallback with descriptive alt text and `width="100%"`), keeping `# Elegoo Centauri Carbon local control` and the badge row below it unchanged. Verify `grep -c 'docs/assets/banner-' README.md` is 2, both referenced files exist, `git diff README.md` shows no change to the heading or badge lines, and the rendered README (`gh api markdown -f mode=gfm -f context=emmpaul/elegoo-centauri-carbon -F text=@README.md` or a GitHub preview) contains the `<picture>` with both sources.
+- [x] 2.1 Add the `<picture>` banner from design D2 as the first lines of `README.md` (dark `<source media="(prefers-color-scheme: dark)">`, light `<img>` fallback with descriptive alt text and `width="100%"`), keeping `# Elegoo Centauri Carbon local control` and the badge row below it unchanged. Verify `grep -c 'docs/assets/banner-' README.md` is 2, both referenced files exist, `git diff README.md` shows no change to the heading or badge lines, and the rendered README (`gh api markdown -f mode=gfm -f context=emmpaul/elegoo-centauri-carbon -F text=@README.md` or a GitHub preview) contains the `<picture>` with both sources.
 
 ## 3. Quick start
 

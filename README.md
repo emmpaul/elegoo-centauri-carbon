@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+  <img alt="Centauri Carbon local control: dashboard, print control and notifications on your own network" src="docs/assets/banner-light.png" width="100%">
+</picture>
+
 # Elegoo Centauri Carbon local control
 
 [![CI](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml)
