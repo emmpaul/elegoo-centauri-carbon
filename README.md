@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+  <img alt="Centauri Carbon local control: dashboard, print control and notifications on your own network" src="docs/assets/banner-light.png" width="100%">
+</picture>
+
 # Elegoo Centauri Carbon local control
 
 [![CI](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emmpaul/elegoo-centauri-carbon/actions/workflows/ci.yml)
@@ -18,6 +23,82 @@ protocol and gives you, on your own network:
   comes back.
 
 Everything runs locally; nothing goes through Elegoo's cloud.
+
+## Quick start
+
+On Linux (or WSL2) with Docker and its compose plugin, paste this block into
+a terminal. Change `192.0.2.10` on its first line to your printer's address
+first. The block downloads `compose.yaml` and `printer.env.example` into
+`~/printer`, writes the printer address and a new access token into
+`printer.env`, starts the newest published version, and prints the token:
+
+```sh
+printer_ip=192.0.2.10
+mkdir -p ~/printer && cd ~/printer
+curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/emmpaul/elegoo-centauri-carbon/main/printer.env.example
+cp printer.env.example printer.env && chmod 600 printer.env
+sed -i "s/^PRINTER_IP=.*/PRINTER_IP=$printer_ip/; s/^ACCESS_TOKEN=.*/ACCESS_TOKEN=$(openssl rand -hex 32)/" printer.env
+tag=$(curl -fsSL 'https://api.github.com/repos/emmpaul/elegoo-centauri-carbon/releases?per_page=1' | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+if [ -n "$tag" ]; then
+  echo "IMAGE_TAG=$tag" > .env && docker compose up -d
+else
+  echo "Could not look up the newest release: put IMAGE_TAG=<version> in .env, then run docker compose up -d" >&2
+fi
+grep ACCESS_TOKEN printer.env
+```
+
+Then open <http://127.0.0.1:8080/> and enter the token. Give the printer a
+fixed address (a DHCP reservation on your router), since the container can't
+find it on its own.
+
+- **Version:** the block picks the newest release. You can also read a
+  version from the [Releases](https://github.com/emmpaul/elegoo-centauri-carbon/releases)
+  page and set it by hand in `.env` (for example `IMAGE_TAG=1.0.0-rc.5`).
+- **Update:** change `IMAGE_TAG` in `.env`, then
+  `docker compose pull && docker compose up -d`.
+- **macOS:** `sed -i` above is GNU syntax. Edit `PRINTER_IP` and
+  `ACCESS_TOKEN` (from `openssl rand -hex 32`) in `printer.env` by hand
+  instead.
+
+To run it without Docker, see [Install](#install) and [Run](#run).
+
+### Reach the dashboard
+
+Run the block above first: it writes `.env`, and the lines below add to it.
+Run these in `~/printer`.
+
+1. **This machine only** (the default): <http://127.0.0.1:8080/>.
+2. **Other devices on your home network:** publish the port on the host's
+   LAN address (or `0.0.0.0` for every interface):
+
+   ```sh
+   echo PUBLISH_ADDR=<host LAN IP> >> .env && docker compose up -d
+   ```
+
+   Open `http://<host LAN IP>:8080/`, and allow port 8080 in the host's
+   firewall if it has one. This is fine on a trusted home network because
+   the token is required. Don't forward the port on your router.
+3. **From anywhere, privately, with [Tailscale](https://tailscale.com):**
+   install Tailscale on the host and on your phone, then either publish on
+   the host's tailnet address and open `http://<tailnet IP or MagicDNS name>:8080/`:
+
+   ```sh
+   echo PUBLISH_ADDR=$(tailscale ip -4) >> .env && docker compose up -d
+   ```
+
+   or keep the default and let Tailscale serve it over HTTPS at
+   `https://<machine>.<tailnet>.ts.net/` (needs HTTPS turned on for your
+   tailnet). With HTTPS, Android also offers to install the dashboard as an
+   app. See [Tailscale Serve](https://tailscale.com/kb/1312/serve).
+
+   ```sh
+   tailscale serve --bg 8080
+   ```
+
+4. **Public HTTPS on your own domain:** put a reverse proxy in front of it
+   over a VPN, as in [docs/deployment.md](docs/deployment.md) (Dokploy and
+   Tailscale). Never expose port 8080 itself to the internet.
 
 ## Requirements
 
@@ -202,13 +283,19 @@ with a health check.
 docker run -d --name printer --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
-  ghcr.io/emmpaul/elegoo-centauri-carbon:latest
+  ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
 ```
 
-Or with the compose file in this repository, which reads `printer.env`:
+`<version>` is a version from the
+[Releases](https://github.com/emmpaul/elegoo-centauri-carbon/releases) page
+(for example `1.0.0-rc.5`).
+
+Or with the compose file in this repository, which reads `printer.env`, and
+`IMAGE_TAG` from the shell or a `.env` file next to it:
 
 ```sh
 cp printer.env.example printer.env   # set PRINTER_IP, and ACCESS_TOKEN to the output of: openssl rand -hex 32
+echo IMAGE_TAG=<version> > .env
 docker compose up -d
 ```
 
@@ -247,7 +334,7 @@ docker run -d --name printer --restart unless-stopped \
   -p 127.0.0.1:8080:8080 \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
   -v "$PWD/web/fonts:/app/web/fonts:ro" \
-  ghcr.io/emmpaul/elegoo-centauri-carbon:latest
+  ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
 ```
 
 ## Security
