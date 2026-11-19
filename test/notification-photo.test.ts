@@ -366,6 +366,26 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual(second?.jpeg, JPEG);
   });
 
+  it("shortens the light wait of a queued take with 3500 ms left to 1500 ms, keeping 2000 ms for the frame", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    const first = taker.take();
+    await settle();
+    mock.timers.tick(1_500);
+    void taker.take(); // its limit ends at 6500 ms
+    await settle();
+    mock.timers.tick(1_500); // t = 3000: the first ends, the second has 3500 ms left
+    camera.answer(0, JPEG);
+    await first;
+    await settle();
+    assert.equal(camera.calls.length, 2);
+    assert.deepEqual(control.sent, [true, false, true], "the second turns the light on");
+    mock.timers.tick(1_499);
+    assert.equal(await armed(1), false, "not armed at 1499 ms");
+    mock.timers.tick(1);
+    assert.equal(await armed(1), true, "armed at 1500 ms, leaving 2000 ms for the frame");
+  });
+
   it("sends no command when the Photo light is off", async () => {
     const pending = new PhotoTaker({ camera, light: null, logger }).take();
     await settle();
