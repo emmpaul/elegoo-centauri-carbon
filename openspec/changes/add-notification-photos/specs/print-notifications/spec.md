@@ -33,7 +33,8 @@ per-event setting SHALL still decide whether an event is sent at all.
 The system SHALL take the Photo at the moment the event is detected, through the same
 single camera connection the dashboard uses: the next whole frame of that connection
 when it is open, otherwise a connection opened for the Photo and closed once no viewer
-remains. The system SHALL NOT open a second camera connection to the printer. The JPEG
+remains. The running service SHALL NOT open a second camera connection to the printer
+for a Photo; only the manual test command opens its own short connection. The JPEG
 SHALL be sent exactly as the camera sent it.
 
 #### Scenario: Viewer watching
@@ -106,7 +107,9 @@ retry the rejected upload.
 A second setting, off by default and without effect unless photos are on, SHALL let the
 system turn the chamber light on for the Photo when it is off. The light command SHALL
 pass the same state checks as the user's light command; when they refuse, the Photo
-SHALL be taken as it is. The system SHALL send no other command for a Photo.
+SHALL be taken as it is. Besides the light commands and the command that enables the
+camera stream before a camera connection opens (as for a dashboard viewer), the system
+SHALL send no other command for a Photo.
 
 #### Scenario: Light off, Photo light on
 - **GIVEN** photos and the Photo light are on, the printer is online, and the chamber light is off

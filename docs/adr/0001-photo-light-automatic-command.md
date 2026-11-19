@@ -7,12 +7,14 @@ status: proposed
 Until now only a user action sent a command that changes the printer. A Photo taken with
 the chamber light off is dark, so the owner can turn on `ntfy.photoLight`, which is off by
 default and has no effect unless `ntfy.photos` is on. With it on, the service turns the
-light on before the Photo, waits for a status push that shows it on, takes the Photo, and
-turns it off again, unless someone changed the light in the meantime. This command takes
-the same print-control path and `control-rules` guard as the dashboard's light button and
-does not bypass them: when the guard refuses, the Photo is taken as it is. The only
-automatic command is the light, which changes nothing about the print. Nothing automatic
-ever pauses, resumes, stops, or starts a print.
+light on before the Photo, waits up to 3 s for a status push that shows it on, takes the
+Photo, and turns it off again, unless someone changed the light in the meantime. This
+command takes the same print-control path and `control-rules` guard as the dashboard's
+light button and does not bypass them: when the guard refuses, the Photo is taken as it
+is. The light is the only automatic command that changes what the printer does, and it
+changes nothing about the print. (Taking a Photo with nobody watching also sends Cmd 386
+to enable the camera stream, exactly as opening the dashboard camera does; that only
+starts the video feed.) Nothing automatic ever pauses, resumes, stops, or starts a print.
 
 ## Considered Options
 
