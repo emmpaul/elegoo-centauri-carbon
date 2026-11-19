@@ -117,6 +117,16 @@
           </div>
         </div>
       </section>
+
+      <details class="hist" data-field="history">
+        <summary class="hist__head"><span class="hist__title">History</span><span class="hist__chev" aria-hidden="true"></span></summary>
+        <ol class="hist__list" data-field="historyList" aria-label="Past prints"></ol>
+        <div class="hist__status" data-field="historyStatus" role="status" hidden>
+          <span class="hist__message" data-field="historyMessage"></span>
+          <button type="button" class="hist__retry" data-field="historyRetry" hidden>Retry</button>
+        </div>
+        <div class="hist__end" data-field="historySentinel" aria-hidden="true"></div>
+      </details>
     </main>
   </body>
 </html>

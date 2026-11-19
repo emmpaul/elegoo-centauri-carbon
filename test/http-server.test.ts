@@ -662,11 +662,11 @@ describe("HTTP API dashboard files", () => {
     assert.doesNotMatch(source, /import type|: StatusSnapshot\b/, "types are stripped");
     assert.doesNotThrow(() => new Function(source.replace(/^import .*$/gm, "")), "the stripped script parses");
 
-    for (const path of ["/mjpeg.js", "/view.js", "/stop-slide.js", "/commands.js", "/src/control-rules.ts"]) {
+    for (const path of ["/mjpeg.js", "/view.js", "/stop-slide.js", "/commands.js", "/history.js", "/src/control-rules.ts"]) {
       const module = await fetch(`${base}${path}`);
       assert.equal(module.status, 200, path);
       assert.match(module.headers.get("content-type") ?? "", /^text\/javascript/, path);
-      assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b|: StatusPageState\b/, `${path}: types are stripped`);
+      assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b|: StatusPageState\b|: HistoryJob\b/, `${path}: types are stripped`);
     }
     // The browser resolves view.js's import of the rules against the page; here it points at the served copy.
     const rulesUrl = `data:text/javascript,${encodeURIComponent(await (await fetch(`${base}/src/control-rules.ts`)).text())}`;

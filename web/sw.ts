@@ -10,7 +10,7 @@
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 /** Bump to drop the old cached shell on the next activation. */
-const CACHE = "dashboard-v2";
+const CACHE = "dashboard-v3";
 const SHELL = [
   "/",
   "/app.js",
@@ -19,6 +19,7 @@ const SHELL = [
   "/view.js",
   "/stop-slide.js",
   "/commands.js",
+  "/history.js",
   "/src/control-rules.ts",
   "/style.css",
   "/manifest.webmanifest",

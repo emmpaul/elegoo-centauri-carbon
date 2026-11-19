@@ -1187,6 +1187,209 @@ body {
   font-weight: 700;
 }
 
+/* ---- History section (design D8): below the status sheet, so it starts below
+   the fold in every status state. On a phone it continues the sheet's surface;
+   on a laptop it is a card across the page width under the camera and panel. ---- */
+.hist {
+  flex: none;
+  background: var(--sheet);
+  border-top: 1px solid var(--line);
+  color: var(--text);
+}
+
+@media (min-width: 960px) {
+  .hist {
+    margin: 0 24px 24px;
+    border-top: none;
+    border-radius: 20px;
+    /* Inset only: an outer shadow would rise into the first screen. */
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+}
+
+.hist__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 var(--pad);
+  list-style: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.hist__head::-webkit-details-marker {
+  display: none;
+}
+
+.hist__head:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+.hist__title {
+  flex: 1;
+}
+
+/* Chevron: points down while collapsed, up while open. */
+.hist__chev {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 4px 0;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  transform: rotate(45deg);
+}
+
+.hist[open] .hist__chev {
+  margin: 4px 4px 0 0;
+  transform: rotate(-135deg);
+}
+
+.hist__list {
+  margin: 0;
+  padding: 0 var(--pad);
+  list-style: none;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The thumbnail, or the neutral placeholder of the same size without one. */
+.hist__thumb {
+  flex: none;
+  display: block;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--raise);
+}
+
+.hist__thumb[data-empty] {
+  background: var(--neutral-tint);
+  border: 1px dashed var(--dash);
+}
+
+.hist__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hist__name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist__meta {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist__outcome {
+  --o: var(--text-3);
+  --o-text: var(--text-2);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 40%;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--o-text);
+  text-align: right;
+}
+
+.hist__outcome::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--o);
+}
+
+.hist__outcome[data-tone="ok"] {
+  --o: var(--ok);
+  --o-text: var(--ok-text);
+}
+
+.hist__outcome[data-tone="warn"] {
+  --o: var(--warn);
+  --o-text: var(--warn-text);
+}
+
+.hist__outcome[data-tone="info"] {
+  --o: var(--info);
+  --o-text: var(--info-text);
+}
+
+.hist__outcome[data-tone="bad"] {
+  --o: var(--bad);
+  --o-text: var(--bad-text);
+}
+
+.hist__outcome[data-tone="bad"]::before {
+  border-radius: 2px;
+}
+
+/* Loading, "No prints yet", or "History unavailable" with Retry. */
+.hist__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px var(--pad);
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.hist__message {
+  flex: 1;
+  min-width: 0;
+}
+
+.hist__retry {
+  flex: none;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--btn);
+  box-shadow: var(--btn-shadow);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The end of the list: scrolling it into view loads the next page. */
+.hist__end {
+  height: 1px;
+}
+
 /* ---- Token screen: app mark, title, field with Show/Hide, Connect ---- */
 .tok {
   box-sizing: border-box;
