@@ -225,7 +225,9 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     assert.deepEqual((await pending).jpeg, JPEG);
     assert.deepEqual(control.sent, [true, false]);
-    assert.equal(store.listenerCount("change"), 0, "the change listener is removed after the take");
+    assert.equal(store.listenerCount("change"), 1, "the take's listener is removed; only the off watcher remains");
+    store.show("off"); // the push showing our off
+    assert.equal(store.listenerCount("change"), 0);
   });
 
   it("arms the frame at 3000 ms without a change, and the result arrives before 5000 ms", async () => {
@@ -244,7 +246,9 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     await pending;
     assert.deepEqual(result?.jpeg, JPEG);
-    assert.equal(store.listenerCount("change"), 0, "the change listener is removed after the take");
+    assert.equal(store.listenerCount("change"), 1, "the take's listener is removed; only the off watcher remains");
+    store.show("off"); // the push showing our off
+    assert.equal(store.listenerCount("change"), 0);
   });
 
   for (const light of ["on", "unknown"] as const) {
@@ -305,6 +309,8 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual((await pending).jpeg, JPEG);
     await settle();
     assert.deepEqual(control.sent, [true, false]);
+    assert.equal(store.listenerCount("change"), 1, "only the off watcher remains");
+    store.show("off");
     assert.equal(store.listenerCount("change"), 0);
   });
 
@@ -335,6 +341,8 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual((await pending).jpeg, JPEG);
     await settle();
     assert.deepEqual(control.sent, [true, false]);
+    assert.equal(store.listenerCount("change"), 1, "only the off watcher remains");
+    store.show("off");
     assert.equal(store.listenerCount("change"), 0);
   });
 
@@ -377,6 +385,8 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual((await second).jpeg, JPEG);
     await settle();
     assert.deepEqual(control.sent, [true, false, true, false], "the second turns the light off again");
+    assert.equal(store.listenerCount("change"), 1, "only the off watcher remains");
+    store.show("off");
     assert.equal(store.listenerCount("change"), 0);
   });
 
@@ -399,6 +409,64 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual((await second).jpeg, JPEG);
     await settle();
     assert.deepEqual(control.sent, [true, false]);
+  });
+
+  it("sends no light command when the light was turned on elsewhere after the push showing our off", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    const first = taker.take();
+    await settle();
+    store.show("on");
+    camera.answer(0, JPEG);
+    await first;
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    store.show("off"); // the push showing our off
+    store.show("on"); // turned on at the touchscreen: no command through the service
+
+    const second = taker.take();
+    await settle();
+    assert.equal(camera.calls[1]!.after, undefined, "no wait: the light is on as reported");
+    camera.answer(1, JPEG);
+    assert.deepEqual((await second).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true, false], "the user's light is left alone");
+  });
+
+  it("stops watching for the push showing our off once it lands", async () => {
+    const store = new StubStore("off");
+    const baseline = store.listenerCount("change");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    camera.answer(0, JPEG);
+    await pending;
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    assert.equal(store.listenerCount("change"), baseline + 1, "one watcher waits for the off push");
+    store.show("on"); // a push still showing on: keeps watching
+    assert.equal(store.listenerCount("change"), baseline + 1);
+    store.show("off");
+    assert.equal(store.listenerCount("change"), baseline);
+  });
+
+  it("keeps at most one off watcher across takes, and close removes it", async () => {
+    const store = new StubStore("off");
+    const baseline = store.listenerCount("change");
+    const taker = takerWith(store);
+    for (const index of [0, 1]) {
+      const pending = taker.take();
+      await settle();
+      if (index === 0) store.show("on");
+      else mock.timers.tick(3_000);
+      camera.answer(index, JPEG);
+      await pending;
+      await settle();
+    }
+    assert.deepEqual(control.sent, [true, false, true, false]);
+    assert.equal(store.listenerCount("change"), baseline + 1, "one watcher, not one per take");
+    await taker.close();
+    assert.equal(store.listenerCount("change"), baseline, "close removes the watcher");
   });
 
   it("arms a queued take with 1000 ms left at once, without the 3000 ms light wait", async () => {

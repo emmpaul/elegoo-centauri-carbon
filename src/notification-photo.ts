@@ -62,9 +62,13 @@ export class PhotoTaker {
   private closed = false;
   /**
    * `lightCommands` right after our last restore sent its off command, or
-   * null: while it still matches, an "on" report predates that off.
+   * null: while it still matches, an "on" report predates that off. Cleared
+   * by the first change showing the light "off" after that command, so an
+   * "on" reported later (the touchscreen, another client) is trusted.
    */
   private offSentAt: number | null = null;
+  /** The one listener waiting to clear `offSentAt`, if any. */
+  private offWatch: (() => void) | null = null;
 
   constructor(options: PhotoTakerOptions) {
     this.camera = options.camera;
@@ -106,6 +110,7 @@ export class PhotoTaker {
    */
   close(waitMs = 1_000): Promise<void> {
     this.closed = true;
+    this.stopOffWatch();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const bound = new Promise<void>((resolve) => (timer = setTimeout(resolve, waitMs)));
     const idle = this.queue.then(
@@ -153,6 +158,8 @@ export class PhotoTaker {
     // the next push: unless anyone sent a light command since, the light is off.
     const staleOn = last === "on" && control.lightCommands === this.offSentAt;
     if (last !== "off" && !staleOn) return undefined;
+    // The marker no longer applies once we send our own command.
+    this.stopOffWatch();
 
     const before = control.lightCommands;
     const sent = control.setLight(true);
@@ -200,13 +207,34 @@ export class PhotoTaker {
       if (control.lightCommands !== ours || offAfterOn) return;
       const off = control.setLight(false);
       // Sent when the guard let it through (the counter moved).
-      if (control.lightCommands !== ours) this.offSentAt = control.lightCommands;
+      if (control.lightCommands !== ours) this.watchOff(state, control.lightCommands);
       off.then(
         (result) => this.logResult("off", result),
         (error: unknown) => this.logger.warn(`photo: turning the light off again failed: ${messageOf(error)}`),
       );
     };
     return { ready, restore };
+  }
+
+  /**
+   * Marks the light as stale "on" until the first change showing it "off"
+   * (the push of our off command), then forgets the mark. One watch at a time.
+   */
+  private watchOff(state: LightState, sentAt: number): void {
+    this.stopOffWatch();
+    if (this.closed) return;
+    this.offSentAt = sentAt;
+    const onChange = (snapshot: StatusSnapshot) => {
+      if (snapshot.light === "off") this.stopOffWatch();
+    };
+    state.on("change", onChange);
+    this.offWatch = () => state.off("change", onChange);
+  }
+
+  private stopOffWatch(): void {
+    this.offSentAt = null;
+    this.offWatch?.();
+    this.offWatch = null;
   }
 
   private logResult(direction: "on" | "off", result: CommandResult): void {
