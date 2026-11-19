@@ -146,9 +146,10 @@ export class PhotoTaker {
     const restore = () => {
       clearTimeout(lightWait);
       state.off("change", onChange);
-      // Leave the light alone when anyone else sent a light command, it was
-      // switched off elsewhere after it came on, or it is not on now.
-      if (control.lightCommands !== ours || offAfterOn || state.snapshot.light !== "on") return;
+      // Leave the light alone when anyone else sent a light command or it was
+      // switched off elsewhere after it came on. No "on" report is required:
+      // the push showing our command often lands after the wait or the Photo.
+      if (control.lightCommands !== ours || offAfterOn) return;
       control.setLight(false).then(
         (result) => this.logResult("off", result),
         (error: unknown) => this.logger.warn(`photo: turning the light off again failed: ${messageOf(error)}`),

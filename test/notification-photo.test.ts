@@ -252,7 +252,7 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual(control.sent, [true]);
   });
 
-  it("sends no off command when the light is not on at the restore", async () => {
+  it("attempts the off command when the light is not reported on at the restore", async () => {
     const store = new StubStore("off");
     const pending = takerWith(store).take();
     await settle();
@@ -262,8 +262,51 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     assert.deepEqual((await pending).jpeg, JPEG);
     await settle();
-    assert.deepEqual(control.sent, [true]);
+    assert.deepEqual(control.sent, [true, false]);
     assert.equal(store.listenerCount("change"), 0);
+  });
+
+  it("turns the light off when the push showing it on arrives only after the Photo", async () => {
+    const store = new StubStore("off");
+    let result: PhotoResult | undefined;
+    const pending = takerWith(store)
+      .take()
+      .then((r) => (result = r));
+    await settle();
+    mock.timers.tick(3_000);
+    assert.equal(await armed(), true);
+    camera.answer(0, JPEG);
+    await pending;
+    assert.deepEqual(result?.jpeg, JPEG);
+    store.show("on"); // the late push
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+  });
+
+  it("turns the light off after a Photo armed at 3000 ms with no change at all", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    mock.timers.tick(3_000);
+    assert.equal(await armed(), true);
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    assert.equal(store.listenerCount("change"), 0);
+  });
+
+  it("sends no off command when someone else sent a light command and no change came", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    control.lightCommands++; // the dashboard's command
+    mock.timers.tick(3_000);
+    await settle();
+    camera.answer(0, JPEG);
+    await pending;
+    await settle();
+    assert.deepEqual(control.sent, [true]);
   });
 
   it("sends no command when the Photo light is off", async () => {
