@@ -81,9 +81,19 @@ docker run --rm -v printer_printer-data:/data:ro -v "$PWD":/backup alpine \
 docker compose start
 ```
 
-To restore one, stop the service, unpack it into the volume with the same
-`docker run` and `tar xzf /backup/printer-data-<date>.tar.gz -C /data` (and
-the volume mounted without `:ro`), then start it.
+To restore one, stop the service, delete the archive and its
+`history.sqlite-wal` and `history.sqlite-shm` files from the volume, so ones
+left by an unclean stop are not replayed onto the restored archive, unpack the
+backup into it, and start the service (run in `~/printer`, with the backup's
+date):
+
+```sh
+docker compose stop
+docker run --rm -v printer_printer-data:/data -v "$PWD":/backup alpine \
+  sh -c 'rm -f /data/history.sqlite /data/history.sqlite-wal /data/history.sqlite-shm &&
+         tar xzf /backup/printer-data-<date>.tar.gz -C /data'
+docker compose start
+```
 
 Generate the token with the command below and set `ACCESS_TOKEN` in
 `printer.env` to its output. Don't reuse a token from the repository or
