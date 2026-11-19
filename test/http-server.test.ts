@@ -8,7 +8,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { dashboardFiles } from "../src/dashboard-files.ts";
-import { createApiServer } from "../src/http-server.ts";
+import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
+import { HistorySync } from "../src/history-sync.ts";
+import { createApiServer, type HistorySource } from "../src/http-server.ts";
 import { type CommandSender, PrintControl } from "../src/print-control.ts";
 import { PrinterSession } from "../src/printer-session.ts";
 import { Cmd, CommandTimeoutError, type Logger, NotConnectedError, type StatusMessage } from "../src/sdcp-client.ts";
@@ -42,7 +44,7 @@ async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
-/** Reads `event: status` messages from an SSE response body. */
+/** Reads events from an SSE response body. */
 class SseReader {
   private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
   private readonly decoder = new TextDecoder();
@@ -54,6 +56,13 @@ class SseReader {
   }
 
   async next(): Promise<StatusSnapshot> {
+    const event = await this.nextEvent();
+    assert.equal(event.name, "status", `unexpected event: ${event.name}`);
+    return JSON.parse(event.data) as StatusSnapshot;
+  }
+
+  /** The next event of any name, skipping comments. */
+  async nextEvent(): Promise<{ name: string; data: string }> {
     for (;;) {
       const end = this.buffer.indexOf("\n\n");
       if (end !== -1) {
@@ -61,10 +70,10 @@ class SseReader {
         this.buffer = this.buffer.slice(end + 2);
         if (block.startsWith(":")) continue;
         const lines = block.split("\n");
-        assert.ok(lines.includes("event: status"), `unexpected event block: ${block}`);
+        const name = lines.find((line) => line.startsWith("event: "));
         const data = lines.find((line) => line.startsWith("data: "));
-        assert.ok(data);
-        return JSON.parse(data.slice("data: ".length)) as StatusSnapshot;
+        assert.ok(name && data, `unexpected event block: ${block}`);
+        return { name: name.slice("event: ".length), data: data.slice("data: ".length) };
       }
       const { value, done } = await this.reader.read();
       assert.ok(!done, "stream ended");
@@ -356,6 +365,224 @@ describe("HTTP API on malformed requests", () => {
   }
 });
 
+/** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
+function historyEntries(): Record<string, unknown>[] {
+  const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
+  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: Record<string, unknown>[] } } };
+  return payload.Data.Data.HistoryDetailList;
+}
+
+/** The archive as the server reads it, with `change` events from `changes`. */
+function historySource(history: HistoryStore, changes: EventEmitter = new EventEmitter()): HistorySource {
+  return {
+    list: (before, limit) => history.list(before, limit),
+    thumbnail: (taskId) => history.thumbnail(taskId),
+    on: (event, listener) => changes.on(event, listener),
+    off: (event, listener) => changes.off(event, listener),
+  };
+}
+
+interface HistoryBody {
+  jobs: { id: string; thumbnail: string | null }[];
+  next: string | null;
+}
+
+describe("HTTP API print history", () => {
+  const TOKEN = "s3cret-token";
+  const auth = { Authorization: `Bearer ${TOKEN}` };
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  let history: HistoryStore;
+  let server: Server;
+  let base: string;
+  let firstId: string;
+
+  beforeEach(async () => {
+    history = HistoryStore.open(":memory:");
+    const jobs = historyEntries().map(jobFromDetail).filter((job) => job !== null);
+    assert.equal(history.upsert(jobs), 26);
+    firstId = jobs[0]!.taskId;
+    history.putThumbnail(firstId, "image/png", PNG);
+    const store = new StatusStore();
+    server = createApiServer({ store, control: {} as never, token: TOKEN, history: historySource(history), logger: quiet });
+    base = await listen(server);
+  });
+
+  afterEach(async () => {
+    await closeServer(server);
+    history.close();
+  });
+
+  async function errorCode(response: Response): Promise<string> {
+    return ((await response.json()) as { error: { code: string } }).error.code;
+  }
+
+  it("pages the 26 jobs as 20 with a next cursor, then 6 with next null", async () => {
+    const first = await fetch(`${base}/api/history`, { headers: auth });
+    assert.equal(first.status, 200);
+    assert.match(first.headers.get("content-type") ?? "", /^application\/json/);
+    const page1 = (await first.json()) as HistoryBody;
+    assert.equal(page1.jobs.length, 20);
+    assert.ok(page1.next !== null);
+
+    const last = await fetch(`${base}/api/history?limit=20&before=${encodeURIComponent(page1.next)}`, { headers: auth });
+    assert.equal(last.status, 200);
+    const page2 = (await last.json()) as HistoryBody;
+    assert.equal(page2.jobs.length, 6);
+    assert.equal(page2.next, null);
+    const ids = new Set([...page1.jobs, ...page2.jobs].map((job) => job.id));
+    assert.equal(ids.size, 26);
+  });
+
+  it("answers 400 bad-request for a limit outside 1 to 100 and a malformed cursor", async () => {
+    for (const query of ["limit=0", "limit=101", "limit=abc", "limit=", "before=not-a-cursor", "before="]) {
+      const response = await fetch(`${base}/api/history?${query}`, { headers: auth });
+      assert.equal(response.status, 400, query);
+      assert.equal(await errorCode(response), "bad-request", query);
+    }
+    assert.equal((await fetch(`${base}/api/history?limit=100`, { headers: auth })).status, 200);
+  });
+
+  it("answers 401 without the token on both routes", async () => {
+    for (const path of ["/api/history", `/api/history/thumbnail?id=${firstId}`]) {
+      const response = await fetch(`${base}${path}`);
+      assert.equal(response.status, 401, path);
+      assert.equal(await errorCode(response), "unauthorized", path);
+    }
+  });
+
+  it("serves a stored PNG with the same bytes and nosniff, with the token as a query parameter", async () => {
+    const page = (await (await fetch(`${base}/api/history?limit=100`, { headers: auth })).json()) as HistoryBody;
+    const listed = page.jobs.find((job) => job.id === firstId);
+    assert.equal(listed?.thumbnail, `/api/history/thumbnail?id=${firstId}`);
+
+    const response = await fetch(`${base}${listed.thumbnail}&token=${TOKEN}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("cache-control"), "private, max-age=86400");
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), PNG);
+  });
+
+  it("answers 404 not-found for an unknown id or a job without a thumbnail", async () => {
+    const withoutThumbnail = history.list(null, 100).jobs.find((job) => job.thumbnail === null);
+    assert.ok(withoutThumbnail);
+    for (const id of ["unknown-id", withoutThumbnail.id]) {
+      const response = await fetch(`${base}/api/history/thumbnail?id=${id}`, { headers: auth });
+      assert.equal(response.status, 404, id);
+      assert.equal(await errorCode(response), "not-found", id);
+    }
+  });
+
+  it("answers 400 bad-request for a missing or empty id", async () => {
+    for (const path of ["/api/history/thumbnail", "/api/history/thumbnail?id="]) {
+      const response = await fetch(`${base}${path}`, { headers: auth });
+      assert.equal(response.status, 400, path);
+      assert.equal(await errorCode(response), "bad-request", path);
+    }
+  });
+
+  it("answers 405 for anything but GET", async () => {
+    for (const path of ["/api/history", "/api/history/thumbnail?id=x"]) {
+      const response = await fetch(`${base}${path}`, { method: "POST", headers: auth });
+      assert.equal(response.status, 405, path);
+      assert.equal(await errorCode(response), "method-not-allowed", path);
+      assert.equal(response.headers.get("allow"), "GET");
+    }
+  });
+
+  it("has no history routes without a history source", async () => {
+    const plain = createApiServer({ store: new StatusStore(), control: {} as never, token: null, logger: quiet });
+    const plainBase = await listen(plain);
+    try {
+      assert.equal((await fetch(`${plainBase}/api/history`)).status, 404);
+    } finally {
+      await closeServer(plain);
+    }
+  });
+});
+
+describe("HTTP API history event", () => {
+  let printer: FakePrinter;
+  let session: PrinterSession;
+  let history: HistoryStore;
+  let sync: HistorySync;
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    printer = await FakePrinter.start({ history: { entries: historyEntries() } });
+    session = new PrinterSession({ url: printer.url, logger: quiet });
+    const store = new StatusStore();
+    store.attach(session);
+    history = HistoryStore.open(":memory:");
+    // The fixture thumbnails name 192.0.2.10, another host: they are never requested.
+    sync = new HistorySync({ session, store: history, logger: quiet, printerHost: "127.0.0.1" });
+    server = createApiServer({ store, control: {} as never, token: null, history: historySource(history, sync), logger: quiet });
+    base = await listen(server);
+    const attributesRequest = printer.nextFrame(isCmd(Cmd.GET_PRINTER_ATTR));
+    session.start();
+    await attributesRequest;
+    const change = once(store, "change");
+    printer.push(PRINTING);
+    await change;
+  });
+
+  afterEach(async () => {
+    sync.close();
+    await closeServer(server);
+    session.stop();
+    history.close();
+    await printer.close();
+  });
+
+  it("sends a history event after a sync that stores jobs, none after one that changes nothing, and status events as before", async () => {
+    const events = new SseReader(await fetch(`${base}/api/events`));
+    assert.equal((await events.next()).connection, "online");
+
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(await events.nextEvent(), { name: "history", data: "{}" });
+    assert.equal(history.list(null, 100).jobs.length, 26);
+
+    sync.trigger();
+    await sync.idle();
+    printer.push(PAUSING);
+    // The next event is the status change: the empty sync sent nothing before it.
+    const snapshot = await events.next();
+    assert.equal(snapshot.connection, "online");
+    assert.equal(sync.listenerCount("change"), 1);
+    await events.cancel();
+  });
+
+  it("sends the history event to more SSE clients than the emitter's listener warning allows, with one listener", async () => {
+    const warnings: Error[] = [];
+    const onWarning = (warning: Error) => warnings.push(warning);
+    process.on("warning", onWarning);
+    try {
+      const clients = await Promise.all(
+        Array.from({ length: 12 }, async () => new SseReader(await fetch(`${base}/api/events`))),
+      );
+      for (const client of clients) assert.equal((await client.next()).connection, "online");
+      assert.equal(sync.listenerCount("change"), 1);
+
+      sync.trigger();
+      await sync.idle();
+      for (const client of clients) assert.deepEqual(await client.nextEvent(), { name: "history", data: "{}" });
+
+      await Promise.all(clients.map((client) => client.cancel()));
+      for (let i = 0; i < 400 && sync.listenerCount("change") > 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      assert.equal(sync.listenerCount("change"), 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      const leaks = warnings.filter((warning) => warning.name === "MaxListenersExceededWarning");
+      assert.deepEqual(leaks.filter((warning) => warning.message.includes("[HistorySync]")), []);
+    } finally {
+      process.off("warning", onWarning);
+    }
+  });
+});
+
 /** A store whose snapshot the test sets and announces. */
 class FakeStore extends EventEmitter {
   snapshot = { connection: "online", pad: "" } as unknown as StatusSnapshot;
@@ -471,11 +698,11 @@ describe("HTTP API dashboard files", () => {
     assert.doesNotMatch(source, /import type|: StatusSnapshot\b/, "types are stripped");
     assert.doesNotThrow(() => new Function(source.replace(/^import .*$/gm, "")), "the stripped script parses");
 
-    for (const path of ["/mjpeg.js", "/view.js", "/stop-slide.js", "/commands.js", "/src/control-rules.ts"]) {
+    for (const path of ["/mjpeg.js", "/view.js", "/stop-slide.js", "/commands.js", "/history.js", "/src/control-rules.ts"]) {
       const module = await fetch(`${base}${path}`);
       assert.equal(module.status, 200, path);
       assert.match(module.headers.get("content-type") ?? "", /^text\/javascript/, path);
-      assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b|: StatusPageState\b/, `${path}: types are stripped`);
+      assert.doesNotMatch(await module.text(), /import type|: Uint8Array\b|: StatusSnapshot\b|: StatusPageState\b|: HistoryJob\b/, `${path}: types are stripped`);
     }
     // The browser resolves view.js's import of the rules against the page; here it points at the served copy.
     const rulesUrl = `data:text/javascript,${encodeURIComponent(await (await fetch(`${base}/src/control-rules.ts`)).text())}`;

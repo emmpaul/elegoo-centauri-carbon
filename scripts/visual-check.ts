@@ -2,13 +2,13 @@
 // state of the design references and compares each one with its reference PNG.
 // It never talks to a printer or the service: it starts its own HTTP server on
 // 127.0.0.1 that serves the dashboard files plus mocked /api/status,
-// /api/events (held open), /api/command, and /camera, chosen per browser
-// context by a `vstate` cookie.
+// /api/events (held open), /api/command, /api/history, /api/history/thumbnail,
+// and /camera, chosen per browser context by a `vstate` cookie.
 //
 // Usage:
 //   node scripts/visual-check.ts [ids…] [--all-widths]
 //
-//   ids           a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2 (default: all)
+//   ids           a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2, h1–h2 (default: all)
 //   --all-widths  also shoot each screen id at the other width (360 ↔ 1280)
 //
 // Output in scratch/visual/ (git-ignored):
@@ -19,6 +19,9 @@
 //   <id>-actual.png                 g1, g2 only: the rendered icons or splash composed for comparison
 //   index.html                      reference | actual | diff per id, with the diff share
 //   report.json                     the same results, machine-readable
+// h1 and h2 open the History section (five fixed jobs, thumbnails from
+// test/fixtures/camera-frame-1.jpg) and scroll it to the top; they get no
+// device-clock overlay. Every other state gets an empty history.
 // For each id it prints the share of pixels whose colour differs by more than 8
 // in any channel between the reference and the shot in the reference's theme.
 //
@@ -43,12 +46,14 @@ import type { AddressInfo } from "node:net";
 import { type Browser, chromium, type Page } from "playwright-core";
 import { dashboardFiles } from "../src/dashboard-files.ts";
 import { SPLASHES, splashFile } from "./render-icons.ts";
+import type { HistoryJob } from "../src/history-store.ts";
 import type { StatusSnapshot } from "../src/status-store.ts";
 
 const ROOT = new URL("../", import.meta.url);
 const OUT = new URL("scratch/visual/", ROOT);
 const REF = new URL("docs/design/reference/", ROOT);
 const ICONS = new URL("web/icons/", ROOT);
+const THUMBNAIL = new URL("test/fixtures/camera-frame-1.jpg", ROOT);
 const FONTS = ["satoshi-400", "satoshi-500", "satoshi-700", "cabinet-grotesk-800"];
 
 /** The references' fixed clock: 2026-11-13 21:20:00, read as UTC (the browser runs in UTC). */
@@ -168,7 +173,7 @@ function toSnapshot(variant: string): StatusSnapshot {
 }
 
 type CommandMode = "ack" | "failed" | "timeout" | "hold";
-type Interaction = "slide-hold" | "slide-stop" | "pause";
+type Interaction = "slide-hold" | "slide-stop" | "pause" | "history";
 
 interface VisualState {
   id: string;
@@ -211,7 +216,11 @@ const SCREENS: Array<[id: string, variant: string, theme: Theme, width: 360 | 12
   ["e4", "token", "light", 360, "Token entry, light"],
   ["f1", "printing", "dark", 1280, "Laptop: printing, dark"],
   ["f2", "paused", "light", 1280, "Laptop: paused, light"],
+  ["h1", "idle", "dark", 360, "History open, dark"],
+  ["h2", "idle", "light", 360, "History open, light"],
 ];
+/** Ids that open the History section with HISTORY_JOBS (design D10). */
+const HISTORY_IDS = new Set(["h1", "h2"]);
 
 function stateOf([id, variant, theme, width, label]: (typeof SCREENS)[number]): VisualState {
   const p = PRESETS[variant] ?? {};
@@ -222,6 +231,7 @@ function stateOf([id, variant, theme, width, label]: (typeof SCREENS)[number]): 
     interaction = p.cmd.action === "stop" ? "slide-stop" : "pause";
   }
   if (p.slide !== undefined) interaction = "slide-hold";
+  if (HISTORY_IDS.has(id)) interaction = "history";
   return {
     id, label, variant, theme, width, command, interaction,
     camera: p.cam === false ? "down" : "frame",
@@ -231,6 +241,26 @@ function stateOf([id, variant, theme, width, label]: (typeof SCREENS)[number]): 
 }
 
 const STATES = new Map(SCREENS.map((row) => [row[0], stateOf(row)]));
+
+const MIN = 60_000;
+const DAY = 24 * 60 * MIN;
+/** One job of the history API; the thumbnail path names the job when it has one. */
+function job(n: number, startedAt: number, endedAt: number, layers: [number, number], outcome: HistoryJob["outcome"], taskStatus: number, errorCode: number | null, thumbnail = true): HistoryJob {
+  const id = `00000000-0000-4000-8000-00000000000${n}`;
+  return {
+    id, fileName: `test-print-${n}.gcode`, startedAt, endedAt, durationSeconds: Math.round((endedAt - startedAt) / 1000),
+    layers: { printed: layers[0], total: layers[1] }, outcome, taskStatus, errorCode,
+    thumbnail: thumbnail ? `/api/history/thumbnail?id=${id}` : null,
+  };
+}
+/** h1/h2's list (design D10): completed today, stopped, failed 45, completed on an earlier day, one without a thumbnail. */
+const HISTORY_JOBS: HistoryJob[] = [
+  job(1, N - 75 * MIN, N - 2 * MIN, [180, 180], "completed", 1, null),
+  job(2, N - 280 * MIN, N - 258 * MIN, [41, 310], "stopped", 3, null),
+  job(3, N - 490 * MIN, N - 349 * MIN, [205, 412], "failed", 1, 45),
+  job(4, N - DAY - 110 * MIN, N - DAY + 85 * MIN, [256, 256], "completed", 1, null),
+  job(5, N - 2 * DAY - 300 * MIN, N - 2 * DAY - 252 * MIN, [96, 96], "completed", 1, null, false),
+];
 const ICON_IDS = ["g1", "g2"];
 
 // ---- Mock server ----
@@ -279,6 +309,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", Connection: "keep-alive" });
     res.write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
     return hold(res);
+  }
+  if (path === "/api/history") return void json(res, 200, { jobs: state.interaction === "history" ? HISTORY_JOBS : [], next: null });
+  if (path === "/api/history/thumbnail") {
+    res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+    return void res.end(await readFile(THUMBNAIL));
   }
   if (path === "/api/command" && req.method === "POST") {
     let raw = "";
@@ -352,6 +387,15 @@ async function interact(page: Page, state: VisualState, width: 360 | 1280): Prom
       await page.getByRole("button", { name: "Pause", exact: true }).click({ timeout: STEP_MS });
       return null;
     }
+    if (state.interaction === "history") {
+      await page.locator("summary", { hasText: "History" }).click({ timeout: STEP_MS });
+      const rows = page.locator(".hist__row");
+      await rows.nth(HISTORY_JOBS.length - 1).waitFor({ state: "visible", timeout: STEP_MS });
+      await page.locator(".hist").evaluate((el: any) => el.scrollIntoView({ block: "start" }));
+      // The thumbnails load lazily: wait until every one in the list has decoded.
+      await page.waitForFunction(() => [...(globalThis as any).document.querySelectorAll(".hist__row img")].every((img: any) => img.complete && img.naturalWidth > 0), null, { timeout: STEP_MS });
+      return null;
+    }
     const slider = page.getByRole("slider").first();
     await slider.waitFor({ state: "visible", timeout: STEP_MS });
     // The element with role=slider is the thumb (D12); when it is the whole track, start at its thumb.
@@ -375,7 +419,7 @@ async function interact(page: Page, state: VisualState, width: 360 | 1280): Prom
     if (state.interaction === "slide-stop") await page.mouse.up();
     return null;
   } catch (error) {
-    const what = state.interaction === "pause" ? 'button "Pause"' : "slider (role=slider)";
+    const what = state.interaction === "pause" ? 'button "Pause"' : state.interaction === "history" ? 'summary "History" and its rows' : "slider (role=slider)";
     return `interaction unreachable: ${what}: ${String((error as Error).message).split("\n")[0]}`;
   }
 }
@@ -407,7 +451,7 @@ async function shoot(browser: Browser, base: string, state: VisualState, theme: 
     const note = [interaction, overflow > 0 ? `horizontal scroll at ${width} px (${theme}): ${overflow} px` : null].filter((n) => n !== null).join("; ") || null;
     await page.evaluate(freezeAnimations, ANIMATION_TIME_MS[state.id] ?? 275);
     await page.addStyleTag({ content: `html{position:relative;top:${REFERENCE_FRAME_Y}px}` });
-    if (width === 360) await page.evaluate(overlayClock, { onToken: state.unauthorized, theme });
+    if (width === 360 && state.interaction !== "history") await page.evaluate(overlayClock, { onToken: state.unauthorized, theme });
     await page.screenshot({ path: new URL(file, OUT).pathname, caret: "hide" });
     return note;
   } finally {
@@ -709,6 +753,10 @@ try {
       input = icon.input;
       result.notes.push(icon.note);
     } else {
+      if (!existsSync(new URL(`${result.id}.png`, REF))) {
+        result.notes.push(`no reference docs/design/reference/${result.id}.png yet`);
+        continue;
+      }
       input = { ref: [{ src: `/__ref/${result.id}.png`, x: 0, y: 0 }], actual: [{ src: `/__out/${result.id}-${result.theme}.png`, x: 0, y: 0 }], w: result.width, h: result.height };
     }
     const out = await page.evaluate(compareInBrowser, { ...input, tolerance: TOLERANCE });

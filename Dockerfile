@@ -2,7 +2,8 @@
 # Node runs the .ts sources directly, so there is no build step: one stage
 # installs the production dependencies, the runtime stage copies them with the
 # sources. Configure it with env (PRINTER_IP, ACCESS_TOKEN, LISTEN_PORT, ...)
-# or a config file mounted at CONFIG_PATH.
+# or a config file mounted at CONFIG_PATH. The print history archive lives in
+# /data (DATA_DIR); mount a named volume there to keep it across containers.
 
 # Major from .nvmrc.
 ARG NODE_IMAGE=node:26-slim
@@ -25,6 +26,11 @@ COPY package.json ./
 COPY src ./src
 COPY web ./web
 COPY scripts/healthcheck.ts ./scripts/healthcheck.ts
+# The history archive (design D11 of add-print-history). An empty named volume
+# mounted here takes this ownership, so the node user can write it.
+RUN mkdir -p /data && chown node:node /data
+ENV DATA_DIR=/data
+VOLUME /data
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

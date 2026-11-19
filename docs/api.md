@@ -9,8 +9,10 @@ internet: anyone who can reach it can pause or stop prints.
 | Method | Path | What it does |
 | --- | --- | --- |
 | `GET` | `/api/status` | The current status snapshot, as JSON |
-| `GET` | `/api/events` | A Server-Sent Events stream of status snapshots |
+| `GET` | `/api/events` | A Server-Sent Events stream of status snapshots and history changes |
 | `POST` | `/api/command` | Runs pause, resume, stop, or the light, and reports the result |
+| `GET` | `/api/history` | Past print jobs from the archive, newest first, a page at a time |
+| `GET` | `/api/history/thumbnail?id=<id>` | A job's stored thumbnail image |
 | `GET` | `/camera` | The printer's camera as an MJPEG stream (`multipart/x-mixed-replace`) |
 
 The examples below use these two shell variables. Leave `TOKEN` empty if no
@@ -116,11 +118,24 @@ data: {"connection":"online","machineState":{"name":"printing","code":1},...}
 
 ```
 
+The stream also sends an event named `history`, with `data: {}`, each time a
+sync with the printer adds or changes a job in the archive or stores a
+thumbnail (see [Print history](#print-history)): one event per sync, never one
+for a sync that changes nothing. Reload the list from `/api/history` when it
+arrives. A client that only listens for `status` ignores it.
+
+```text
+event: history
+data: {}
+
+```
+
 In a browser:
 
 ```js
 const events = new EventSource(`/api/events?token=${token}`);
 events.addEventListener("status", (e) => render(JSON.parse(e.data)));
+events.addEventListener("history", () => reloadHistory());
 ```
 
 ## Commands
@@ -205,16 +220,113 @@ reached, or doesn't answer within 10 seconds, the answer is `502` with
 curl -s --max-time 2 -o camera.mjpeg "$BASE/camera?token=$TOKEN"; head -c 120 camera.mjpeg
 ```
 
+## Print history
+
+The service keeps an archive of the printer's past print jobs in
+`history.sqlite` in its data directory (`dataDir` / `DATA_DIR`). It syncs the
+archive from the printer's own job history each time the session comes
+online and each time a job ends, and keeps every job it has stored, also once
+the printer's list drops it. Both routes read only the archive: they answer
+while the printer is offline and never contact it. Both need the token like
+every API route, and accept only `GET`.
+
+`GET /api/history` returns one page of jobs, newest first by start time.
+
+| Query parameter | Meaning |
+| --- | --- |
+| `limit` | Jobs per page, an integer from 1 to 100; 20 when left out |
+| `before` | The `next` value of the previous page; left out for the first page |
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/history?limit=2"
+```
+
+```json
+{
+  "jobs": [
+    {
+      "id": "c735768d-8d67-4ae2-8d07-05c0c05c4aa2",
+      "fileName": "test-print-2.gcode",
+      "startedAt": 1794604720000,
+      "endedAt": 1794605432000,
+      "durationSeconds": 712,
+      "layers": { "printed": 12, "total": 12 },
+      "outcome": "completed",
+      "taskStatus": 1,
+      "errorCode": null,
+      "thumbnail": "/api/history/thumbnail?id=c735768d-8d67-4ae2-8d07-05c0c05c4aa2"
+    },
+    {
+      "id": "27febebe-8552-40e8-9e82-086c014a5502",
+      "fileName": "test-print-1.gcode",
+      "startedAt": 1794600358000,
+      "endedAt": 1794604693000,
+      "durationSeconds": 4335,
+      "layers": { "printed": 180, "total": 180 },
+      "outcome": "completed",
+      "taskStatus": 1,
+      "errorCode": null,
+      "thumbnail": null
+    }
+  ],
+  "next": "1794600358_27febebe-8552-40e8-9e82-086c014a5502"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The printer's task id of the job |
+| `fileName` | The printed file's name |
+| `startedAt`, `endedAt` | ms since the epoch; `null` when unknown. `endedAt` is `null` while the job runs |
+| `durationSeconds` | Seconds from start to end; `null` while the job runs or when either time is unknown |
+| `layers` | Layers `printed` and the file's `total` (0 when the printer didn't report it) |
+| `outcome` | `failed` when the job has an error code, else `completed` (task status 1), `stopped` (3), `running` (4), or `unknown` (any other status) |
+| `taskStatus` | The printer's raw task status |
+| `errorCode` | The printer's error code for the job; `null` when 0 |
+| `thumbnail` | Path of the stored thumbnail (below); `null` when none is stored |
+
+`next` is the cursor of the following page, or `null` on the last page. It
+is opaque: pass it back unchanged as `before`.
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/history?limit=2&before=1794600358_27febebe-8552-40e8-9e82-086c014a5502"
+```
+
+A `limit` outside 1 to 100, or a `before` that isn't a cursor, answers `400`
+with `bad-request`:
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/history?limit=0"
+# {"error":{"code":"bad-request","message":"limit must be an integer from 1 to 100"}}
+```
+
+`GET /api/history/thumbnail?id=<id>` returns a job's thumbnail as it was
+stored, `image/png` or `image/jpeg`, with `Cache-Control: private,
+max-age=86400` and `X-Content-Type-Options: nosniff`. Use the `thumbnail` path
+of a listed job; an `<img>` passes the token as `?token=`. A job without a
+stored thumbnail, or an id the archive doesn't hold, answers `404` with
+`not-found`, and a missing `id` answers `400` with `bad-request`. The service
+fetches each job's thumbnail from the printer once and keeps at most 100 MiB
+of thumbnails, dropping the oldest jobs' first; those jobs stay listed with
+`thumbnail` `null`.
+
+```sh
+curl -s -o thumbnail.png -w '%{http_code} %{content_type}\n' \
+  "$BASE/api/history/thumbnail?id=c735768d-8d67-4ae2-8d07-05c0c05c4aa2&token=$TOKEN"
+# 200 image/png
+```
+
 ## Errors
 
 Errors have the body `{"error":{"code":"<code>","message":"<text>"}}`:
 
 | Status | `code` | When |
 | --- | --- | --- |
-| 400 | `bad-request` | The request target isn't a valid URL, the body isn't a JSON object, the action is unknown, `on` is missing for the light, or the body is over 4 KiB |
+| 400 | `bad-request` | The request target isn't a valid URL, the body isn't a JSON object, the action is unknown, `on` is missing for the light, the body is over 4 KiB, or a history `limit`, `before`, or thumbnail `id` isn't valid |
 | 400 | `confirmation-required` | Stop without `"confirm": true` |
 | 401 | `unauthorized` | Missing or wrong token |
-| 404 | `not-found` | Unknown path |
+| 404 | `not-found` | Unknown path, or no stored thumbnail for the id |
 | 405 | `method-not-allowed` | Wrong method; the `Allow` header lists the right one |
 | 409 | `not-allowed` | The command doesn't fit the current print state, or the printer isn't online |
 | 502 | `camera-unavailable` | The camera can't be reached or doesn't answer within 10 seconds |

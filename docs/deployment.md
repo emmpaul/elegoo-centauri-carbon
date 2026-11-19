@@ -63,6 +63,38 @@ container's port 8080. A config file works too: mount it and set
 `CONFIG_PATH` to its path in the container. The settings are the ones in the
 README's [Configure](../README.md#configure) table.
 
+Leave `DATA_DIR` unset too: the image keeps the print
+history archive (`history.sqlite`) in `/data`, and `compose.yaml` mounts the
+named volume `printer-data` there, so the history survives recreating and
+upgrading the container. Compose names the volume after the project, which is
+the directory's name: `printer_printer-data` for `~/printer`
+(`docker volume ls` lists it).
+
+To back up the archive, stop the service so the database is not written
+mid-copy, copy the volume into a dated archive in the current directory, and
+start it again (run in `~/printer`):
+
+```sh
+docker compose stop
+docker run --rm -v printer_printer-data:/data:ro -v "$PWD":/backup alpine \
+  tar czf /backup/printer-data-$(date +%F).tar.gz -C /data .
+docker compose start
+```
+
+To restore one, stop the service, delete the archive and its
+`history.sqlite-wal` and `history.sqlite-shm` files from the volume, so ones
+left by an unclean stop are not replayed onto the restored archive, unpack the
+backup into it, and start the service (run in `~/printer`, with the backup's
+date):
+
+```sh
+docker compose stop
+docker run --rm -v printer_printer-data:/data -v "$PWD":/backup alpine \
+  sh -c 'rm -f /data/history.sqlite /data/history.sqlite-wal /data/history.sqlite-shm &&
+         tar xzf /backup/printer-data-<date>.tar.gz -C /data'
+docker compose start
+```
+
 Generate the token with the command below and set `ACCESS_TOKEN` in
 `printer.env` to its output. Don't reuse a token from the repository or
 from this guide:
@@ -290,6 +322,15 @@ HTTPS front door. Keep `PUBLISH_ADDR=127.0.0.1` in both cases.
 The token stays required in both cases.
 
 ## Upgrade and rollback
+
+Before upgrading from a version without print history, check that your
+`compose.yaml` has the `printer-data:/data` volume (get the current file as in
+[Files and settings](#files-and-settings)): without it, every recreated
+container starts an empty archive, which the next connection refills only with
+the jobs the printer still lists. Before every upgrade, keep a copy of the
+volume with the backup command above. A newer version may move the archive to
+a newer schema, which an older version refuses to open, so rolling back after
+such an upgrade means restoring that copy.
 
 Set `IMAGE_TAG` in `.env` to the new version, then pull and restart:
 

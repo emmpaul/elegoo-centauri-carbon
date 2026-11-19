@@ -2,7 +2,9 @@
 // 127.0.0.1, for trying the API and the dashboard without the real printer.
 // The fake printer simulates a running print (scripts/fake-print-simulation.ts):
 // progress, layers, and time advance, and pause, resume, stop, and the light
-// change its state as the printer would. Stop it with Ctrl-C.
+// change its state as the printer would. It also keeps a job history (the 26
+// recorded jobs plus the simulated one, with thumbnails), which the service
+// syncs into an in-memory archive for /api/history. Stop it with Ctrl-C.
 //
 // Environment:
 //   LISTEN_PORT   API port (default 8080)

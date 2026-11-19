@@ -1,13 +1,14 @@
 // HTTP API for the dashboard (design D3, D4, D5): the status snapshot, a
 // Server-Sent Events stream of snapshot changes, the control command
-// endpoint, the camera proxy, and the dashboard's static files. When an access
-// token is configured, every API and camera route requires it, as a bearer
-// header or, for clients that cannot set headers (EventSource, <img>), as a
-// `token` query parameter. The dashboard's files hold no printer data and are
-// served without it.
+// endpoint, the camera proxy, the print history archive, and the dashboard's
+// static files. When an access token is configured, every API and camera
+// route requires it, as a bearer header or, for clients that cannot set
+// headers (EventSource, <img>), as a `token` query parameter. The dashboard's
+// files hold no printer data and are served without it.
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { StaticFiles } from "./dashboard-files.ts";
+import type { HistoryPage, Thumbnail } from "./history-store.ts";
 import { type CommandResult, ControlRejectedError } from "./print-control.ts";
 import { type Logger, NotConnectedError } from "./sdcp-client.ts";
 import type { StatusSnapshot } from "./status-store.ts";
@@ -27,6 +28,16 @@ export interface Controls {
   setLight(on: boolean): Promise<CommandResult>;
 }
 
+/** The print history archive as the server reads it (a HistoryStore). */
+export interface HistorySource {
+  /** Throws a RangeError for a malformed cursor or limit. */
+  list(before: string | null, limit: number): HistoryPage;
+  thumbnail(taskId: string): Thumbnail | null;
+  /** Once per sync that stored something (a HistorySync's `change`). */
+  on(event: "change", listener: () => void): unknown;
+  off(event: "change", listener: () => void): unknown;
+}
+
 export interface ApiServerOptions {
   store: SnapshotSource;
   control: Controls;
@@ -34,6 +45,8 @@ export interface ApiServerOptions {
   token: string | null;
   /** Serves `GET /camera` (a CameraProxy); without it the route does not exist. */
   camera?: { handle(req: IncomingMessage, res: ServerResponse): void };
+  /** Serves `GET /api/history` and its thumbnails; without it the routes do not exist. */
+  history?: HistorySource;
   /** The dashboard's files, served on GET without the token; without it there is no dashboard. */
   dashboard?: StaticFiles;
   logger?: Logger;
@@ -47,6 +60,10 @@ export interface ApiServerOptions {
 
 /** Largest accepted command body, in bytes. */
 const MAX_BODY_BYTES = 4096;
+
+/** History page size when `limit` is not given, and the largest accepted. */
+const HISTORY_DEFAULT_LIMIT = 20;
+const HISTORY_MAX_LIMIT = 100;
 
 /** Error codes in `{"error": {"code", "message"}}` bodies. */
 export type ApiErrorCode =
@@ -75,6 +92,7 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 /** Creates (but does not start) the API server. */
 export function createApiServer(options: ApiServerOptions): Server {
   const logger = options.logger ?? console;
+  const historyChanges = options.history === undefined ? undefined : new ChangeFanOut<[]>(options.history);
   const events: EventStreamLimits = {
     keepAliveMs: options.keepAliveMs ?? 15_000,
     maxBacklogBytes: options.maxEventBacklogBytes ?? 1024 * 1024,
@@ -83,11 +101,16 @@ export function createApiServer(options: ApiServerOptions): Server {
   };
   const routes: Record<string, Partial<Record<string, Handler>>> = {
     "/api/status": { GET: (_req, res) => sendJson(res, 200, options.store.snapshot) },
-    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, events, logger) },
+    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, historyChanges, events, logger) },
     "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
   };
   const camera = options.camera;
   if (camera !== undefined) routes["/camera"] = { GET: (req, res) => camera.handle(req, res) };
+  const history = options.history;
+  if (history !== undefined) {
+    routes["/api/history"] = { GET: (_req, res, url) => sendJson(res, 200, historyPage(history, url)) };
+    routes["/api/history/thumbnail"] = { GET: (_req, res, url) => sendThumbnail(res, history, url) };
+  }
 
   return createServer((req, res) => {
     // Everything runs inside the async function, so a synchronous throw
@@ -156,6 +179,39 @@ function sameToken(given: string, expected: string): boolean {
   return timingSafeEqual(digest(given), digest(expected));
 }
 
+/** An emitter of `change` events. */
+interface ChangeSource<Args extends unknown[]> {
+  on(event: "change", listener: (...args: Args) => void): unknown;
+  off(event: "change", listener: (...args: Args) => void): unknown;
+}
+
+/**
+ * One `change` listener on a source for all SSE clients, so their number (up
+ * to maxEventClients) is not bounded by the emitter's listener-leak warning
+ * (used for the history, whose HistorySync keeps the default limit of 10).
+ */
+class ChangeFanOut<Args extends unknown[]> {
+  readonly #source: ChangeSource<Args>;
+  readonly #listeners = new Set<(...args: Args) => void>();
+  readonly #notify = (...args: Args) => {
+    for (const listener of this.#listeners) listener(...args);
+  };
+
+  constructor(source: ChangeSource<Args>) {
+    this.#source = source;
+  }
+
+  on(listener: (...args: Args) => void): void {
+    if (this.#listeners.size === 0) this.#source.on("change", this.#notify);
+    this.#listeners.add(listener);
+  }
+
+  off(listener: (...args: Args) => void): void {
+    if (!this.#listeners.delete(listener)) return;
+    if (this.#listeners.size === 0) this.#source.off("change", this.#notify);
+  }
+}
+
 interface EventStreamLimits {
   keepAliveMs: number;
   maxBacklogBytes: number;
@@ -165,11 +221,19 @@ interface EventStreamLimits {
 }
 
 /**
- * Sends the current snapshot, then every change, as `status` events. A client
+ * Sends the current snapshot, then every change, as `status` events, and a
+ * `history` event (empty data) after each sync that stored something. A client
  * that does not read is dropped once its backlog passes the limit, so it
  * cannot grow server memory without bound.
  */
-function streamEvents(req: IncomingMessage, res: ServerResponse, store: SnapshotSource, limits: EventStreamLimits, logger: Logger): void {
+function streamEvents(
+  req: IncomingMessage,
+  res: ServerResponse,
+  store: SnapshotSource,
+  history: ChangeFanOut<[]> | undefined,
+  limits: EventStreamLimits,
+  logger: Logger,
+): void {
   if (limits.clients >= limits.maxClients) {
     throw new ApiError(503, "too-many-clients", `at most ${limits.maxClients} event streams at once`);
   }
@@ -188,6 +252,7 @@ function streamEvents(req: IncomingMessage, res: ServerResponse, store: Snapshot
     }
   };
   const send = (snapshot: StatusSnapshot) => write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
+  const sendHistory = () => write("event: history\ndata: {}\n\n");
   const keepAlive = setInterval(() => write(": keep-alive\n\n"), limits.keepAliveMs);
   keepAlive.unref();
   req.socket.setTimeout(0);
@@ -195,9 +260,44 @@ function streamEvents(req: IncomingMessage, res: ServerResponse, store: Snapshot
     limits.clients--;
     clearInterval(keepAlive);
     store.off("change", send);
+    history?.off(sendHistory);
   });
   store.on("change", send);
+  history?.on(sendHistory);
   send(store.snapshot);
+}
+
+/** One history page for `?limit=<1-100>&before=<cursor>`; invalid values answer 400. */
+function historyPage(history: HistorySource, url: URL): HistoryPage {
+  const limitText = url.searchParams.get("limit");
+  let limit = HISTORY_DEFAULT_LIMIT;
+  if (limitText !== null) {
+    limit = /^\d{1,3}$/.test(limitText) ? Number(limitText) : 0;
+    if (limit < 1 || limit > HISTORY_MAX_LIMIT) {
+      throw new ApiError(400, "bad-request", `limit must be an integer from 1 to ${HISTORY_MAX_LIMIT}`);
+    }
+  }
+  try {
+    return history.list(url.searchParams.get("before"), limit);
+  } catch (error) {
+    if (error instanceof RangeError) throw new ApiError(400, "bad-request", "before is not a history cursor");
+    throw error;
+  }
+}
+
+/** The stored thumbnail of `?id=<taskId>`; never contacts the printer. */
+function sendThumbnail(res: ServerResponse, history: HistorySource, url: URL): void {
+  const id = url.searchParams.get("id");
+  if (id === null || id === "") throw new ApiError(400, "bad-request", "id is required");
+  const thumbnail = history.thumbnail(id);
+  if (thumbnail === null) throw new ApiError(404, "not-found", `no stored thumbnail for ${id}`);
+  res.writeHead(200, {
+    "Content-Type": thumbnail.contentType,
+    "Content-Length": thumbnail.bytes.byteLength,
+    "Cache-Control": "private, max-age=86400",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(thumbnail.bytes);
 }
 
 /**

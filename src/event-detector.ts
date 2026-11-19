@@ -65,6 +65,11 @@ interface Job {
 /** Machine states during which a job runs (`printing`, and the mid-job material change). */
 const ACTIVE_MACHINE_STATES = new Set(["printing", "loading-material"]);
 
+/** Whether the snapshot shows a job running. */
+export function isJobActive(snapshot: StatusSnapshot): boolean {
+  return ACTIVE_MACHINE_STATES.has(snapshot.machineState.name);
+}
+
 type DetectorEvents = { event: [PrintEvent] };
 
 export class EventDetector extends EventEmitter<DetectorEvents> {
@@ -111,7 +116,7 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
     if (snapshot.machineState.code === null) return;
     const baseline = !this.initialized;
     this.initialized = true;
-    if (ACTIVE_MACHINE_STATES.has(snapshot.machineState.name)) this.trackActive(snapshot, baseline);
+    if (isJobActive(snapshot)) this.trackActive(snapshot, baseline);
     else this.trackInactive(snapshot);
   }
 

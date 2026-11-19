@@ -31,12 +31,6 @@ most prints fail) and when about ten minutes are left. They come from the status
 service already reads, and the same event dedupe applies.
 **Protocol:** none needed.
 
-### Print history
-
-A dashboard view of past jobs: name, start and end time, duration, layers printed,
-outcome with the failure reason, and the thumbnail.
-**Protocol:** Cmd 320 (history ids) and Cmd 321 (task detail), both *observed*. Read-only.
-
 ## Later
 
 ### Temperature and progress charts

@@ -1,14 +1,16 @@
 // Wires the service together (design D4): one printer session, the status
-// store, the event detector, print control, the camera proxy, and the HTTP
-// API with the dashboard.
+// store, the event detector, print control, the camera proxy, the history
+// archive and its sync, and the HTTP API with the dashboard.
 import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { CameraProxy } from "./camera-proxy.ts";
 import { listenAuthError } from "./config.ts";
 import { dashboardFiles } from "./dashboard-files.ts";
-import { EventDetector, type PrintEvent } from "./event-detector.ts";
-import { createApiServer } from "./http-server.ts";
+import { EventDetector, isJobActive, type PrintEvent } from "./event-detector.ts";
+import { HistoryStore } from "./history-store.ts";
+import { HistorySync } from "./history-sync.ts";
+import { createApiServer, type HistorySource } from "./http-server.ts";
 import type { Notifier } from "./notifier.ts";
 import { PrintControl } from "./print-control.ts";
 import { PrinterSession } from "./printer-session.ts";
@@ -27,12 +29,16 @@ export interface ServiceOptions {
   offlineAfterMs?: number;
   /** Push channel for events; none means events are only logged. */
   notifier?: Notifier | null;
+  /** History archive file; `:memory:` (kept only while running) by default. */
+  historyPath?: string;
 }
 
 export interface Service {
   session: PrinterSession;
   store: StatusStore;
   detector: EventDetector;
+  /** The print history archive. */
+  history: HistoryStore;
   server: Server;
   /** The address the API listens on. */
   address: AddressInfo;
@@ -54,6 +60,8 @@ export async function startService(options: ServiceOptions): Promise<Service> {
   const refusal = listenAuthError(options.listen, options.token);
   if (refusal !== null) throw new Error(refusal);
   const logger = options.logger ?? console;
+  // Opened first, so an archive that cannot be opened leaves no socket open.
+  const history = HistoryStore.open(options.historyPath ?? ":memory:");
   const session = new PrinterSession({ url: options.printerUrl, logger });
   const store = new StatusStore();
   store.attach(session);
@@ -66,6 +74,19 @@ export async function startService(options: ServiceOptions): Promise<Service> {
       store.applyTaskDetail(response);
       return taskErrorCode(response, taskId) ?? null;
     },
+  });
+  const historySync = new HistorySync({
+    session,
+    store: history,
+    printerHost: new URL(options.printerUrl).hostname,
+    logger,
+    printActive: () => isJobActive(store.snapshot),
+  });
+  session.on("state", (state) => {
+    if (state === "online") historySync.trigger();
+  });
+  detector.on("event", (event) => {
+    if (event.type === "finished" || event.type === "failed" || event.type === "stopped") historySync.trigger();
   });
   const notifier = options.notifier ?? null;
   detector.on("event", (event) => {
@@ -81,23 +102,49 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     // The web UI enables streaming before it shows the camera.
     beforeConnect: () => session.send(Cmd.EDIT_PRINTER_VIDEO_STREAMING, { Enable: 1 }),
   });
-  const server = createApiServer({ store, control, token: options.token, camera, dashboard: dashboardFiles(), logger });
+  const historySource: HistorySource = {
+    list: (before, limit) => history.list(before, limit),
+    thumbnail: (taskId) => history.thumbnail(taskId),
+    on: (event, listener) => historySync.on(event, listener),
+    off: (event, listener) => historySync.off(event, listener),
+  };
+  const server = createApiServer({
+    store,
+    control,
+    token: options.token,
+    camera,
+    history: historySource,
+    dashboard: dashboardFiles(),
+    logger,
+  });
   server.listen(options.listen.port, options.listen.host);
-  await once(server, "listening");
+  try {
+    await once(server, "listening");
+  } catch (error) {
+    // Nothing started yet: release what was opened, including the detector's offline timer.
+    detector.close();
+    camera.close();
+    historySync.close();
+    history.close();
+    throw error;
+  }
   session.start();
 
   return {
     session,
     store,
     detector,
+    history,
     server,
     address: server.address() as AddressInfo,
     async close() {
       detector.close();
       camera.close();
+      historySync.close();
       session.stop();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      history.close();
     },
   };
 }

@@ -48,11 +48,24 @@ export interface FakePrinterOptions {
   host?: string;
   /** Port to listen on. A free port by default. */
   port?: number;
+  /** Job history that Cmd 320 and 321 answer from; `replies` still win. */
+  history?: FakeHistory;
+}
+
+/**
+ * The fake's job history: `HistoryDetailList` entries, newest first. Cmd 320
+ * answers their `TaskId`s in this order, Cmd 321 the entries whose ids were
+ * asked, in the order asked. The list is read on every request, so a test or
+ * script may change it while the fake runs.
+ */
+export interface FakeHistory {
+  entries: Record<string, unknown>[];
 }
 
 export class FakePrinter {
   readonly received: ReceivedFrame[] = [];
   readonly replies: Map<number, Reply>;
+  readonly history: FakeHistory | undefined;
   private readonly server: WebSocketServer;
   private readonly frameListeners = new Set<(frame: ReceivedFrame) => void>();
   private silent = false;
@@ -62,6 +75,7 @@ export class FakePrinter {
     this.server = server;
     this.host = urlHost(options.host ?? "127.0.0.1");
     this.replies = new Map(Object.entries(options.replies ?? {}).map(([cmd, reply]) => [Number(cmd), reply]));
+    this.history = options.history;
     server.on("connection", (socket) => {
       socket.on("message", (data, isBinary) => {
         const text = isBinary ? Buffer.from(data as Buffer).toString("utf8") : data.toString();
@@ -175,7 +189,7 @@ export class FakePrinter {
   private answer(socket: WebSocket, payload: unknown): void {
     const cmd = commandOf(payload);
     if (cmd === undefined || this.silent) return;
-    const reply = this.replies.get(cmd) ?? 0;
+    const reply = this.replies.get(cmd) ?? this.historyReply(cmd) ?? 0;
     if (reply === "silent") return;
     const request = (payload as { Data: { RequestID?: unknown; Data?: unknown } }).Data;
     const requestData = typeof request.Data === "object" && request.Data !== null ? (request.Data as Record<string, unknown>) : {};
@@ -192,6 +206,23 @@ export class FakePrinter {
         Topic: `sdcp/response/${FIXTURE_MAINBOARD_ID}`,
       }),
     );
+  }
+
+  /** The history answer for Cmd 320 or 321 when the fake has a history. */
+  private historyReply(cmd: number): Reply | undefined {
+    const history = this.history;
+    if (history === undefined) return undefined;
+    if (cmd === 320) {
+      return () => ({ Ack: 0, HistoryData: history.entries.map((entry) => entry.TaskId) });
+    }
+    if (cmd === 321) {
+      return (data) => {
+        const ids = Array.isArray(data.Id) ? data.Id : [];
+        const list = ids.flatMap((id) => history.entries.filter((entry) => entry.TaskId === id));
+        return { Ack: 0, HistoryDetailList: list };
+      };
+    }
+    return undefined;
   }
 }
 

@@ -56,6 +56,14 @@ describe("accessible controls", () => {
     }
   });
 
+  it("the History summary is a target at least 44 px tall", () => {
+    assert.match(tagOf("history"), /^<details\b/);
+    const summary = html.match(/<summary\b[^>]*class="([\w-]+)"/)?.[1];
+    assert.equal(summary, "hist__head", "the History section has its summary");
+    const heights = [...rule(".hist__head").matchAll(/^\s*(?:min-)?height:\s*(\d+)px;/gm)].map((m) => Number(m[1]));
+    assert.ok(heights.some((px) => px >= 44), `.hist__head is at least 44 px tall (${heights.join(", ") || "no height"})`);
+  });
+
   it("nothing animates under reduced motion", () => {
     const block = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/)?.[1];
     assert.ok(block !== undefined, "a reduced-motion block");
