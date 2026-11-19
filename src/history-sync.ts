@@ -2,12 +2,22 @@
 // Cmd 320 for the ids, then Cmd 321 for the ids the archive lacks or holds as
 // running. It sends nothing else for history, runs one sync at a time, and a
 // failed sync only logs a warning: the session, status, and events never see it.
+// Thumbnails are fetched over HTTP from the printer's own host only (design D5).
 import { EventEmitter } from "node:events";
 import { type HistoryStore, jobFromDetail, type JobRecord, TASK_STATUS_RUNNING } from "./history-store.ts";
 import { Cmd, type Logger, type SdcpResponse } from "./sdcp-client.ts";
 
 /** The ids one Cmd 321 asks for at most: the size the printer's web UI sends. */
 export const DETAIL_CHUNK_SIZE = 26;
+
+/** Largest thumbnail stored (design D5). */
+export const THUMBNAIL_MAX_BYTES = 1024 * 1024;
+/** Time limit of one thumbnail request. */
+export const THUMBNAIL_TIMEOUT_MS = 10_000;
+/** Failed fetches after which a job's thumbnail is no longer tried. */
+export const THUMBNAIL_MAX_ATTEMPTS = 3;
+
+const THUMBNAIL_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg"]);
 
 /** What the sync needs of the printer session. */
 export interface HistorySession {
@@ -17,7 +27,14 @@ export interface HistorySession {
 export interface HistorySyncOptions {
   session: HistorySession;
   store: HistoryStore;
+  /** Hostname of the printer; thumbnails are fetched only from it. */
+  printerHost: string;
   logger?: Logger;
+  /** `fetch` for thumbnails; the global one by default. */
+  fetch?: typeof fetch;
+  thumbnailMaxBytes?: number;
+  thumbnailTimeoutMs?: number;
+  thumbnailMaxAttempts?: number;
 }
 
 type SyncEvents = {
@@ -29,6 +46,12 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   readonly #session: HistorySession;
   readonly #store: HistoryStore;
   readonly #logger: Logger;
+  readonly #printerHost: string;
+  readonly #fetch: typeof fetch;
+  readonly #thumbnailMaxBytes: number;
+  readonly #thumbnailTimeoutMs: number;
+  readonly #thumbnailMaxAttempts: number;
+  readonly #abort = new AbortController();
   #running: Promise<void> | null = null;
   #again = false;
   #closed = false;
@@ -38,6 +61,11 @@ export class HistorySync extends EventEmitter<SyncEvents> {
     this.#session = options.session;
     this.#store = options.store;
     this.#logger = options.logger ?? console;
+    this.#printerHost = options.printerHost;
+    this.#fetch = options.fetch ?? fetch;
+    this.#thumbnailMaxBytes = options.thumbnailMaxBytes ?? THUMBNAIL_MAX_BYTES;
+    this.#thumbnailTimeoutMs = options.thumbnailTimeoutMs ?? THUMBNAIL_TIMEOUT_MS;
+    this.#thumbnailMaxAttempts = options.thumbnailMaxAttempts ?? THUMBNAIL_MAX_ATTEMPTS;
   }
 
   /**
@@ -62,6 +90,7 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   close(): void {
     this.#closed = true;
     this.#again = false;
+    this.#abort.abort();
   }
 
   async #loop(): Promise<void> {
@@ -89,10 +118,74 @@ export class HistorySync extends EventEmitter<SyncEvents> {
         if (this.#closed) break;
         changed += this.#store.upsert(jobs);
       }
+      changed += await this.#fetchThumbnails();
     } catch (error) {
       if (!this.#closed) this.#logger.warn(`history sync failed: ${(error as Error).message}`);
     }
     if (changed > 0 && !this.#closed) this.emit("change");
+  }
+
+  /**
+   * Fetches the missing thumbnails one at a time and returns how many were
+   * stored. Each failure is counted against its job and logged; it does not
+   * end the sync.
+   */
+  async #fetchThumbnails(): Promise<number> {
+    let stored = 0;
+    for (const { taskId, url } of this.#store.jobsNeedingThumbnail(this.#thumbnailMaxAttempts)) {
+      if (this.#closed) break;
+      if (!this.#fromPrinter(url)) {
+        // Not the printer's host: never requested, and given up on after the attempt limit.
+        this.#store.recordThumbnailFailure(taskId);
+        continue;
+      }
+      try {
+        const { contentType, bytes } = await this.#download(url);
+        if (this.#closed) break;
+        this.#store.putThumbnail(taskId, contentType, bytes);
+        stored++;
+      } catch (error) {
+        if (this.#closed) break;
+        this.#store.recordThumbnailFailure(taskId);
+        this.#logger.warn(`thumbnail of history job ${taskId} not stored: ${(error as Error).message}`);
+      }
+    }
+    return stored;
+  }
+
+  #fromPrinter(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === "http:" && parsed.hostname === this.#printerHost;
+    } catch {
+      return false;
+    }
+  }
+
+  /** One thumbnail request: 200, an image type, and at most the byte limit, read in chunks. */
+  async #download(url: string): Promise<{ contentType: string; bytes: Uint8Array }> {
+    const signal = AbortSignal.any([AbortSignal.timeout(this.#thumbnailTimeoutMs), this.#abort.signal]);
+    const response = await this.#fetch(url, { redirect: "error", signal });
+    try {
+      if (response.status !== 200) throw new Error(`answered HTTP ${response.status}`);
+      const contentType = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+      if (!THUMBNAIL_TYPES.has(contentType)) throw new Error(`answered content type "${contentType}"`);
+      const length = Number(response.headers.get("content-length") ?? NaN);
+      if (length > this.#thumbnailMaxBytes) throw new Error(`is ${length} bytes, over ${this.#thumbnailMaxBytes}`);
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      if (response.body !== null) {
+        for await (const chunk of response.body) {
+          size += chunk.byteLength;
+          if (size > this.#thumbnailMaxBytes) throw new Error(`is over ${this.#thumbnailMaxBytes} bytes`);
+          chunks.push(chunk);
+        }
+      }
+      return { contentType, bytes: Buffer.concat(chunks) };
+    } finally {
+      // Drops the rest of a body that was not read to its end.
+      if (response.body !== null && !response.bodyUsed) await response.body.cancel().catch(() => {});
+    }
   }
 
   /** Sends one history command and checks its `Ack`. */

@@ -6,6 +6,7 @@ import { HistorySync } from "../src/history-sync.ts";
 import { PrinterSession } from "../src/printer-session.ts";
 import type { Logger } from "../src/sdcp-client.ts";
 import { FakePrinter, type FixtureFrame, type ReceivedFrame, type Reply, loadFixture } from "./support/fake-printer.ts";
+import { FakeThumbnails, fakePng } from "./support/fake-thumbnails.ts";
 
 /** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
 function fixtureEntries(): Record<string, unknown>[] {
@@ -63,7 +64,8 @@ describe("HistorySync", () => {
   }
 
   function newSync(): HistorySync {
-    return new HistorySync({ session, store, logger });
+    // The fixture thumbnails name 192.0.2.10, another host: they are never requested.
+    return new HistorySync({ session, store, logger, printerHost: "127.0.0.1" });
   }
 
   beforeEach(() => {
@@ -220,5 +222,80 @@ describe("HistorySync", () => {
       [],
     );
     assert.ok(printer.receivedCommands.includes(320));
+  });
+
+  describe("thumbnails", () => {
+    let thumbnails: FakeThumbnails;
+
+    beforeEach(async () => {
+      thumbnails = await FakeThumbnails.start();
+    });
+
+    afterEach(async () => {
+      await thumbnails.close();
+    });
+
+    /** Starts with the first `count` fixture jobs, their thumbnails on the fake thumbnail server. */
+    async function startWithThumbnails(count: number): Promise<void> {
+      await start();
+      entries.splice(count);
+      for (const entry of entries) entry.Thumbnail = thumbnails.urlFor(entry.TaskId as string);
+    }
+
+    function thumbnailSync(): HistorySync {
+      return new HistorySync({ session, store, logger, printerHost: "127.0.0.1", thumbnailMaxBytes: 1024 });
+    }
+
+    it("fetches a thumbnail once across two syncs and stores its bytes", async () => {
+      await startWithThumbnails(2);
+      const sync = thumbnailSync();
+      let changes = 0;
+      sync.on("change", () => changes++);
+      sync.trigger();
+      await sync.idle();
+      sync.trigger();
+      await sync.idle();
+      const id = entries[0]!.TaskId as string;
+      assert.equal(thumbnails.requestsFor.get(id), 1);
+      assert.equal(thumbnails.requests, 2);
+      assert.deepEqual(store.thumbnail(id), { contentType: "image/png", bytes: new Uint8Array(fakePng(id)) });
+      assert.equal(store.job(id)?.thumbnail, `/api/history/thumbnail?id=${id}`);
+      assert.equal(changes, 1);
+      assert.deepEqual(logger.warnings, []);
+    });
+
+    it("makes no request for a thumbnail on another host", async () => {
+      await startWithThumbnails(1);
+      const id = entries[0]!.TaskId as string;
+      entries[0]!.Thumbnail = thumbnails.urlFor(id).replace("127.0.0.1", "localhost");
+      const sync = thumbnailSync();
+      sync.trigger();
+      await sync.idle();
+      assert.equal(thumbnails.requests, 0);
+      assert.equal(store.thumbnail(id), null);
+      assert.equal(store.job(id)?.thumbnail, null);
+    });
+
+    for (const [name, answer] of [
+      ["an answer over the limit", { body: Buffer.alloc(2048) }],
+      ["a chunked answer over the limit", { body: Buffer.alloc(2048), chunked: true }],
+      ["a text/html answer", { body: Buffer.from("<html></html>"), contentType: "text/html" }],
+      ["a 404 answer", undefined],
+    ] as const) {
+      it(`stores nothing for ${name} and counts a failure, giving up after 3`, async () => {
+        await startWithThumbnails(1);
+        const id = entries[0]!.TaskId as string;
+        thumbnails.answer = () => answer;
+        const sync = thumbnailSync();
+        for (let i = 0; i < 4; i++) {
+          sync.trigger();
+          await sync.idle();
+        }
+        assert.equal(thumbnails.requestsFor.get(id), 3);
+        assert.equal(store.thumbnail(id), null);
+        assert.equal(logger.warnings.length, 3);
+        assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${id} not stored`));
+      });
+    }
   });
 });
