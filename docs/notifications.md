@@ -47,7 +47,9 @@ start):
 {
   "ntfy": {
     "url": "https://ntfy.sh",
-    "topic": "printer-3f9c2a7be41d08c5a6e2f913"
+    "topic": "printer-3f9c2a7be41d08c5a6e2f913",
+    "photos": false,
+    "photoLight": false
   },
   "events": {
     "started": true,
@@ -64,16 +66,24 @@ start):
 - `ntfy.url`: the ntfy server; `https://ntfy.sh` by default.
 - `ntfy.topic`: your topic. `null` (the default when the file doesn't set it)
   turns notifications off.
+- `ntfy.photos`: attach a Photo from the camera to the finished, failed,
+  stopped, and paused notifications (see [Photos](#photos)). `false` by
+  default.
+- `ntfy.photoLight`: turn the chamber light on for the Photo (see
+  [The Photo light](#the-photo-light)). `false` by default, and no effect
+  without `ntfy.photos`.
 - `events`: turn each kind of notification on (`true`) or off (`false`).
   All are on by default.
 
-Environment variables override the file: `NTFY_URL`, `NTFY_TOPIC`, and
-`NOTIFY_EVENTS`, a comma-separated list of the events to send (every event
+Environment variables override the file: `NTFY_URL`, `NTFY_TOPIC`,
+`NTFY_PHOTOS`, `NTFY_PHOTO_LIGHT` (`1` or `true` turn them on, `0` or
+`false` off), and `NOTIFY_EVENTS`, a comma-separated list of the events to send (every event
 not listed is turned off; `none` turns them all off), for example
 `NOTIFY_EVENTS=finished,failed,offline`.
 
-On start the service logs `notifications to <url>`, or
-`notifications off (no ntfy topic)`.
+On start the service logs `notifications to <url>`, followed by
+` (with photos)` or ` (with photos and the photo light)` when those are on,
+or `notifications off (no ntfy topic)`.
 
 ## 5. Send a test notification
 
@@ -87,8 +97,21 @@ It sends one "Test notification" through the configured server and topic,
 exactly as the service sends print events (with the same retries), and
 prints `Test notification sent to <url>, topic <topic>.` Your phone should
 show it within a few seconds. It exits with status 1 and logs the reason
-when no topic is configured or the server can't be reached. It doesn't
-contact the printer.
+when no topic is configured or the server can't be reached. With photos off
+it doesn't contact the printer.
+
+With photos on (see [Photos](#photos)) it finds the printer (`printerIp`,
+else discovery), waits up to 5 seconds for it to answer, and attaches a
+real Photo from its camera, uploaded as `photo-test.jpg`. It never sends a
+light command, even with the Photo light on. It then prints
+`Test notification sent to <url>, topic <topic>, with a photo.`, or, when it
+fell back to text,
+`Test notification sent to <url>, topic <topic>, without a photo: <reason>.`
+(for example `printer not online within 5 s`, or the camera error). A
+fallback still exits with status 0: the notification was delivered. The
+command opens its own camera connection, so run it while the service is
+stopped or nobody watches the camera, if the printer refuses a second
+stream.
 
 You can also test the topic alone, without the service, with curl:
 
@@ -172,7 +195,35 @@ How it works:
   no text-only fallback (the server is down, so text would fail the same
   way).
 
-Privacy: a Photo shows the inside of the printer and whatever of the room
+### The Photo light
+
+The chamber light is often off when a print ends, and a Photo of a dark
+chamber shows little. With `ntfy.photoLight` (or `NTFY_PHOTO_LIGHT=1`) the
+service turns the light on for the Photo:
+
+- It's off by default, and has no effect unless `ntfy.photos` is on.
+- It acts only when the printer reports the light off. When the light is
+  already on, or its state isn't known yet, no light command is sent.
+- The command goes through the same checks as the dashboard's light button:
+  when they refuse it (the printer is offline, or hasn't reported its light
+  yet), the Photo is taken with the light as it is.
+- After the command the service waits for a status push showing the light
+  on, up to 3 seconds, then takes the Photo anyway; the 5-second limit
+  still holds.
+- After the Photo it turns the light off again, unless someone changed it
+  meanwhile: a light command from the dashboard, or the printer reporting
+  the light off after it came on. It doesn't wait for a report showing the
+  light on before turning it off.
+
+This is the one command the service sends to the printer on its own,
+without a person pressing a button; see
+[ADR 0001](adr/0001-photo-light-automatic-command.md) for why it is allowed
+and how it is bounded. The light comes on briefly during a pause too, while
+a print is still in progress.
+
+### Privacy
+
+A Photo shows the inside of the printer and whatever of the room
 the camera sees, and it is uploaded to the ntfy server. On ntfy.sh anyone
 who knows the topic, or the attachment's URL, can see it until it expires.
 Use a long random topic (see [Choose a topic](#2-choose-a-topic)) or a
