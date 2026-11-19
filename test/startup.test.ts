@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -43,6 +44,48 @@ describe("node src/main.ts", () => {
     assert.notEqual(code, 0);
     assert.ok(!stderr.includes(UDP_ATTEMPT_MARKER), `no discovery attempted: ${stderr}`);
     for (const name of ["0.0.0.0", "ACCESS_TOKEN", "LISTEN_HOST"]) assert.ok(stderr.includes(name), `stderr names ${name}: ${stderr}`);
+  });
+
+  it("creates ./data and the archive in it when neither dataDir nor DATA_DIR is set", async () => {
+    const cwd = join(dir, "default-location");
+    mkdirSync(cwd);
+    // A free port: listen on 0, read the port, and release it for the service.
+    const probe = createServer().listen(0, "127.0.0.1");
+    await new Promise((resolve) => probe.once("listening", resolve));
+    const { port } = probe.address() as { port: number };
+    await new Promise((resolve) => probe.close(resolve));
+
+    const child = spawn(process.execPath, [fileURLToPath(new URL("../src/main.ts", import.meta.url))], {
+      cwd,
+      env: {
+        PATH: process.env.PATH,
+        CONFIG_PATH: join(dir, "missing.json"),
+        // Nothing listens on 127.0.0.1:3030 in the tests: the session only retries in the background.
+        PRINTER_IP: "127.0.0.1",
+        LISTEN_HOST: "127.0.0.1",
+        LISTEN_PORT: String(port),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => (output += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (output += chunk));
+    const exited = new Promise<[number | null, NodeJS.Signals | null]>((resolve) =>
+      child.once("exit", (exitCode, exitSignal) => resolve([exitCode, exitSignal])),
+    );
+    try {
+      for (let i = 0; i < 500 && !output.includes("API on http://"); i++) {
+        if (child.exitCode !== null) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(output.includes("API on http://"), `the service started: ${output}`);
+      assert.ok(existsSync(join(cwd, "data", "history.sqlite")), "./data/history.sqlite exists");
+    } finally {
+      child.kill("SIGTERM");
+      const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+      await exited;
+      clearTimeout(timer);
+    }
   });
 
   it(
