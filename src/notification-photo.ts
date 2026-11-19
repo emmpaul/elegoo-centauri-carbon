@@ -60,6 +60,11 @@ export class PhotoTaker {
   /** The end of the last take requested; the next one starts after it. */
   private queue: Promise<unknown> = Promise.resolve();
   private closed = false;
+  /**
+   * `lightCommands` right after our last restore sent its off command, or
+   * null: while it still matches, an "on" report predates that off.
+   */
+  private offSentAt: number | null = null;
 
   constructor(options: PhotoTakerOptions) {
     this.camera = options.camera;
@@ -143,7 +148,11 @@ export class PhotoTaker {
   private lightUp(waitMs: number): { ready: Promise<void>; restore: () => void } | undefined {
     if (this.light === null) return undefined;
     const { state, control } = this.light;
-    if (state.snapshot.light !== "off") return undefined;
+    let last = state.snapshot.light;
+    // Right after our own off command the store can still report "on" until
+    // the next push: unless anyone sent a light command since, the light is off.
+    const staleOn = last === "on" && control.lightCommands === this.offSentAt;
+    if (last !== "off" && !staleOn) return undefined;
 
     const before = control.lightCommands;
     const sent = control.setLight(true);
@@ -169,13 +178,16 @@ export class PhotoTaker {
       if (waitMs <= 0) resolve();
       else lightWait = setTimeout(resolve, waitMs);
     });
+    // Only a change to "on" counts, so a stale "on" (and the "off" push of
+    // our earlier off command that follows it) neither arms nor blocks.
     const onChange = (snapshot: StatusSnapshot) => {
-      if (snapshot.light === "on") {
+      if (snapshot.light === "on" && last !== "on") {
         seenOn = true;
         markReady();
       } else if (snapshot.light === "off" && seenOn) {
         offAfterOn = true;
       }
+      last = snapshot.light;
     };
     state.on("change", onChange);
 
@@ -186,7 +198,10 @@ export class PhotoTaker {
       // switched off elsewhere after it came on. No "on" report is required:
       // the push showing our command often lands after the wait or the Photo.
       if (control.lightCommands !== ours || offAfterOn) return;
-      control.setLight(false).then(
+      const off = control.setLight(false);
+      // Sent when the guard let it through (the counter moved).
+      if (control.lightCommands !== ours) this.offSentAt = control.lightCommands;
+      off.then(
         (result) => this.logResult("off", result),
         (error: unknown) => this.logger.warn(`photo: turning the light off again failed: ${messageOf(error)}`),
       );

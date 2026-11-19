@@ -351,6 +351,56 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual(control.sent, [true]);
   });
 
+  it("turns the light on again for a take right after one that turned it off, before the push shows it off", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    const first = taker.take();
+    const second = taker.take();
+    await settle();
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    assert.deepEqual((await first).jpeg, JPEG);
+    await settle();
+    assert.equal(store.snapshot.light, "on", "the push showing our off has not arrived");
+    assert.deepEqual(control.sent, [true, false, true], "the second turns the light on again");
+    assert.equal(camera.calls.length, 2);
+    assert.notEqual(camera.calls[1]!.after, undefined, "the second waits for the light");
+
+    store.show("on"); // a push still showing the light on, before our off landed
+    assert.equal(await armed(1), false, "not armed by the stale 'on'");
+    store.show("off"); // the push showing the first take's off
+    assert.equal(await armed(1), false);
+    store.show("on"); // the push showing the second take's on
+    assert.equal(await armed(1), true);
+    camera.answer(1, JPEG);
+    assert.deepEqual((await second).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true, false, true, false], "the second turns the light off again");
+    assert.equal(store.listenerCount("change"), 0);
+  });
+
+  it("trusts the light's 'on' report when someone sent a light command after the last take's off", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    const first = taker.take();
+    await settle();
+    store.show("on");
+    camera.answer(0, JPEG);
+    await first;
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    control.lightCommands++; // the dashboard turns the light on again
+
+    const second = taker.take();
+    await settle();
+    assert.equal(camera.calls[1]!.after, undefined, "no wait: the light is on as reported");
+    camera.answer(1, JPEG);
+    assert.deepEqual((await second).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+  });
+
   it("arms a queued take with 1000 ms left at once, without the 3000 ms light wait", async () => {
     const store = new StubStore("off");
     const taker = takerWith(store);
