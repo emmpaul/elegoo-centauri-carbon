@@ -19,6 +19,10 @@ export interface ThumbnailAnswer {
   body: Uint8Array;
   /** Leave out `Content-Length`, so the body is sent chunked. */
   chunked?: boolean;
+  /** More response headers, e.g. a `Location`. */
+  headers?: Record<string, string>;
+  /** Never answer: the request stays open until the client gives up or the fake closes. */
+  hang?: boolean;
 }
 
 export interface FakeThumbnailsOptions {
@@ -92,9 +96,11 @@ export class FakeThumbnails {
       res.writeHead(404).end();
       return;
     }
+    if (answer.hang) return;
     res.writeHead(answer.status ?? 200, {
       "Content-Type": answer.contentType ?? "image/png",
       ...(answer.chunked ? {} : { "Content-Length": answer.body.byteLength }),
+      ...answer.headers,
     });
     res.end(answer.body);
   }

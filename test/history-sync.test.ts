@@ -297,6 +297,60 @@ describe("HistorySync", () => {
         assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${id} not stored`));
       });
     }
+
+    it("never requests an https URL, even on the printer's host", async () => {
+      await startWithThumbnails(1);
+      const id = entries[0]!.TaskId as string;
+      entries[0]!.Thumbnail = thumbnails.urlFor(id).replace("http:", "https:");
+      const requested: string[] = [];
+      const sync = new HistorySync({
+        session,
+        store,
+        logger,
+        printerHost: "127.0.0.1",
+        fetch: (input, init) => {
+          requested.push(String(input));
+          return fetch(input, init);
+        },
+      });
+      sync.trigger();
+      await sync.idle();
+      assert.deepEqual(requested, []);
+      assert.equal(store.thumbnail(id), null);
+    });
+
+    it("does not follow a redirect, even to the printer's host", async () => {
+      await startWithThumbnails(1);
+      const id = entries[0]!.TaskId as string;
+      const target = await FakeThumbnails.start();
+      try {
+        thumbnails.answer = () => ({ status: 302, body: new Uint8Array(), headers: { Location: target.urlFor(id) } });
+        const sync = thumbnailSync();
+        sync.trigger();
+        await sync.idle();
+        assert.equal(thumbnails.requestsFor.get(id), 1);
+        assert.equal(target.requests, 0);
+        assert.equal(store.thumbnail(id), null);
+        assert.equal(logger.warnings.length, 1);
+        assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${id} not stored`));
+      } finally {
+        await target.close();
+      }
+    });
+
+    it("gives up on a thumbnail request that gets no answer within the time limit", { timeout: 5_000 }, async () => {
+      await startWithThumbnails(2);
+      const [hanging, answered] = entries.map((entry) => entry.TaskId as string) as [string, string];
+      thumbnails.answer = (taskId) => (taskId === hanging ? { body: new Uint8Array(), hang: true } : { body: fakePng(taskId) });
+      const sync = new HistorySync({ session, store, logger, printerHost: "127.0.0.1", thumbnailTimeoutMs: 100 });
+      sync.trigger();
+      await sync.idle();
+      assert.equal(thumbnails.requestsFor.get(hanging), 1);
+      assert.equal(store.thumbnail(hanging), null);
+      assert.deepEqual(store.thumbnail(answered), { contentType: "image/png", bytes: new Uint8Array(fakePng(answered)) });
+      assert.equal(logger.warnings.length, 1);
+      assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${hanging} not stored`));
+    });
   });
 
   describe("follow-up sync", () => {
