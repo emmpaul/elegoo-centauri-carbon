@@ -93,11 +93,18 @@ limitMs = 5000, lightWaitMs = 3000, logger }` with
 `take(): Promise<PhotoResult>`, where
 `PhotoResult = { jpeg: Buffer } | { jpeg: null; reason: string }`. It never rejects.
 
-- The cap is one `AbortSignal.timeout(limitMs)` created when the take starts; it is the
-  `signal` of `takeFrame`, so the whole take (light wait included) ends within 5 s.
+- The cap is measured from the Event's detection: `take()` is called the moment the
+  detector emits (D6), and it fixes the deadline, detection + `limitMs`, before the take
+  is queued. One timer per take fires at that deadline, aborts the `signal` given to
+  `takeFrame`, and settles the take with `"photo timed out"`, so the whole take (queue
+  wait and light wait included) ends within 5 s of detection.
 - Takes run one at a time (a promise chain), so two Events in quick succession never
-  fight over the light; each take's cap starts when it starts. Events close enough to
-  queue are rare (a pause right before a stop), and the second waits at most 5 s.
+  fight over the light. A take queued behind another gets only the time left until its
+  own deadline: when the take before it ends, it starts with what remains, and when
+  nothing remains (its deadline passed while it waited) it resolves at once with
+  `"photo timed out"` without touching the camera or the light. Every Notification
+  therefore goes out within about 5 s of its detection, at the price of a text-only
+  Notification for a second Event close behind the first (a pause right before a stop).
 - Without the light (`light` null, or the light not `"off"`): `takeFrame({ signal })`.
 
 ### D4. The Photo light
@@ -113,13 +120,19 @@ Only when `photoLight` is on and `snapshot.light === "off"`:
    logged; the wait below still decides.
 3. `takeFrame({ signal, after })` starts at once, so the camera opens in parallel; `after`
    resolves on the first store `change` whose snapshot shows `light: "on"`, or after
-   `lightWaitMs` (3 s) without one, which leaves at least 2 s of the cap for a frame. No
-   confirmation: the Photo is taken anyway.
+   `lightWaitMs` (3 s) without one, which leaves at least 2 s of the cap for a frame. A
+   queued take with less than the full 5 s left shortens that wait to keep 2 s for the
+   frame (`min(lightWaitMs, remaining - 2000)`, arming at once when that is not
+   positive). No confirmation: the Photo is taken anyway.
 4. Restore in `finally` (after the Photo or its failure), without delaying the
-   Notification: send `setLight(false)` only if `lightCommands` is still the value right
-   after our command (no one else sent a light command), no store change showed the
-   light `"off"` after it showed `"on"`, and the snapshot shows `"on"` now. A refusal or
-   failure of that command is logged as a warning.
+   Notification: send `setLight(false)` when our `setLight(true)` was sent (it passed
+   the guard), `lightCommands` is still the value right after our command (no one else
+   sent a light command), and no store change showed the light `"off"` after it had
+   shown `"on"`. The light does **not** have to have been reported `"on"`: the printer
+   pushes its status about every 3 s, so the push showing our command often lands after
+   the 3 s wait, or after the Photo; requiring an `"on"` report left the light on in
+   exactly that case. A refusal or failure of that command (for example the guard
+   refusing because `LightStatus` became unknown) is logged as a warning.
 
 `light.state` reads `store.snapshot.light`; `light.control` is the service's
 `PrintControl`, so the guard in `control-rules.ts` applies unchanged. No other command is
@@ -205,7 +218,13 @@ change (its frames start with `FF D8`); a test that needs a slow camera uses a l
 - [`pnpm notify:test` with photos on opens its own camera stream, a second one while the
   service has a viewer] → It is a manual one-off outside the service; a refused stream is
   a reported fallback. The service itself never opens a second connection.
-- [A queued second take may wait up to 5 s behind the first] → Rare; bounded.
+- [A take queued behind another gets only the time left of its own 5 s, so a second
+  Event right after the first (a pause right before a stop) may go out text-only] →
+  Rare; in exchange every Notification leaves within about 5 s of its detection.
+- [The off command is sent without seeing the light reported on, so it may reach a
+  printer that never applied our on command (its `Ack` failed or timed out)] → Harmless:
+  the light is off either way, and a user command or an off-after-on report meanwhile
+  still suppresses it.
 
 ## Migration Plan
 

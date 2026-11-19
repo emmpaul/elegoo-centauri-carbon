@@ -53,7 +53,9 @@ SHALL be sent exactly as the camera sent it.
 ### Requirement: Photo time limit and text-only fallback
 A Notification with photos on SHALL always be delivered. Taking the Photo SHALL take at
 most 5 seconds from detection; when no whole frame arrives in time, or the camera cannot
-be reached or fails, the system SHALL send the Notification text-only and log why.
+be reached or fails, the system SHALL send the Notification text-only and log why. The 5
+seconds SHALL be measured from the event's own detection also when the Photo has to wait
+for another Photo being taken; a Photo with no time left SHALL NOT be attempted.
 
 #### Scenario: Camera unreachable
 - **GIVEN** photos are on and the camera cannot be reached
@@ -64,6 +66,11 @@ be reached or fails, the system SHALL send the Notification text-only and log wh
 - **GIVEN** photos are on and the camera sends no whole frame within 5 seconds
 - **WHEN** a print finishes
 - **THEN** the "print finished" Notification is sent text-only no later than 5 seconds after detection plus delivery time
+
+#### Scenario: Two Photo events within 5 seconds
+- **GIVEN** photos are on and a Photo is being taken for a "print paused" event
+- **WHEN** a print stops 1 second after the pause was detected and the camera sends no whole frame
+- **THEN** each Notification is sent no later than 5 seconds after its own event's detection plus delivery time, the "print stopped" one text-only with the reason logged
 
 ### Requirement: Photo upload to ntfy
 A Notification with a Photo SHALL be published to ntfy as an attachment upload, with the
@@ -127,9 +134,15 @@ SHALL be taken as it is. The system SHALL send no other command for a Photo.
 - **THEN** no light command is sent
 
 ### Requirement: Light restored after the Photo
-After a Photo for which the system turned the light on, the system SHALL turn the light
-off again, unless the light was changed by anyone else meanwhile: a light command from a
-user, or a status push showing the light off after it was on.
+After a Photo for which the system sent the command turning the light on, the system
+SHALL turn the light off again, unless the light was changed by anyone else meanwhile: a
+light command from a user, or a status push showing the light off after it was on. The
+system SHALL NOT require a status push showing the light on before turning it off.
+
+#### Scenario: Status push arrives after the Photo
+- **GIVEN** the system sent the command turning the light on for a Photo
+- **WHEN** no status push shows the light on until after the Photo is taken
+- **THEN** the system turns the light off again after the Photo
 
 #### Scenario: User changed the light meanwhile
 - **GIVEN** the system turned the light on for a Photo
