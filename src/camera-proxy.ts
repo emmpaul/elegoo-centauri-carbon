@@ -1,7 +1,9 @@
 // Camera proxy (design D5): one upstream MJPEG connection to the printer,
 // fanned out to every browser watching. The upstream opens with the first
 // viewer and closes when the last one leaves, so the printer never serves
-// more than one stream to this service.
+// more than one stream to this service. A frame taker (`takeFrame`, for the
+// notification Photo) holds the same upstream for one part without counting
+// as a viewer.
 import { get, type ClientRequest, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Logger } from "./sdcp-client.ts";
 
@@ -38,6 +40,29 @@ interface Viewer {
   raw: boolean;
 }
 
+/** A Photo frame is rejected once its part grows past this many bytes. */
+const MAX_FRAME_BYTES = 8 * 1024 * 1024;
+
+/** Room for a part's headers on top of the frame cap. */
+const MAX_PART_HEADER_BYTES = 64 * 1024;
+
+const CRLF = Buffer.from("\r\n");
+const HEADER_END = Buffer.from("\r\n\r\n");
+
+interface FrameTaker {
+  /** True once `after` has settled; only parts whose delimiter arrives later count. */
+  armed: boolean;
+  /** True once the delimiter that starts the taken part has arrived. */
+  inPart: boolean;
+  /** Bytes of the part so far (after its delimiter). */
+  chunks: Buffer[];
+  size: number;
+  /** Last bytes seen, for a delimiter split across chunks. */
+  tail: Buffer;
+  resolve: (frame: Buffer) => void;
+  reject: (error: Error) => void;
+}
+
 /** Shares one upstream MJPEG stream between any number of viewers. */
 export class CameraProxy {
   private readonly options: CameraProxyOptions;
@@ -45,6 +70,7 @@ export class CameraProxy {
   private readonly maxBacklogBytes: number;
   private readonly responseTimeoutMs: number;
   private readonly viewers = new Set<Viewer>();
+  private readonly takers = new Set<FrameTaker>();
   /** Bumped on every connect and close; callbacks of an older connection do nothing. */
   private generation = 0;
   private connecting = false;
@@ -90,10 +116,60 @@ export class CameraProxy {
     else if (!this.upstreamOpen) void this.connect();
   }
 
-  /** Drops every viewer and the upstream. */
+  /**
+   * Resolves with the next whole JPEG part of the upstream stream, opened for
+   * it when nothing holds it. Only a part whose delimiter arrives after
+   * `after` settles counts. Rejects when `signal` aborts, the upstream fails,
+   * the stream has no multipart boundary, or the part is not a JPEG or is
+   * larger than 8 MiB.
+   */
+  takeFrame(options: { signal: AbortSignal; after?: Promise<unknown> }): Promise<Buffer> {
+    const { signal, after } = options;
+    if (signal.aborted) return Promise.reject(new Error("photo timed out"));
+    if (this.upstream !== undefined && this.delimiter === null) {
+      return Promise.reject(new Error("camera stream has no multipart boundary"));
+    }
+    return new Promise<Buffer>((resolve, reject) => {
+      const onAbort = () => taker.reject(new Error("photo timed out"));
+      const settle = () => {
+        signal.removeEventListener("abort", onAbort);
+        this.takers.delete(taker);
+        this.releaseUpstream();
+      };
+      const taker: FrameTaker = {
+        armed: after === undefined,
+        inPart: false,
+        chunks: [],
+        size: 0,
+        tail: Buffer.alloc(0),
+        resolve: (frame) => {
+          if (!this.takers.has(taker)) return;
+          settle();
+          resolve(frame);
+        },
+        reject: (error) => {
+          if (!this.takers.has(taker)) return;
+          settle();
+          reject(error);
+        },
+      };
+      this.takers.add(taker);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (after !== undefined) {
+        const arm = () => {
+          taker.armed = true;
+        };
+        after.then(arm, arm);
+      }
+      if (!this.upstreamOpen) void this.connect();
+    });
+  }
+
+  /** Drops every viewer, every frame taker, and the upstream. */
   close(): void {
     for (const viewer of this.viewers) viewer.res.destroy();
     this.viewers.clear();
+    for (const taker of [...this.takers]) taker.reject(new Error("camera proxy closed"));
     this.closeUpstream();
   }
 
@@ -125,6 +201,10 @@ export class CameraProxy {
       this.upstream = upstream;
       this.delimiter = delimiterOf(upstream.headers["content-type"]);
       this.tail = Buffer.alloc(0);
+      if (this.delimiter === null) {
+        for (const taker of [...this.takers]) taker.reject(new Error("camera stream has no multipart boundary"));
+        if (!current()) return; // nothing else held the upstream
+      }
       for (const viewer of this.viewers) this.sendHead(viewer, upstream.headers);
       upstream.on("data", (chunk: Buffer) => this.fanOut(chunk));
       upstream.on("end", () => {
@@ -158,6 +238,7 @@ export class CameraProxy {
    * the next part delimiter, so its first part is whole.
    */
   private fanOut(chunk: Buffer): void {
+    if (this.takers.size > 0) this.feedTakers(chunk);
     const withTail = this.delimiter === null ? chunk : Buffer.concat([this.tail, chunk]);
     let start: number | undefined;
     for (const viewer of this.viewers) {
@@ -182,16 +263,77 @@ export class CameraProxy {
     }
   }
 
-  private detach(viewer: Viewer): void {
-    this.viewers.delete(viewer);
-    if (this.viewers.size === 0) this.closeUpstream();
+  /**
+   * Cuts the first part whose delimiter arrives after a taker is armed, up to
+   * the next delimiter, and hands its body (part headers and the trailing
+   * CRLF removed) to the taker.
+   */
+  private feedTakers(chunk: Buffer): void {
+    const delimiter = this.delimiter;
+    if (delimiter === null) return;
+    for (const taker of [...this.takers]) {
+      if (!taker.armed) continue;
+      const search = Buffer.concat([taker.tail, chunk]);
+      if (!taker.inPart) {
+        const start = search.indexOf(delimiter);
+        if (start === -1) {
+          taker.tail = search.subarray(Math.max(0, search.length - (delimiter.length - 1)));
+          continue;
+        }
+        taker.inPart = true;
+        const rest = search.subarray(start + delimiter.length);
+        taker.chunks = [rest];
+        taker.size = rest.length;
+        taker.tail = Buffer.alloc(0);
+        this.finishPart(taker, rest, delimiter);
+        continue;
+      }
+      taker.chunks.push(chunk);
+      taker.size += chunk.length;
+      this.finishPart(taker, search, delimiter);
+    }
   }
 
-  /** Ends every viewer (502 for those without headers yet) and the upstream. */
+  /**
+   * Looks for the closing delimiter in `search`, the newest bytes of the part
+   * so far (it ends where the part so far ends), and settles the taker once
+   * the part is whole.
+   */
+  private finishPart(taker: FrameTaker, search: Buffer, delimiter: Buffer): void {
+    const end = search.indexOf(delimiter);
+    if (end === -1) {
+      if (taker.size > MAX_FRAME_BYTES + MAX_PART_HEADER_BYTES) {
+        taker.reject(new Error("camera frame is larger than 8 MiB"));
+        return;
+      }
+      taker.tail = search.subarray(Math.max(0, search.length - (delimiter.length - 1)));
+      return;
+    }
+    const part = Buffer.concat(taker.chunks).subarray(0, taker.size - (search.length - end));
+    const headerEnd = part.indexOf(HEADER_END);
+    let body = headerEnd === -1 ? part : part.subarray(headerEnd + HEADER_END.length);
+    if (body.subarray(body.length - CRLF.length).equals(CRLF)) body = body.subarray(0, body.length - CRLF.length);
+    if (body.length > MAX_FRAME_BYTES) taker.reject(new Error("camera frame is larger than 8 MiB"));
+    else if (body.length < 2 || body[0] !== 0xff || body[1] !== 0xd8) taker.reject(new Error("camera frame is not a JPEG"));
+    else taker.resolve(body);
+  }
+
+  private detach(viewer: Viewer): void {
+    this.viewers.delete(viewer);
+    this.releaseUpstream();
+  }
+
+  /** Closes the upstream once no viewer and no frame taker holds it. */
+  private releaseUpstream(): void {
+    if (this.viewers.size === 0 && this.takers.size === 0) this.closeUpstream();
+  }
+
+  /** Ends every viewer (502 for those without headers yet), every frame taker, and the upstream. */
   private fail(reason: string): void {
     this.logger.warn(`camera: ${reason}`);
     const viewers = [...this.viewers];
     this.viewers.clear();
+    for (const taker of [...this.takers]) taker.reject(new Error(reason));
     this.closeUpstream();
     for (const { res } of viewers) {
       if (res.headersSent) {
