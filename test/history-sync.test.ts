@@ -180,7 +180,12 @@ describe("HistorySync", () => {
     sync.trigger();
     await sync.idle();
     assert.match(logger.warnings.at(-1)!, /320 answered without a HistoryData list/);
-    assert.equal(logger.warnings.length, 3);
+    printer.replies.set(320, () => ({ Ack: "1\nforged: line" }));
+    sync.trigger();
+    await sync.idle();
+    assert.match(logger.warnings.at(-1)!, /320 answered Ack 1\\u000aforged: line/);
+    assert.doesNotMatch(logger.warnings.at(-1)!, /\n/);
+    assert.equal(logger.warnings.length, 4);
     assert.equal(store.list(null, 100).jobs.length, 0);
     assert.equal(session.state, "online");
   });

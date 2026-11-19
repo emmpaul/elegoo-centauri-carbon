@@ -250,7 +250,7 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   async #request(cmd: number, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await this.#session.send(cmd, data);
     const answer = response.Data.Data;
-    if (answer.Ack !== 0) throw new Error(`SDCP command ${cmd} answered Ack ${String(answer.Ack)}`);
+    if (answer.Ack !== 0) throw new Error(`SDCP command ${cmd} answered Ack ${printable(String(answer.Ack))}`);
     return answer;
   }
 }
