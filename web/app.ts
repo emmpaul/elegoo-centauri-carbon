@@ -10,8 +10,11 @@ import { delimiterOf, MjpegParser } from "./mjpeg.js";
 import { type ButtonView, type DashboardView, type Row, settledDashboardView, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
 import { attachStopSlide } from "./stop-slide.js";
 import { Commands } from "./commands.js";
+import { HistoryList, type HistoryState, historyRowView, historyStatusView } from "./history.js";
 
 const TOKEN_KEY = "printer-token";
+/** localStorage key of the History section's open or closed choice (design D8). */
+const HISTORY_OPEN_KEY = "history-open";
 /** Wait before reopening the event stream after the service closed it. */
 const RETRY_MS = 5000;
 /** Wait before trying the camera again after it failed (design D11). */
@@ -387,6 +390,104 @@ function setUpCamera(): void {
   document.addEventListener("visibilitychange", render);
 }
 
+// ---- History section (design D8) ----
+
+/** Watches the end of the list; re-observing it reports whether it is in view now. */
+let historyObserver: IntersectionObserver | null = null;
+
+const historyList = new HistoryList({
+  fetch: (path) => apiFetch(path),
+  observe(visible) {
+    historyObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) visible();
+    });
+    historyObserver.observe(field("historySentinel"));
+  },
+  render: renderHistory,
+  unauthorized: () => void connect(),
+});
+
+/** One row: thumbnail or placeholder, name, times, duration, layers, and outcome. */
+function historyRow(job: HistoryState["jobs"][number]): HTMLLIElement {
+  const row = historyRowView(job, Date.now());
+  const item = document.createElement("li");
+  item.className = "hist__row";
+  item.dataset.key = JSON.stringify(row);
+  let thumb: HTMLElement;
+  if (row.thumbnail === null) {
+    thumb = document.createElement("span");
+    thumb.dataset.empty = "";
+  } else {
+    const image = document.createElement("img");
+    image.loading = "lazy";
+    image.alt = "";
+    image.src = withToken(row.thumbnail);
+    thumb = image;
+  }
+  thumb.className = "hist__thumb";
+  const main = document.createElement("div");
+  main.className = "hist__main";
+  const name = document.createElement("div");
+  name.className = "hist__name";
+  name.textContent = row.name;
+  name.title = row.name;
+  const meta = document.createElement("div");
+  meta.className = "hist__meta";
+  meta.textContent = [row.end === null ? row.start : `${row.start} – ${row.end}`, row.duration, `${row.layers} layers`].filter((part) => part !== null).join(" · ");
+  main.append(name, meta);
+  const outcome = document.createElement("span");
+  outcome.className = "hist__outcome";
+  outcome.dataset.tone = row.outcome.tone;
+  outcome.textContent = row.outcome.label;
+  item.append(thumb, main, outcome);
+  return item;
+}
+
+/** Writes the list, keeping rows that did not change (so their thumbnails stay), and the status line. */
+function renderHistory(state: HistoryState): void {
+  const list = field("historyList");
+  state.jobs.forEach((job, index) => {
+    const fresh = historyRow(job);
+    const current = list.children[index] as HTMLElement | undefined;
+    if (current === undefined) list.append(fresh);
+    else if (current.dataset.key !== fresh.dataset.key) current.replaceWith(fresh);
+  });
+  while (list.children.length > state.jobs.length) list.lastElementChild?.remove();
+
+  const status = historyStatusView(state.status);
+  field("historyStatus").hidden = status === null;
+  setText("historyMessage", status?.message ?? "");
+  field("historyRetry").hidden = !status?.retry;
+  // The observer reports only changes: look again, so an end still in view loads the next page.
+  if (state.status === "more" && historyObserver !== null) {
+    const sentinel = field("historySentinel");
+    historyObserver.unobserve(sentinel);
+    historyObserver.observe(sentinel);
+  }
+}
+
+/** Restores the open choice, and loads the list when the section opens. */
+function setUpHistory(): void {
+  const details = field<HTMLDetailsElement>("history");
+  details.addEventListener("toggle", () => {
+    try {
+      localStorage.setItem(HISTORY_OPEN_KEY, details.open ? "open" : "closed");
+    } catch {
+      // Storage blocked: the choice lasts for this page only.
+    }
+    if (details.open) void historyList.open();
+    else historyList.close();
+  });
+  field("historyRetry").addEventListener("click", () => void historyList.retry());
+  let open = false;
+  try {
+    open = localStorage.getItem(HISTORY_OPEN_KEY) === "open";
+  } catch {
+    // Storage blocked: collapsed, the default.
+  }
+  details.open = open;
+}
+
 // ---- Theme (design D4) ----
 
 type Theme = "dark" | "light";
@@ -428,6 +529,8 @@ function setUpTheme(): void {
 // ---- Live updates ----
 
 let events: EventSource | null = null;
+/** Set after the first successful status read: later ones are reconnects. */
+let connectedBefore = false;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
 const tokenPage: TokenPageState = { rejected: false, edited: false, shown: false };
@@ -518,6 +621,9 @@ async function connect(): Promise<void> {
   serviceReachable = true;
   latest = (await response.json()) as StatusSnapshot;
   render();
+  // A reconnect may have missed history events (or followed a rejected token): read the list again.
+  if (connectedBefore || historyList.state.status === "error") void historyList.changed();
+  connectedBefore = true;
 
   const source = new EventSource(withToken("/api/events"));
   events = source;
@@ -526,6 +632,7 @@ async function connect(): Promise<void> {
     latest = JSON.parse((event as MessageEvent<string>).data) as StatusSnapshot;
     render();
   });
+  source.addEventListener("history", () => void historyList.changed());
   source.addEventListener("open", () => {
     serviceReachable = true;
     render();
@@ -556,6 +663,7 @@ function start(): void {
   setUpTheme();
   setUpControls();
   setUpCamera();
+  setUpHistory();
   registerServiceWorker();
   // Keeps the "… ago" texts current between updates.
   setInterval(render, 1000);
