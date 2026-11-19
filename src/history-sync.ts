@@ -257,6 +257,14 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   }
 }
 
+/**
+ * Printer-supplied text with its control and line-separator characters
+ * written as `\uXXXX`, so it cannot break or forge a log line.
+ */
+function printable(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 /** The `HistoryData` ids of a Cmd 320 answer. */
 function historyIds(answer: Record<string, unknown>): string[] {
   const ids = answer.HistoryData;

@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { once } from "node:events";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
-import { HistorySync } from "../src/history-sync.ts";
+import { type HistorySession, HistorySync } from "../src/history-sync.ts";
 import { PrinterSession } from "../src/printer-session.ts";
 import type { Logger } from "../src/sdcp-client.ts";
 import { FakePrinter, type FixtureFrame, type ReceivedFrame, type Reply, loadFixture } from "./support/fake-printer.ts";
