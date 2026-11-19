@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import type { HistoryJob } from "../src/history-store.ts";
 import "./support/web-modules.ts";
 
-const { HistoryList, historyRowView, historyStatusView } = await import("../web/history.ts");
+const { HistoryList, historyRowKey, historyRowView, historyStatusView } = await import("../web/history.ts");
 
 /** The references' "now": 2026-11-13 21:20:00 UTC. */
 const NOW = Date.UTC(2026, 10, 13, 21, 20, 0);
@@ -80,6 +80,19 @@ describe("history rows", () => {
 
   it("leaves the thumbnail null for the placeholder", () => {
     assert.equal(historyRowView(job({ thumbnail: null }), NOW).thumbnail, null);
+  });
+
+  it("keys a row by its thumbnail src with the current token", () => {
+    const row = historyRowView(job(), NOW);
+    const withToken = (token: string) => (path: string) => `${path}&token=${token}`;
+    const first = historyRowKey(row, withToken("a"));
+    assert.equal(first.src, "/api/history/thumbnail?id=job-1&token=a");
+    const next = historyRowKey(row, withToken("b"));
+    assert.equal(next.src, "/api/history/thumbnail?id=job-1&token=b");
+    assert.notEqual(next.key, first.key, "a new token rebuilds the row");
+    assert.equal(historyRowKey(row, withToken("a")).key, first.key, "an unchanged row keeps its key");
+    assert.notEqual(historyRowKey(historyRowView(job({ outcome: "failed", errorCode: 45 }), NOW), withToken("a")).key, first.key);
+    assert.deepEqual(historyRowKey(historyRowView(job({ thumbnail: null }), NOW), withToken("a")).src, null);
   });
 });
 

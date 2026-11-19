@@ -10,7 +10,7 @@ import { delimiterOf, MjpegParser } from "./mjpeg.js";
 import { type ButtonView, type DashboardView, type Row, settledDashboardView, type SlideState, type SlideView, type StatusView, type TokenPageState, tokenView } from "./view.js";
 import { attachStopSlide } from "./stop-slide.js";
 import { Commands } from "./commands.js";
-import { HistoryList, type HistoryState, historyRowView, historyStatusView } from "./history.js";
+import { HistoryList, type HistoryState, historyRowKey, historyRowView, historyStatusView } from "./history.js";
 
 const TOKEN_KEY = "printer-token";
 /** localStorage key of the History section's open or closed choice (design D8). */

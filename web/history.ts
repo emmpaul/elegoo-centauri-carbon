@@ -69,6 +69,16 @@ export function historyRowView(job: HistoryJob, now: number): HistoryRowView {
   };
 }
 
+/**
+ * The thumbnail src of a row, with the current token, and the row's key. The
+ * src is in the key, so a row built with an earlier token is rebuilt and its
+ * image asks with the current one.
+ */
+export function historyRowKey(row: HistoryRowView, withToken: (path: string) => string): { src: string | null; key: string } {
+  const src = row.thumbnail === null ? null : withToken(row.thumbnail);
+  return { src, key: JSON.stringify([row, src]) };
+}
+
 // ---- Loader (design D8) ----
 
 /** Jobs per page the section asks for (the API's default). */
