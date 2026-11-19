@@ -372,6 +372,25 @@ describe("CameraProxy.takeFrame with a fake MJPEG source", () => {
     await source.waitForNoStreams();
   });
 
+  it("keeps the upstream for a pending frame when the last viewer leaves, and closes it afterwards", async () => {
+    await start();
+    const viewer = await Viewer.open(`${base}/camera`);
+    await viewer.waitForParts(1);
+    let release!: () => void;
+    const after = new Promise<void>((resolve) => (release = resolve));
+    const taking = proxy.takeFrame({ signal: AbortSignal.timeout(3000), after });
+    viewer.close();
+    await until(() => proxy.viewerCount === 0, "the viewer to leave");
+    assert.equal(proxy.upstreamOpen, true, "the pending frame holds the upstream");
+
+    release();
+    const frame = await taking;
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame)), "a whole frame");
+    assert.equal(source.connections, 1, "no second connection");
+    await source.waitForNoStreams();
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
   it("rejects when the signal aborts and closes the otherwise unused upstream", async () => {
     await restartSource({ frameIntervalMs: 60_000 });
     await start();
