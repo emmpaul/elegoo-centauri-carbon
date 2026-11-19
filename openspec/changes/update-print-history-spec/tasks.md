@@ -4,4 +4,4 @@
 
 ## 2. Check
 
-- [ ] 2.1 `openspec validate update-print-history-spec --strict`, `pnpm typecheck`, and `pnpm test` pass
+- [x] 2.1 `openspec validate update-print-history-spec --strict`, `pnpm typecheck`, and `pnpm test` pass
