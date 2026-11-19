@@ -183,6 +183,7 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     assert.deepEqual((await pending).jpeg, JPEG);
     assert.deepEqual(control.sent, [true, false]);
+    assert.equal(store.listenerCount("change"), 0, "the change listener is removed after the take");
   });
 
   it("arms the frame at 3000 ms without a change, and the result arrives before 5000 ms", async () => {
@@ -201,6 +202,7 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     await pending;
     assert.deepEqual(result?.jpeg, JPEG);
+    assert.equal(store.listenerCount("change"), 0, "the change listener is removed after the take");
   });
 
   for (const light of ["on", "unknown"] as const) {
@@ -248,6 +250,20 @@ describe("PhotoTaker with the Photo light", () => {
     camera.answer(0, JPEG);
     await pending;
     assert.deepEqual(control.sent, [true]);
+  });
+
+  it("sends no off command when the light is not on at the restore", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    store.show("unknown"); // the printer stopped reporting the light
+    await settle();
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true]);
+    assert.equal(store.listenerCount("change"), 0);
   });
 
   it("sends no command when the Photo light is off", async () => {
