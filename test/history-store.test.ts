@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, describe, it } from "node:test";
-import { HistoryStore, SCHEMA_VERSION, jobFromDetail } from "../src/history-store.ts";
+import {
+  HistoryStore,
+  SCHEMA_VERSION,
+  encodeHistoryCursor,
+  jobFromDetail,
+  parseHistoryCursor,
+} from "../src/history-store.ts";
 import type { JobRecord } from "../src/history-store.ts";
 import { loadFixture } from "./support/fake-printer.ts";
 
@@ -221,5 +227,82 @@ describe("HistoryStore.upsert", () => {
     assert.equal(job?.beginTime, 0);
     assert.equal(job?.layersTotal, 0);
     assert.equal(job?.thumbnailUrl, null);
+  });
+});
+
+describe("HistoryStore.list", () => {
+  it("pages 26 jobs as 20 then 6, newest first", () => {
+    const store = HistoryStore.open(":memory:");
+    const entries = fixtureEntries();
+    store.upsert(records(entries));
+
+    const first = store.list(null, 20);
+    assert.equal(first.jobs.length, 20);
+    assert.notEqual(first.next, null);
+    const second = store.list(first.next, 20);
+    assert.equal(second.jobs.length, 6);
+    assert.equal(second.next, null);
+
+    const expected = [...entries]
+      .sort((a, b) => (b.BeginTime as number) - (a.BeginTime as number))
+      .map((entry) => entry.TaskId);
+    assert.deepEqual([...first.jobs, ...second.jobs].map((job) => job.id), expected);
+    assert.equal(first.jobs[0]?.fileName, "test-print-2.gcode");
+    store.close();
+  });
+
+  it("answers next null when the jobs fit exactly in one page", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records(fixtureEntries()));
+    assert.equal(store.list(null, 26).next, null);
+    assert.equal(store.list(null, 25).jobs.length, 25);
+    assert.notEqual(store.list(null, 25).next, null);
+    store.close();
+  });
+
+  it("keeps a stable order without duplicates or gaps for equal start times", () => {
+    const store = HistoryStore.open(":memory:");
+    const ids = ["a-1", "b-2", "c-3", "d-4", "e-5", "f-6", "g-7"];
+    store.upsert(records(ids.map((id, i) => syntheticEntry({ TaskId: id, BeginTime: i < 5 ? 1794600000 : 1794500000 }))));
+
+    const seen: string[] = [];
+    let before: string | null = null;
+    for (let pages = 0; pages < 10; pages++) {
+      const page = store.list(before, 2);
+      seen.push(...page.jobs.map((job) => job.id));
+      before = page.next;
+      if (before === null) break;
+    }
+    assert.deepEqual(seen, ["e-5", "d-4", "c-3", "b-2", "a-1", "g-7", "f-6"]);
+    store.close();
+  });
+
+  it("encodes and parses a cursor", () => {
+    const cursor = { beginTime: 1794600358, taskId: "27febebe-8552-40e8-9e82-086c014a5502" };
+    assert.equal(encodeHistoryCursor(cursor), "1794600358_27febebe-8552-40e8-9e82-086c014a5502");
+    assert.deepEqual(parseHistoryCursor(encodeHistoryCursor(cursor)), cursor);
+  });
+
+  it("rejects malformed cursors", () => {
+    const store = HistoryStore.open(":memory:");
+    const bad = ["", "abc", "_id", "123_", "123", "-1_id", "1.5_id", "1234567890123_id", "123_id with space",
+      "123_id;DROP", `123_${"a".repeat(65)}`, "123_id\n"];
+    for (const cursor of bad) {
+      assert.equal(parseHistoryCursor(cursor), null, cursor);
+      assert.throws(() => store.list(cursor, 20), RangeError, cursor);
+    }
+    store.close();
+  });
+
+  it("rejects a limit that is not a positive integer", () => {
+    const store = HistoryStore.open(":memory:");
+    for (const limit of [0, -1, 1.5, Number.NaN]) assert.throws(() => store.list(null, limit), RangeError);
+    store.close();
+  });
+
+  it("lists nothing from an empty archive", () => {
+    const store = HistoryStore.open(":memory:");
+    assert.deepEqual(store.list(null, 20), { jobs: [], next: null });
+    store.close();
   });
 });

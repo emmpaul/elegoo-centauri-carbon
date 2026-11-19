@@ -75,6 +75,32 @@ export interface HistoryJob {
   thumbnail: string | null;
 }
 
+/** One page of the history, newest first, and the cursor of the next page or null on the last. */
+export interface HistoryPage {
+  jobs: HistoryJob[];
+  next: string | null;
+}
+
+/** Position in the history: the start time (Unix seconds) and id of the last job of a page. */
+export interface HistoryCursor {
+  beginTime: number;
+  taskId: string;
+}
+
+const CURSOR = /^(\d{1,12})_([A-Za-z0-9-]{1,64})$/;
+
+/** Encodes a cursor as `<beginTime>_<taskId>`; clients treat it as opaque. */
+export function encodeHistoryCursor(cursor: HistoryCursor): string {
+  return `${cursor.beginTime}_${cursor.taskId}`;
+}
+
+/** Parses a cursor made by {@link encodeHistoryCursor}, or returns null for a malformed one. */
+export function parseHistoryCursor(text: string): HistoryCursor | null {
+  const match = CURSOR.exec(text);
+  if (match === null) return null;
+  return { beginTime: Number(match[1]), taskId: match[2]! };
+}
+
 /**
  * Normalizes one `HistoryDetailList[]` entry, or returns null when it has no
  * non-empty string `TaskId`. Numbers default to 0 when missing or not finite.
@@ -202,6 +228,33 @@ export class HistoryStore {
   job(taskId: string): HistoryJob | null {
     const row = this.#db.prepare(`${SELECT_JOB} WHERE task_id = ?`).get(taskId);
     return row === undefined ? null : toHistoryJob(row as unknown as JobRow);
+  }
+
+  /**
+   * At most `limit` stored jobs, newest first by start time then id, that come
+   * after the cursor `before` (all jobs from the newest when null). Throws a
+   * RangeError for a malformed cursor or a limit that is not a positive integer.
+   */
+  list(before: string | null, limit: number): HistoryPage {
+    if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`invalid history page limit: ${limit}`);
+    const cursor = before === null ? null : parseHistoryCursor(before);
+    if (before !== null && cursor === null) throw new RangeError(`invalid history cursor: ${before}`);
+    const order = "ORDER BY begin_time DESC, task_id DESC LIMIT ?";
+    const rows = (
+      cursor === null
+        ? this.#db.prepare(`${SELECT_JOB} ${order}`).all(limit + 1)
+        : this.#db
+            .prepare(`${SELECT_JOB} WHERE (begin_time, task_id) < (?, ?) ${order}`)
+            .all(cursor.beginTime, cursor.taskId, limit + 1)
+    ) as unknown as JobRow[];
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      jobs: page.map(toHistoryJob),
+      next: rows.length > limit && last !== undefined
+        ? encodeHistoryCursor({ beginTime: last.begin_time, taskId: last.task_id })
+        : null,
+    };
   }
 
   #transaction(work: () => void): void {
