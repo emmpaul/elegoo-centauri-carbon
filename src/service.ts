@@ -102,7 +102,7 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     // The web UI enables streaming before it shows the camera.
     beforeConnect: () => session.send(Cmd.EDIT_PRINTER_VIDEO_STREAMING, { Enable: 1 }),
   });
-  const server = createApiServer({ store, control, token: options.token, camera, dashboard: dashboardFiles(), logger });
+  const server = createApiServer({ store, control, token: options.token, camera, history, dashboard: dashboardFiles(), logger });
   server.listen(options.listen.port, options.listen.host);
   try {
     await once(server, "listening");

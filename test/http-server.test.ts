@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { dashboardFiles } from "../src/dashboard-files.ts";
+import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
 import { createApiServer } from "../src/http-server.ts";
 import { type CommandSender, PrintControl } from "../src/print-control.ts";
 import { PrinterSession } from "../src/printer-session.ts";
@@ -354,6 +355,124 @@ describe("HTTP API on malformed requests", () => {
       assert.equal((await fetch(`${base}/api/status`, { headers })).status, 200);
     });
   }
+});
+
+/** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
+function historyEntries(): unknown[] {
+  const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
+  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: unknown[] } } };
+  return payload.Data.Data.HistoryDetailList;
+}
+
+interface HistoryBody {
+  jobs: { id: string; thumbnail: string | null }[];
+  next: string | null;
+}
+
+describe("HTTP API print history", () => {
+  const TOKEN = "s3cret-token";
+  const auth = { Authorization: `Bearer ${TOKEN}` };
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  let history: HistoryStore;
+  let server: Server;
+  let base: string;
+  let firstId: string;
+
+  beforeEach(async () => {
+    history = HistoryStore.open(":memory:");
+    const jobs = historyEntries().map(jobFromDetail).filter((job) => job !== null);
+    assert.equal(history.upsert(jobs), 26);
+    firstId = jobs[0]!.taskId;
+    history.putThumbnail(firstId, "image/png", PNG);
+    const store = new StatusStore();
+    server = createApiServer({ store, control: {} as never, token: TOKEN, history, logger: quiet });
+    base = await listen(server);
+  });
+
+  afterEach(async () => {
+    await closeServer(server);
+    history.close();
+  });
+
+  async function errorCode(response: Response): Promise<string> {
+    return ((await response.json()) as { error: { code: string } }).error.code;
+  }
+
+  it("pages the 26 jobs as 20 with a next cursor, then 6 with next null", async () => {
+    const first = await fetch(`${base}/api/history`, { headers: auth });
+    assert.equal(first.status, 200);
+    assert.match(first.headers.get("content-type") ?? "", /^application\/json/);
+    const page1 = (await first.json()) as HistoryBody;
+    assert.equal(page1.jobs.length, 20);
+    assert.ok(page1.next !== null);
+
+    const last = await fetch(`${base}/api/history?limit=20&before=${encodeURIComponent(page1.next)}`, { headers: auth });
+    assert.equal(last.status, 200);
+    const page2 = (await last.json()) as HistoryBody;
+    assert.equal(page2.jobs.length, 6);
+    assert.equal(page2.next, null);
+    const ids = new Set([...page1.jobs, ...page2.jobs].map((job) => job.id));
+    assert.equal(ids.size, 26);
+  });
+
+  it("answers 400 bad-request for a limit outside 1 to 100 and a malformed cursor", async () => {
+    for (const query of ["limit=0", "limit=101", "limit=abc", "limit=", "before=not-a-cursor", "before="]) {
+      const response = await fetch(`${base}/api/history?${query}`, { headers: auth });
+      assert.equal(response.status, 400, query);
+      assert.equal(await errorCode(response), "bad-request", query);
+    }
+    assert.equal((await fetch(`${base}/api/history?limit=100`, { headers: auth })).status, 200);
+  });
+
+  it("answers 401 without the token on both routes", async () => {
+    for (const path of ["/api/history", `/api/history/thumbnail?id=${firstId}`]) {
+      const response = await fetch(`${base}${path}`);
+      assert.equal(response.status, 401, path);
+      assert.equal(await errorCode(response), "unauthorized", path);
+    }
+  });
+
+  it("serves a stored PNG with the same bytes and nosniff, with the token as a query parameter", async () => {
+    const page = (await (await fetch(`${base}/api/history?limit=100`, { headers: auth })).json()) as HistoryBody;
+    const listed = page.jobs.find((job) => job.id === firstId);
+    assert.equal(listed?.thumbnail, `/api/history/thumbnail?id=${firstId}`);
+
+    const response = await fetch(`${base}${listed.thumbnail}&token=${TOKEN}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("cache-control"), "private, max-age=86400");
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), PNG);
+  });
+
+  it("answers 404 not-found for an unknown id or a job without a thumbnail", async () => {
+    const withoutThumbnail = history.list(null, 100).jobs.find((job) => job.thumbnail === null);
+    assert.ok(withoutThumbnail);
+    for (const id of ["unknown-id", withoutThumbnail.id]) {
+      const response = await fetch(`${base}/api/history/thumbnail?id=${id}`, { headers: auth });
+      assert.equal(response.status, 404, id);
+      assert.equal(await errorCode(response), "not-found", id);
+    }
+  });
+
+  it("answers 405 for anything but GET", async () => {
+    for (const path of ["/api/history", "/api/history/thumbnail?id=x"]) {
+      const response = await fetch(`${base}${path}`, { method: "POST", headers: auth });
+      assert.equal(response.status, 405, path);
+      assert.equal(await errorCode(response), "method-not-allowed", path);
+      assert.equal(response.headers.get("allow"), "GET");
+    }
+  });
+
+  it("has no history routes without a history source", async () => {
+    const plain = createApiServer({ store: new StatusStore(), control: {} as never, token: null, logger: quiet });
+    const plainBase = await listen(plain);
+    try {
+      assert.equal((await fetch(`${plainBase}/api/history`)).status, 404);
+    } finally {
+      await closeServer(plain);
+    }
+  });
 });
 
 /** A store whose snapshot the test sets and announces. */
