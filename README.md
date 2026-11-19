@@ -16,7 +16,8 @@
 A small service that talks to an Elegoo Centauri Carbon over its local SDCP
 protocol and gives you, on your own network:
 
-- a dashboard for your phone or PC with live status and the camera,
+- a dashboard for your phone or PC with live status, the camera, and a
+  history of past prints (times, layers, outcome, and thumbnail),
 - print control: pause, resume, stop, and the chamber light,
 - push notifications through [ntfy](https://ntfy.sh) when a print starts,
   finishes, fails, pauses, or stops, and when the printer goes offline or
@@ -282,14 +283,15 @@ with a health check.
 
 ```sh
 docker run -d --name printer --restart unless-stopped \
-  -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:8080:8080 -v printer-data:/data \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
   ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
 ```
 
 `<version>` is a version from the
 [Releases](https://github.com/emmpaul/elegoo-centauri-carbon/releases) page
-(for example `1.0.0-rc.5`).
+(for example `1.0.0-rc.5`). The print history is kept in `/data` (the
+`printer-data` volume), so it survives replacing the container.
 
 Or with the compose file in this repository, which reads `printer.env`, and
 `IMAGE_TAG` from the shell or a `.env` file next to it:
@@ -332,7 +334,7 @@ container, mount the fetched folder (see
 
 ```sh
 docker run -d --name printer --restart unless-stopped \
-  -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:8080:8080 -v printer-data:/data \
   -e PRINTER_IP=192.0.2.10 -e ACCESS_TOKEN=<token> \
   -v "$PWD/web/fonts:/app/web/fonts:ro" \
   ghcr.io/emmpaul/elegoo-centauri-carbon:<version>
