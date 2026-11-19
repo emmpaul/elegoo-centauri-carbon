@@ -7,7 +7,7 @@
 
 ## 2. Integration check
 
-- [ ] 2.1 Run `pnpm typecheck` and `pnpm test`, and verify both pass.
+- [x] 2.1 Run `pnpm typecheck` and `pnpm test`, and verify both pass.
 
 ## Workflow follow-up
 
