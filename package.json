@@ -1,6 +1,6 @@
 {
   "name": "elegoo-centauri-carbon",
-  "version": "1.0.0-rc.5",
+  "version": "1.0.0-rc.6",
   "private": true,
   "description": "Local-first control, dashboard, and notifications for the Elegoo Centauri Carbon over SDCP",
   "type": "module",
