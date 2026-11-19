@@ -131,6 +131,31 @@ describe("PrintControl against the fake printer", () => {
     });
   });
 
+  it("counts light commands that pass the guard and are sent, and nothing else", async () => {
+    const attributesRequest = printer.nextFrame(isCmd(Cmd.GET_PRINTER_ATTR));
+    session.start();
+    await attributesRequest;
+    assert.equal(control.lightCommands, 0);
+    await assertRejected(control.setLight(true), "not-allowed"); // LightStatus unknown
+    assert.equal(control.lightCommands, 0);
+
+    await pushStatus(PRINTING);
+    const pending = control.setLight(false);
+    assert.equal(control.lightCommands, 1, "counted as soon as the command is sent");
+    await pending;
+    await control.pause();
+    await pushStatus(PAUSED);
+    await control.resume();
+    await control.stop({ confirm: true });
+    assert.equal(control.lightCommands, 1, "pause, resume, and stop do not count");
+
+    const offline = once(session, "state");
+    printer.dropClients();
+    await offline;
+    await assertRejected(control.setLight(true), "not-allowed");
+    assert.equal(control.lightCommands, 1);
+  });
+
   it("rejects stop without the confirmation flag and sends nothing", async () => {
     await goOnline(PRINTING);
     await assertRejected(control.stop(), "confirmation-required");

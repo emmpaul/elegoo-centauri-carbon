@@ -68,6 +68,7 @@ export interface StopOptions {
 export class PrintControl {
   private readonly sender: CommandSender;
   private readonly state: ControlStateSource;
+  private lightCount = 0;
 
   constructor(sender: CommandSender, state: ControlStateSource) {
     this.sender = sender;
@@ -91,6 +92,16 @@ export class PrintControl {
   }
 
   /**
+   * How many light commands passed the guard and were sent, by anyone (the
+   * dashboard and the Photo light alike). Counted when the command is sent,
+   * before its response, so a caller reads its own command right after
+   * calling `setLight`.
+   */
+  get lightCommands(): number {
+    return this.lightCount;
+  }
+
+  /**
    * Turns the chamber light on or off (Cmd 403). Sends the whole last-seen
    * `LightStatus` object with `SecondLight` set, as the web UI does.
    */
@@ -98,7 +109,10 @@ export class PrintControl {
     const lightStatus = this.state.lightStatus;
     return this.checked(
       "light",
-      () => this.sender.send(Cmd.EDIT_PRINTER_STATUS_DATA, { LightStatus: { ...lightStatus, SecondLight: on ? 1 : 0 } }),
+      () => {
+        this.lightCount++;
+        return this.sender.send(Cmd.EDIT_PRINTER_STATUS_DATA, { LightStatus: { ...lightStatus, SecondLight: on ? 1 : 0 } });
+      },
       lightStatus !== null,
     );
   }
