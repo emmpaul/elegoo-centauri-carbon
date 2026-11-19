@@ -24,10 +24,22 @@ const finished: PrintEvent = {
 
 const allOn = () => Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>;
 
-function recordingLogger(): Logger & { warnings: string[]; errors: string[] } {
+function recordingLogger(): Logger & { infos: string[]; warnings: string[]; errors: string[] } {
+  const infos: string[] = [];
   const warnings: string[] = [];
   const errors: string[] = [];
-  return { warnings, errors, info() {}, warn: (m) => warnings.push(m), error: (m) => errors.push(m) };
+  return { infos, warnings, errors, info: (m) => infos.push(m), warn: (m) => warnings.push(m), error: (m) => errors.push(m) };
+}
+
+const paused: PrintEvent = { ...finished, type: "paused", fileName: "test-print-1.gcode", progress: 42, durationSeconds: null };
+/** A small JPEG-like body: SOI, arbitrary bytes (not valid UTF-8), EOI. */
+const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x80, 0xc3, 0x28, 0x0d, 0x0a, 0xff, 0xd9]);
+
+/** Decodes one RFC 2047 encoded word (=?UTF-8?B?…?=). */
+function decodeWord(value: string): string {
+  const match = /^=\?UTF-8\?B\?([A-Za-z0-9+/=]*)\?=$/.exec(value);
+  assert.ok(match, `an encoded word: ${value}`);
+  return Buffer.from(match[1] as string, "base64").toString("utf8");
 }
 
 /** A URL on 127.0.0.1 where nothing listens: a port taken and released again. */
@@ -142,6 +154,64 @@ describe("NtfyNotifier against a fake ntfy endpoint", () => {
     assert.equal(ntfy.requests.length, 4, "the first attempt plus 3 retries");
     assert.equal(logger.errors.length, 1);
     assert.match(logger.errors[0] as string, /gave up on finished after 3 retries: HTTP 500/);
+  });
+
+  it("uploads a paused event with its Photo as a PUT with the message in headers", async () => {
+    const logger = recordingLogger();
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), logger });
+    await notifier.notify(paused, async () => ({ jpeg }));
+    assert.equal(ntfy.requests.length, 1);
+    const [request] = ntfy.requests;
+    assert.equal(request?.method, "PUT");
+    assert.equal(request?.path, "/t");
+    assert.deepEqual(request?.raw, jpeg);
+    assert.equal(request?.headers.title, "Print paused");
+    assert.equal(request?.headers.message, "test-print-1.gcode paused at 42%.");
+    assert.equal(request?.headers.priority, "3");
+    assert.equal(request?.headers.tags, "pause_button");
+    assert.equal(request?.headers.filename, "photo-paused.jpg");
+    assert.equal(request?.headers["content-type"], "image/jpeg");
+    assert.deepEqual(logger.warnings, []);
+    assert.deepEqual(logger.errors, []);
+  });
+
+  it("encodes a non-ASCII file name in the message header as an RFC 2047 encoded word", async () => {
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), logger: recordingLogger() });
+    await notifier.notify({ ...paused, fileName: "test-print-1-ü.gcode" }, async () => ({ jpeg }));
+    const [request] = ntfy.requests;
+    assert.equal(request?.method, "PUT");
+    assert.equal(decodeWord(request?.headers.message as string), "test-print-1-ü.gcode paused at 42%.");
+    assert.equal(request?.headers.title, "Print paused", "ASCII values stay plain");
+  });
+
+  it("publishes JSON as before without a photo provider", async () => {
+    const logger = recordingLogger();
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), logger });
+    await notifier.notify(paused);
+    assert.equal(ntfy.requests.length, 1);
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print paused");
+  });
+
+  it("publishes JSON and logs the reason when the provider has no Photo", async () => {
+    const logger = recordingLogger();
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), logger });
+    await notifier.notify(paused, async () => ({ jpeg: null, reason: "photo timed out" }));
+    assert.equal(ntfy.requests.length, 1);
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { message: string }).message, "test-print-1.gcode paused at 42%.");
+    assert.deepEqual(logger.infos, ["ntfy: paused sent without a photo: photo timed out"]);
+  });
+
+  it("never calls the photo provider for a disabled event", async () => {
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: { ...allOn(), paused: false }, logger: recordingLogger() });
+    let calls = 0;
+    await notifier.notify(paused, async () => {
+      calls++;
+      return { jpeg };
+    });
+    assert.equal(calls, 0);
+    assert.equal(ntfy.requests.length, 0);
   });
 
   it("builds no notifier without a topic", () => {

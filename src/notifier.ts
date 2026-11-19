@@ -4,11 +4,24 @@
 // notify() always resolves.
 import type { Config, EventType } from "./config.ts";
 import type { PrintEvent } from "./event-detector.ts";
+import type { PhotoResult } from "./notification-photo.ts";
 import type { Logger } from "./sdcp-client.ts";
 
-/** A push channel. notify() resolves once delivered or given up; it never rejects. */
+/**
+ * A push channel. notify() resolves once delivered or given up; it never
+ * rejects. `photo` is asked for a Photo only when the event is enabled.
+ */
 export interface Notifier {
-  notify(event: PrintEvent): Promise<void>;
+  notify(event: PrintEvent, photo?: () => Promise<PhotoResult>): Promise<void>;
+}
+
+/** How a Notification went out. */
+export interface Delivery {
+  delivered: boolean;
+  /** True when it was delivered with its Photo attached. */
+  photo: boolean;
+  /** Why it went out text-only although a Photo was wanted; null otherwise. */
+  fallback: string | null;
 }
 
 /** One push message, channel-neutral. */
@@ -75,7 +88,10 @@ export interface NtfyNotifierOptions {
   logger?: Logger;
 }
 
-/** Publishes events to an ntfy topic (JSON publish to the server root). */
+/**
+ * Publishes events to an ntfy topic: a JSON publish to the server root, or
+ * a PUT upload to the topic when the event carries a Photo.
+ */
 export class NtfyNotifier implements Notifier {
   private readonly url: string;
   private readonly topic: string;
@@ -91,9 +107,40 @@ export class NtfyNotifier implements Notifier {
     this.logger = options.logger ?? console;
   }
 
-  async notify(event: PrintEvent): Promise<void> {
+  async notify(event: PrintEvent, photo?: () => Promise<PhotoResult>): Promise<void> {
     if (!this.events[event.type]) return;
-    await this.publish(formatEvent(event), event.type);
+    const result = photo === undefined ? undefined : await photo().catch((error: Error): PhotoResult => ({ jpeg: null, reason: error.message }));
+    await this.deliver(formatEvent(event), event.type, result);
+  }
+
+  /**
+   * Delivers one message: an attachment upload when `photo` holds a JPEG,
+   * else the text-only JSON publish. A Photo result without a JPEG is
+   * logged with its reason. Never rejects.
+   */
+  async deliver(push: PushMessage, label: string, photo?: PhotoResult): Promise<Delivery> {
+    if (photo === undefined) return { delivered: await this.publish(push, label), photo: false, fallback: null };
+    if (photo.jpeg === null) {
+      this.logger.info(`ntfy: ${label} sent without a photo: ${photo.reason}`);
+      return { delivered: await this.publish(push, label), photo: false, fallback: photo.reason };
+    }
+    const delivered = await this.upload(push, label, photo.jpeg);
+    return { delivered, photo: delivered, fallback: null };
+  }
+
+  /** Uploads the Photo as an attachment, the message in headers, retrying with back-off. */
+  private async upload(push: PushMessage, label: string, jpeg: Buffer): Promise<boolean> {
+    const headers = {
+      Title: headerValue(push.title),
+      Message: headerValue(push.message),
+      Priority: String(push.priority),
+      Tags: headerValue(push.tags.join(",")),
+      Filename: headerValue(`photo-${label}.jpg`),
+      "Content-Type": "image/jpeg",
+    };
+    return this.withRetries(label, () =>
+      fetch(`${this.url}/${encodeURIComponent(this.topic)}`, { method: "PUT", headers, body: new Uint8Array(jpeg), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+    );
   }
 
   /**
@@ -102,15 +149,22 @@ export class NtfyNotifier implements Notifier {
    */
   async publish(push: PushMessage, label = push.title): Promise<boolean> {
     const body = JSON.stringify({ topic: this.topic, title: push.title, message: push.message, priority: push.priority, tags: push.tags });
+    return this.withRetries(label, () =>
+      fetch(`${this.url}/`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
+    );
+  }
+
+  /** Sends one request, retrying every failure with back-off; true once a 2xx answers. */
+  private async withRetries(label: string, send: () => Promise<Response>): Promise<boolean> {
     let failure = "";
     for (let attempt = 0; ; attempt++) {
       try {
-        const response = await fetch(`${this.url}/`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body,
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
+        const response = await send();
         await response.body?.cancel();
         if (response.ok) return true;
         failure = `HTTP ${response.status}`;
@@ -126,6 +180,15 @@ export class NtfyNotifier implements Notifier {
     this.logger.error(`ntfy: gave up on ${label} after ${this.retryDelaysMs.length} retries: ${failure}`);
     return false;
   }
+}
+
+/**
+ * An HTTP header value: plain when it is printable ASCII, else one RFC 2047
+ * encoded word (=?UTF-8?B?…?=), which ntfy decodes.
+ */
+export function headerValue(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }
 
 /** The configured channel: ntfy when a topic is set, else none (notifications off). */
