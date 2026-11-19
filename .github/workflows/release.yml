@@ -46,7 +46,7 @@ jobs:
 
   release:
     name: create release
-    needs: verify
+    needs: [verify, image]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
