@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { after, before, describe, it } from "node:test";
 import { FakePrinter, FIXTURE_MAINBOARD_ID, loadFixture } from "./support/fake-printer.ts";
+import { FakeThumbnails, fakePng } from "./support/fake-thumbnails.ts";
 
 /** Opens a client with Node's built-in WebSocket and collects parsed frames. */
 async function connect(url: string): Promise<{ socket: WebSocket; frames: unknown[]; next: () => Promise<unknown> }> {
@@ -85,6 +86,93 @@ describe("fake printer", () => {
       assert.deepEqual(first, expected[0]?.payload);
     } finally {
       client.socket.close();
+    }
+  });
+});
+
+describe("fake printer history", () => {
+  const entries = [
+    { TaskId: "job-c", TaskName: "/local/test-print-3.gcode", TaskStatus: 4 },
+    { TaskId: "job-b", TaskName: "/local/test-print-2.gcode", TaskStatus: 1 },
+    { TaskId: "job-a", TaskName: "/local/test-print-1.gcode", TaskStatus: 3 },
+  ];
+
+  function historyRequest(cmd: number, requestId: string, data: Record<string, unknown>): string {
+    return JSON.stringify({
+      Id: "",
+      Data: { Cmd: cmd, Data: data, RequestID: requestId, MainboardID: "", TimeStamp: Date.now(), From: 1 },
+    });
+  }
+
+  it("lists the seeded ids for Cmd 320, in order", async () => {
+    const printer = await FakePrinter.start({ history: { entries } });
+    const client = await connect(printer.url);
+    try {
+      client.socket.send(historyRequest(320, "d".repeat(32), {}));
+      const response = (await client.next()) as { Data: { Cmd: number; Data: { Ack: number; HistoryData: string[] } } };
+      assert.equal(response.Data.Cmd, 320);
+      assert.equal(response.Data.Data.Ack, 0);
+      assert.deepEqual(response.Data.Data.HistoryData, ["job-c", "job-b", "job-a"]);
+    } finally {
+      client.socket.close();
+      await printer.close();
+    }
+  });
+
+  it("answers Cmd 321 with exactly the asked entries, in the asked order", async () => {
+    const printer = await FakePrinter.start({ history: { entries } });
+    const client = await connect(printer.url);
+    try {
+      client.socket.send(historyRequest(321, "e".repeat(32), { Id: ["job-a", "job-c"] }));
+      const response = (await client.next()) as {
+        Data: { Cmd: number; Data: { Ack: number; HistoryDetailList: { TaskId: string }[] } };
+      };
+      assert.equal(response.Data.Cmd, 321);
+      assert.equal(response.Data.Data.Ack, 0);
+      assert.deepEqual(response.Data.Data.HistoryDetailList, [entries[2], entries[0]]);
+    } finally {
+      client.socket.close();
+      await printer.close();
+    }
+  });
+
+  it("lets a silent reply for 320 win over the history", async () => {
+    const printer = await FakePrinter.start({ history: { entries }, replies: { 320: "silent" } });
+    const client = await connect(printer.url);
+    try {
+      client.socket.send(historyRequest(320, "f".repeat(32), {}));
+      client.socket.send(request(0, "0".repeat(32)));
+      const response = (await client.next()) as { Data: { Cmd: number } };
+      assert.equal(response.Data.Cmd, 0);
+      assert.equal(client.frames.length, 0);
+      assert.deepEqual(printer.receivedCommands, [320, 0]);
+    } finally {
+      client.socket.close();
+      await printer.close();
+    }
+  });
+});
+
+describe("fake thumbnails", () => {
+  it("answers 200 with the given bytes and counts requests", async () => {
+    const bytes = fakePng("job-a");
+    const thumbnails = await FakeThumbnails.start({
+      answer: (taskId) => (taskId === "job-a" ? { body: bytes } : undefined),
+    });
+    try {
+      const url = thumbnails.urlFor("job-a");
+      assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/board-resource\/history_image\/job-a\.png$/);
+      const response = await fetch(url);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "image/png");
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+      const missing = await fetch(thumbnails.urlFor("job-z"));
+      assert.equal(missing.status, 404);
+      await missing.arrayBuffer();
+      assert.equal(thumbnails.requests, 2);
+      assert.equal(thumbnails.requestsFor.get("job-a"), 1);
+    } finally {
+      await thumbnails.close();
     }
   });
 });
