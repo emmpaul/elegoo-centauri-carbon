@@ -37,7 +37,7 @@ describe("PhotoTaker without the light", () => {
   let taker: PhotoTaker;
 
   beforeEach(() => {
-    mock.timers.enable({ apis: ["setTimeout"] });
+    mock.timers.enable({ apis: ["setTimeout", "Date"] });
     camera = new StubCamera();
     taker = new PhotoTaker({ camera, light: null });
   });
@@ -77,7 +77,7 @@ describe("PhotoTaker without the light", () => {
     assert.deepEqual(await pending, { jpeg: null, reason: "camera answered HTTP 503" });
   });
 
-  it("starts a second take only after the first ends, with its own time limit", async () => {
+  it("starts a second take only after the first ends, with the time left of its own limit", async () => {
     const first = taker.take();
     const second = taker.take();
     await settle();
@@ -91,12 +91,50 @@ describe("PhotoTaker without the light", () => {
 
     let result: PhotoResult | undefined;
     void second.then((r) => (result = r));
-    mock.timers.tick(4_999);
+    mock.timers.tick(1_999);
     await settle();
-    assert.equal(result, undefined, "the second's limit starts when it starts");
+    assert.equal(result, undefined, "still waiting at 4.999 s");
     mock.timers.tick(1);
     await settle();
-    assert.deepEqual(result, { jpeg: null, reason: "photo timed out" });
+    assert.deepEqual(result, { jpeg: null, reason: "photo timed out" }, "timed out at 5 s from its request, not 8 s");
+  });
+
+  it("measures a queued take's limit from its request", async () => {
+    let first: PhotoResult | undefined;
+    let second: PhotoResult | undefined;
+    void taker.take().then((r) => (first = r));
+    await settle();
+    mock.timers.tick(1_000);
+    void taker.take().then((r) => (second = r));
+    await settle();
+    assert.equal(camera.calls.length, 1);
+
+    mock.timers.tick(4_000); // t = 5000
+    await settle();
+    assert.deepEqual(first, { jpeg: null, reason: "photo timed out" });
+    assert.equal(second, undefined);
+    assert.equal(camera.calls.length, 2, "the second's frame is asked for at 5000 ms");
+
+    mock.timers.tick(999); // t = 5999
+    await settle();
+    assert.equal(second, undefined, "still waiting at 5.999 s");
+    mock.timers.tick(1); // t = 6000
+    await settle();
+    assert.deepEqual(second, { jpeg: null, reason: "photo timed out" });
+  });
+
+  it("does not attempt a queued take whose time ran out while it waited", async () => {
+    const results: PhotoResult[] = [];
+    void taker.take().then((r) => results.push(r));
+    void taker.take().then((r) => results.push(r));
+    await settle();
+    mock.timers.tick(5_000);
+    await settle();
+    assert.deepEqual(results, [
+      { jpeg: null, reason: "photo timed out" },
+      { jpeg: null, reason: "photo timed out" },
+    ]);
+    assert.equal(camera.calls.length, 1, "the stalled source saw one call");
   });
 
   it("takes Photos for finished, failed, stopped, and paused only", () => {
@@ -149,7 +187,7 @@ describe("PhotoTaker with the Photo light", () => {
   let logger: Logger;
 
   beforeEach(() => {
-    mock.timers.enable({ apis: ["setTimeout"] });
+    mock.timers.enable({ apis: ["setTimeout", "Date"] });
     camera = new StubCamera();
     control = new StubControl();
     warnings = [];
@@ -307,6 +345,25 @@ describe("PhotoTaker with the Photo light", () => {
     await pending;
     await settle();
     assert.deepEqual(control.sent, [true]);
+  });
+
+  it("arms a queued take with 1000 ms left at once, without the 3000 ms light wait", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    void taker.take();
+    await settle();
+    mock.timers.tick(1_000);
+    let second: PhotoResult | undefined;
+    void taker.take().then((r) => (second = r));
+    await settle();
+    mock.timers.tick(4_000); // t = 5000: the first times out, the second has 1000 ms left
+    await settle();
+    assert.equal(camera.calls.length, 2);
+    assert.deepEqual(control.sent, [true, false, true], "the second still turns the light on");
+    assert.equal(await armed(1), true, "armed at once");
+    camera.answer(1, JPEG);
+    await settle();
+    assert.deepEqual(second?.jpeg, JPEG);
   });
 
   it("sends no command when the Photo light is off", async () => {

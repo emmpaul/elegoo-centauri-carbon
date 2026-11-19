@@ -1,6 +1,7 @@
 // Notification Photos (design D3): one still JPEG from the printer's camera,
 // taken when an Event is detected and attached to its Notification. A take
-// is capped at 5 s from its start and never rejects: a failure is a result
+// is capped at 5 s from its request (the Event's detection), queue wait
+// included, and never rejects: a failure is a result
 // with the reason, and the Notification goes out text-only. The Photo light
 // (design D4, docs/adr/0001-photo-light-automatic-command.md) turns the
 // chamber light on for the Photo through the dashboard's own guard, and off
@@ -37,7 +38,7 @@ export interface PhotoTakerOptions {
   camera: FrameSource;
   /** The Photo light; null takes every Photo with the light as it is. */
   light: { state: LightState; control: LightControl } | null;
-  /** A take ends within this many milliseconds of its start. 5 s by default. */
+  /** A take ends within this many milliseconds of its request. 5 s by default. */
   limitMs?: number;
   /** The longest wait for a status push showing the light on. 3 s by default. */
   lightWaitMs?: number;
@@ -45,6 +46,8 @@ export interface PhotoTakerOptions {
 }
 
 const TIMED_OUT = "photo timed out";
+/** The time a shortened light wait leaves for the frame. */
+const FRAME_RESERVE_MS = 2_000;
 
 /** Takes Photos one at a time, each within its time limit. */
 export class PhotoTaker {
@@ -66,15 +69,11 @@ export class PhotoTaker {
 
   /**
    * Takes one Photo after any take already running, so two Events in quick
-   * succession never share the camera or the light. Never rejects.
+   * succession never share the camera or the light. The limit runs from this
+   * call, so a queued take gets only the time left. Never rejects.
    */
   take(): Promise<PhotoResult> {
-    const result = this.queue.then(() => this.run());
-    this.queue = result;
-    return result;
-  }
-
-  private async run(): Promise<PhotoResult> {
+    const deadline = Date.now() + this.limitMs;
     // A timer rather than AbortSignal.timeout(), so the limit follows the
     // same clock as every other timer (and node:test mock timers drive it).
     const abort = new AbortController();
@@ -85,16 +84,30 @@ export class PhotoTaker {
         resolve({ jpeg: null, reason: TIMED_OUT });
       }, this.limitMs);
     });
-    const light = this.lightUp();
-    const frame = this.camera.takeFrame({ signal: abort.signal, after: light?.ready }).then(
+    const run = this.queue.then(() => this.run(deadline, abort.signal));
+    this.queue = run;
+    // The timer settles the take even while it waits in the queue.
+    return Promise.race([run, timedOut]).finally(() => clearTimeout(timer));
+  }
+
+  private async run(deadline: number, signal: AbortSignal): Promise<PhotoResult> {
+    const remaining = deadline - Date.now();
+    // Its time ran out while it waited: neither the camera nor the light.
+    if (signal.aborted || remaining <= 0) return { jpeg: null, reason: TIMED_OUT };
+
+    const aborted = new Promise<PhotoResult>((resolve) =>
+      signal.addEventListener("abort", () => resolve({ jpeg: null, reason: TIMED_OUT }), { once: true }),
+    );
+    const light = this.lightUp(Math.min(this.lightWaitMs, remaining - FRAME_RESERVE_MS));
+    const frame = this.camera.takeFrame({ signal, after: light?.ready }).then(
       (jpeg): PhotoResult => ({ jpeg }),
       (error: unknown): PhotoResult => ({ jpeg: null, reason: messageOf(error) }),
     );
     try {
-      // The timer settles the take even when the source ignores the signal.
-      return await Promise.race([frame, timedOut]);
+      // The abort ends the run even when the source ignores the signal, so
+      // the next take in the queue starts at once.
+      return await Promise.race([frame, aborted]);
     } finally {
-      clearTimeout(timer);
       light?.restore();
     }
   }
@@ -103,9 +116,10 @@ export class PhotoTaker {
    * Turns the light on when the Photo light is on and the light is off, and
    * returns when the frame may be taken (`ready`) and how to put the light
    * back (`restore`). Undefined when no command was sent: the Photo is taken
-   * with the light as it is.
+   * with the light as it is. `waitMs` is the longest wait for the light; at
+   * or below 0 the frame is armed at once.
    */
-  private lightUp(): { ready: Promise<void>; restore: () => void } | undefined {
+  private lightUp(waitMs: number): { ready: Promise<void>; restore: () => void } | undefined {
     if (this.light === null) return undefined;
     const { state, control } = this.light;
     if (state.snapshot.light !== "off") return undefined;
@@ -131,7 +145,8 @@ export class PhotoTaker {
     let markReady = () => {};
     const ready = new Promise<void>((resolve) => {
       markReady = resolve;
-      lightWait = setTimeout(resolve, this.lightWaitMs);
+      if (waitMs <= 0) resolve();
+      else lightWait = setTimeout(resolve, waitMs);
     });
     const onChange = (snapshot: StatusSnapshot) => {
       if (snapshot.light === "on") {
