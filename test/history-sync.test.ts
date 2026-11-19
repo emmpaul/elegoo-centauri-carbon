@@ -521,6 +521,28 @@ describe("HistorySync", () => {
       assert.equal(printer.receivedCommands.filter((cmd) => cmd === 320).length, 4);
     });
 
+    it("starts a new run of follow-ups on a trigger after the last one", async () => {
+      const running = await startRunning();
+      const sync = newSync();
+      sync.trigger();
+      await sync.idle();
+      for (let i = 0; i < 3; i++) {
+        tick();
+        await sync.idle();
+      }
+      tick();
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 4, "the follow-ups ran out");
+      sync.trigger();
+      await sync.idle();
+      for (let i = 0; i < 3; i++) {
+        tick();
+        await sync.idle();
+      }
+      assert.equal(detailRequests(printer).length, 8);
+      assert.deepEqual(detailRequests(printer).at(-1), [running.TaskId]);
+    });
+
     it("settles once the printer answers TaskStatus 1", async () => {
       const running = await startRunning();
       const sync = newSync();

@@ -140,10 +140,8 @@ export class HistorySync extends EventEmitter<SyncEvents> {
    */
   #scheduleFollowUp(): void {
     if (this.#closed || this.#running !== null) return;
-    if (!this.#needsFollowUp) {
-      this.#followUps = 0;
-      return;
-    }
+    // No reset here: every sync that could need a follow-up again starts from trigger(), which resets.
+    if (!this.#needsFollowUp) return;
     if (this.#followUps >= this.#maxFollowUps) return;
     this.#followUps++;
     this.#followUpTimer = setTimeout(() => {
