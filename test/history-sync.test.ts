@@ -1,0 +1,224 @@
+import { strict as assert } from "node:assert";
+import { once } from "node:events";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
+import { HistorySync } from "../src/history-sync.ts";
+import { PrinterSession } from "../src/printer-session.ts";
+import type { Logger } from "../src/sdcp-client.ts";
+import { FakePrinter, type FixtureFrame, type ReceivedFrame, type Reply, loadFixture } from "./support/fake-printer.ts";
+
+/** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
+function fixtureEntries(): Record<string, unknown>[] {
+  const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
+  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: Record<string, unknown>[] } } };
+  return payload.Data.Data.HistoryDetailList;
+}
+
+const statusPush = (() => {
+  const frame = loadFixture("connect-idle.json").frames.find((f: FixtureFrame) =>
+    String((f.payload as { Topic?: string }).Topic).startsWith("sdcp/status/"),
+  );
+  assert.ok(frame, "connect-idle.json has a status push");
+  return frame.payload;
+})();
+
+interface RecordingLogger extends Logger {
+  warnings: string[];
+}
+
+function recordingLogger(): RecordingLogger {
+  const warnings: string[] = [];
+  return { warnings, info() {}, warn: (message) => warnings.push(message), error() {} };
+}
+
+function cmdOf(frame: ReceivedFrame): number | undefined {
+  return (frame.payload as { Data?: { Cmd?: number } }).Data?.Cmd;
+}
+
+/** The `Id` lists of the Cmd 321 requests the fake received. */
+function detailRequests(printer: FakePrinter): string[][] {
+  return printer.received
+    .filter((frame) => cmdOf(frame) === 321)
+    .map((frame) => (frame.payload as { Data: { Data: { Id: string[] } } }).Data.Data.Id);
+}
+
+describe("HistorySync", () => {
+  let printer: FakePrinter;
+  let session: PrinterSession;
+  let store: HistoryStore;
+  let logger: RecordingLogger;
+  let entries: Record<string, unknown>[];
+
+  async function start(replies: Record<number, Reply> = {}) {
+    entries = fixtureEntries();
+    printer = await FakePrinter.start({ history: { entries }, replies });
+    logger = recordingLogger();
+    session = new PrinterSession({ url: printer.url, logger, responseTimeoutMs: 300 });
+    store = HistoryStore.open(":memory:");
+    const online = once(session, "state");
+    session.start();
+    await printer.waitForClient();
+    printer.push(statusPush);
+    assert.deepEqual(await online, ["online"]);
+  }
+
+  function newSync(): HistorySync {
+    return new HistorySync({ session, store, logger });
+  }
+
+  beforeEach(() => {
+    entries = [];
+  });
+
+  afterEach(async () => {
+    session.stop();
+    store.close();
+    await printer.close();
+  });
+
+  it("fills an empty archive with the printer's 26 jobs and emits one change", async () => {
+    await start();
+    const sync = newSync();
+    let changes = 0;
+    sync.on("change", () => changes++);
+    sync.trigger();
+    await sync.idle();
+    const page = store.list(null, 100);
+    assert.equal(page.jobs.length, 26);
+    assert.deepEqual(new Set(page.jobs.map((job) => job.id)), new Set(entries.map((entry) => entry.TaskId)));
+    assert.equal(changes, 1);
+    assert.deepEqual(detailRequests(printer), [entries.map((entry) => entry.TaskId)]);
+    assert.deepEqual(logger.warnings, []);
+  });
+
+  it("asks only for the job stored as running", async () => {
+    await start();
+    const running = entries[3]!;
+    store.upsert(
+      entries
+        .map((entry) => (entry === running ? { ...entry, TaskStatus: 4 } : entry))
+        .map(jobFromDetail)
+        .filter((job) => job !== null),
+    );
+    const sync = newSync();
+    let changes = 0;
+    sync.on("change", () => changes++);
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(detailRequests(printer), [[running.TaskId]]);
+    assert.equal(store.job(running.TaskId as string)?.outcome, "completed");
+    assert.equal(changes, 1);
+  });
+
+  it("emits no change for a sync that stores nothing new", async () => {
+    await start();
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    let changes = 0;
+    sync.on("change", () => changes++);
+    sync.trigger();
+    await sync.idle();
+    assert.equal(changes, 0);
+    assert.equal(detailRequests(printer).length, 1);
+  });
+
+  it("runs exactly one more sync for triggers that arrive during a sync", async () => {
+    await start();
+    const sync = newSync();
+    sync.trigger();
+    sync.trigger();
+    sync.trigger();
+    await sync.idle();
+    assert.equal(printer.receivedCommands.filter((cmd) => cmd === 320).length, 2);
+  });
+
+  it("logs one warning for a silent 320 and leaves the archive and session as they were", async () => {
+    await start({ 320: "silent" });
+    const states: string[] = [];
+    session.on("state", (state) => states.push(state));
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    assert.equal(logger.warnings.filter((message) => message.startsWith("history sync failed")).length, 1);
+    assert.match(logger.warnings.at(-1)!, /320/);
+    assert.equal(store.list(null, 100).jobs.length, 0);
+    assert.equal(session.state, "online");
+    assert.deepEqual(states, []);
+  });
+
+  it("warns on a non-zero Ack and on a malformed answer, storing nothing", async () => {
+    await start({ 320: 2, 321: () => ({ Ack: 0, HistoryDetailList: "nope" }) });
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    assert.match(logger.warnings.at(-1)!, /320 answered Ack 2/);
+    printer.replies.delete(320);
+    sync.trigger();
+    await sync.idle();
+    assert.match(logger.warnings.at(-1)!, /321 answered without a HistoryDetailList/);
+    printer.replies.set(320, () => ({ Ack: 0, HistoryData: "nope" }));
+    sync.trigger();
+    await sync.idle();
+    assert.match(logger.warnings.at(-1)!, /320 answered without a HistoryData list/);
+    assert.equal(logger.warnings.length, 3);
+    assert.equal(store.list(null, 100).jobs.length, 0);
+    assert.equal(session.state, "online");
+  });
+
+  it("skips entries without a TaskId and stores the rest", async () => {
+    await start({
+      321: (data) => ({
+        Ack: 0,
+        HistoryDetailList: [
+          { TaskName: "/local/test-print-99.gcode", TaskStatus: 1 },
+          ...entries.filter((entry) => (data.Id as string[]).includes(entry.TaskId as string)),
+        ],
+      }),
+    });
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    assert.equal(store.list(null, 100).jobs.length, 26);
+    assert.deepEqual(logger.warnings, []);
+  });
+
+  it("warns once without a session", async () => {
+    await start();
+    session.stop();
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    assert.equal(logger.warnings.filter((message) => message.startsWith("history sync failed")).length, 1);
+    assert.equal(store.list(null, 100).jobs.length, 0);
+  });
+
+  it("asks for at most 26 ids per Cmd 321", async () => {
+    await start();
+    const extra = Array.from({ length: 4 }, (_, i) => ({
+      ...entries[0],
+      TaskId: `synthetic-${i + 1}`,
+      TaskName: `/local/test-print-${80 + i}.gcode`,
+    }));
+    entries.push(...extra);
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(detailRequests(printer).map((ids) => ids.length), [26, 4]);
+    assert.equal(store.list(null, 100).jobs.length, 30);
+  });
+
+  it("sends no command other than 0, 1, 320, and 321", async () => {
+    await start();
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(
+      [...new Set(printer.receivedCommands)].filter((cmd) => ![0, 1, 320, 321].includes(cmd)),
+      [],
+    );
+    assert.ok(printer.receivedCommands.includes(320));
+  });
+});
