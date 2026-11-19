@@ -173,14 +173,17 @@ cp config.example.json config.json
 | `token` | Access token for the API and dashboard. `null` means no token check, allowed only on a loopback `listen.host`. | `ACCESS_TOKEN` |
 | `ntfy.url` | ntfy server (default `https://ntfy.sh`). | `NTFY_URL` |
 | `ntfy.topic` | ntfy topic. `null` turns notifications off. | `NTFY_TOPIC` |
+| `ntfy.photos` | Attach a camera Photo to the finished, failed, stopped, and paused notifications (default `false`). | `NTFY_PHOTOS` |
+| `ntfy.photoLight` | Turn the chamber light on for the Photo when it is off, and off again after (default `false`; no effect without `ntfy.photos`). | `NTFY_PHOTO_LIGHT` |
 | `events` | Which events notify (`started`, `finished`, `failed`, `paused`, `stopped`, `offline`, `online`). | `NOTIFY_EVENTS` |
 | `dataDir` | Directory of the print history archive, relative to the working directory (default `data`). It is created when missing and must be writable. | `DATA_DIR` |
 
 Settings come from built-in defaults, then the config file, then environment
 variables, so an environment variable wins. An empty variable counts as unset.
 `NOTIFY_EVENTS` is a comma-separated list of the events to turn on (every
-other event is off), or `none`. `CONFIG_PATH` reads the config from another
-file than `./config.json`.
+other event is off), or `none`. `NTFY_PHOTOS` and `NTFY_PHOTO_LIGHT` take `1`
+or `true` to turn on, `0` or `false` to turn off. `CONFIG_PATH` reads the
+config from another file than `./config.json`.
 
 ### Access token
 

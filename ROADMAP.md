@@ -17,13 +17,6 @@ gets the same per-state guards and confirmation as stop does today.
 
 ## Next
 
-### Camera snapshot in notifications
-
-Attach a frame from the camera to the "print finished" and "print failed" ntfy
-notifications, so a phone shows a clean part or a failed print without opening the
-dashboard. ntfy supports attachments, and the service already proxies the camera.
-**Protocol:** none needed.
-
 ### Progress notifications
 
 Optional notifications at useful points in a print: when the first layer is done (when

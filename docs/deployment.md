@@ -57,6 +57,8 @@ clone:
 | `NTFY_URL` | no | ntfy server (default `https://ntfy.sh`). |
 | `NTFY_TOPIC` | no | ntfy topic; unset means no notifications. See [notifications.md](notifications.md). |
 | `NOTIFY_EVENTS` | no | Comma-separated events that notify, or `none` (default: all). |
+| `NTFY_PHOTOS` | no | `1` attaches a camera Photo to the finished, failed, stopped, and paused notifications (default `0`). |
+| `NTFY_PHOTO_LIGHT` | no | `1` turns the chamber light on for the Photo when it is off (default `0`; no effect without `NTFY_PHOTOS`). |
 
 Leave `LISTEN_HOST` and `LISTEN_PORT` unset: `compose.yaml` publishes the
 container's port 8080. A config file works too: mount it and set

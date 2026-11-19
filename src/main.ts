@@ -34,16 +34,23 @@ try {
     token: config.token,
     notifier: notifierFromConfig(config),
     historyPath: join(dataDir, "history.sqlite"),
+    photos: config.ntfy.photos ? { light: config.ntfy.photoLight } : null,
   });
 } catch (error) {
   console.error((error as Error).message);
   process.exit(1);
 }
 console.info(`printer ${host}; API on http://${config.listen.host}:${service.address.port}`);
-console.info(config.ntfy.topic === null ? "notifications off (no ntfy topic)" : `notifications to ${config.ntfy.url}`);
+console.info(config.ntfy.topic === null ? "notifications off (no ntfy topic)" : `notifications to ${config.ntfy.url}${photosNote()}`);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     void service.close().then(() => process.exit(0));
   });
+}
+
+/** " (with photos)" or " (with photos and the photo light)" when photos are on. */
+function photosNote(): string {
+  if (!config.ntfy.photos) return "";
+  return config.ntfy.photoLight ? " (with photos and the photo light)" : " (with photos)";
 }

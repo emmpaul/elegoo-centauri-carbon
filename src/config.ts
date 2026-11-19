@@ -19,8 +19,13 @@ export interface Config {
   listen: { host: string; port: number };
   /** Access token for the API; null means no token check. */
   token: string | null;
-  /** ntfy server and topic; a null topic means no notifications are sent. */
-  ntfy: { url: string; topic: string | null };
+  /**
+   * ntfy server and topic; a null topic means no notifications are sent.
+   * `photos` attaches a Photo to the finished, failed, stopped, and paused
+   * Notifications; `photoLight` turns the chamber light on for the Photo and
+   * has no effect without `photos`.
+   */
+  ntfy: { url: string; topic: string | null; photos: boolean; photoLight: boolean };
   events: Record<EventType, boolean>;
   /** Directory of the history archive, relative to the working directory unless absolute. */
   dataDir: string;
@@ -31,7 +36,7 @@ export function defaultConfig(): Config {
     printerIp: null,
     listen: { host: "0.0.0.0", port: 8080 },
     token: null,
-    ntfy: { url: "https://ntfy.sh", topic: null },
+    ntfy: { url: "https://ntfy.sh", topic: null, photos: false, photoLight: false },
     events: Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>,
     dataDir: "data",
   };
@@ -107,6 +112,8 @@ function applyFile(config: Config, raw: unknown, path: string): void {
     const ntfy = asObject(file.ntfy, `${path}: ntfy`);
     if ("url" in ntfy) config.ntfy.url = string(ntfy.url, `${path}: ntfy.url`);
     if ("topic" in ntfy) config.ntfy.topic = nullableString(ntfy.topic, `${path}: ntfy.topic`);
+    if ("photos" in ntfy) config.ntfy.photos = boolean(ntfy.photos, `${path}: ntfy.photos`);
+    if ("photoLight" in ntfy) config.ntfy.photoLight = boolean(ntfy.photoLight, `${path}: ntfy.photoLight`);
   }
   if ("events" in file) {
     const events = asObject(file.events, `${path}: events`);
@@ -132,6 +139,10 @@ function applyEnv(config: Config, env: Record<string, string | undefined>): void
   if (ntfyUrl !== undefined) config.ntfy.url = ntfyUrl;
   const ntfyTopic = nonEmpty(env.NTFY_TOPIC);
   if (ntfyTopic !== undefined) config.ntfy.topic = ntfyTopic;
+  const photos = envBoolean(env.NTFY_PHOTOS, "NTFY_PHOTOS");
+  if (photos !== undefined) config.ntfy.photos = photos;
+  const photoLight = envBoolean(env.NTFY_PHOTO_LIGHT, "NTFY_PHOTO_LIGHT");
+  if (photoLight !== undefined) config.ntfy.photoLight = photoLight;
   // NOTIFY_EVENTS lists the enabled events; every other event is turned off.
   // "none" turns all of them off.
   const events = nonEmpty(env.NOTIFY_EVENTS);
@@ -148,6 +159,15 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value === undefined || value === "" ? undefined : value;
 }
 
+/** `1`/`true` or `0`/`false`; empty or missing is unset, anything else an error naming the variable. */
+function envBoolean(value: string | undefined, name: string): boolean | undefined {
+  const text = nonEmpty(value);
+  if (text === undefined) return undefined;
+  if (text === "1" || text === "true") return true;
+  if (text === "0" || text === "false") return false;
+  throw new Error(`${name} must be 1, true, 0, or false`);
+}
+
 function asObject(value: unknown, where: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${where} must be an object`);
@@ -157,6 +177,11 @@ function asObject(value: unknown, where: string): Record<string, unknown> {
 
 function string(value: unknown, where: string): string {
   if (typeof value !== "string" || value === "") throw new Error(`${where} must be a non-empty string`);
+  return value;
+}
+
+function boolean(value: unknown, where: string): boolean {
+  if (typeof value !== "boolean") throw new Error(`${where} must be true or false`);
   return value;
 }
 

@@ -1,6 +1,6 @@
 // Test-only fake ntfy server: an HTTP server on http://127.0.0.1:<port> that
-// records every publish request and answers with a chosen status. It never
-// talks to ntfy.sh.
+// records every publish request (JSON publishes and binary PUT uploads) and
+// answers with a chosen status. It never talks to ntfy.sh.
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -9,7 +9,10 @@ export interface NtfyRequest {
   method: string;
   path: string;
   headers: Record<string, string | string[] | undefined>;
+  /** The body decoded as UTF-8. */
   body: string;
+  /** The body as received, byte for byte (an uploaded attachment). */
+  raw: Buffer;
   /** The body parsed as JSON; undefined when it is not JSON. */
   json: unknown;
 }
@@ -26,8 +29,9 @@ export class FakeNtfy {
       const chunks: Buffer[] = [];
       request.on("data", (chunk: Buffer) => chunks.push(chunk));
       request.on("end", () => {
-        const body = Buffer.concat(chunks).toString("utf8");
-        this.requests.push({ method: request.method ?? "", path: request.url ?? "", headers: request.headers, body, json: parse(body) });
+        const raw = Buffer.concat(chunks);
+        const body = raw.toString("utf8");
+        this.requests.push({ method: request.method ?? "", path: request.url ?? "", headers: request.headers, body, raw, json: parse(body) });
         const status = this.statuses.shift() ?? 200;
         response.writeHead(status, { "content-type": "application/json" });
         response.end(status === 200 ? JSON.stringify({ id: `m${this.requests.length}`, event: "message" }) : '{"error":"fake"}');

@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import { once } from "node:events";
-import { type ClientRequest, get, type IncomingMessage, type Server } from "node:http";
+import { type ClientRequest, createServer as createHttpServer, get, type IncomingMessage, type Server } from "node:http";
 import { type AddressInfo, createServer as createTcpServer, type Socket } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { CameraProxy, delimiterOf } from "../src/camera-proxy.ts";
 import { createApiServer } from "../src/http-server.ts";
 import type { Logger } from "../src/sdcp-client.ts";
 import { StatusStore } from "../src/status-store.ts";
-import { FAKE_BOUNDARY, FakeMjpegSource } from "./support/fake-mjpeg.ts";
+import { FAKE_BOUNDARY, FakeMjpegSource, fakeJpeg } from "./support/fake-mjpeg.ts";
 
 const quiet: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -278,6 +278,246 @@ describe("CameraProxy with a fake MJPEG source", () => {
     assert.equal(viewer.response.statusCode, 200);
     await viewer.waitForParts(1);
     viewer.close();
+  });
+});
+
+describe("CameraProxy.takeFrame with a fake MJPEG source", () => {
+  let source: FakeMjpegSource;
+  let proxy: CameraProxy;
+  let server: Server;
+  let base: string;
+  let prepared: number;
+
+  async function start(url = source.url): Promise<void> {
+    prepared = 0;
+    proxy = new CameraProxy({
+      url,
+      logger: quiet,
+      beforeConnect: async () => {
+        prepared++;
+      },
+    });
+    server = createApiServer({ store: new StatusStore(), control: {} as never, token: null, camera: proxy, logger: quiet });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }
+
+  async function restartSource(options: Parameters<typeof FakeMjpegSource.start>[0]): Promise<void> {
+    await source.close();
+    source = await FakeMjpegSource.start(options);
+  }
+
+  /** The frame number in a fakeJpeg part. */
+  function frameNumber(frame: Buffer): number {
+    const match = frame.toString("latin1").match(/frame-(\d+)/);
+    assert.ok(match, "a fakeJpeg frame");
+    return Number(match[1]);
+  }
+
+  beforeEach(async () => {
+    source = await FakeMjpegSource.start();
+  });
+
+  afterEach(async () => {
+    proxy.close();
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await source.close();
+  });
+
+  it("opens the upstream for a frame when no viewer watches, and closes it afterwards", async () => {
+    await start();
+    const frame = await proxy.takeFrame({ signal: AbortSignal.timeout(2000) });
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame)), "the part bytes, unchanged");
+    assert.equal(prepared, 1, "beforeConnect ran once");
+    assert.equal(proxy.viewerCount, 0, "a taker is not a viewer");
+    await source.waitForNoStreams();
+    assert.equal(proxy.upstreamOpen, false);
+    assert.equal(source.connections, 1);
+  });
+
+  it("takes the frame from a viewer's upstream without a second connection", async () => {
+    await start();
+    const viewer = await Viewer.open(`${base}/camera`);
+    await viewer.waitForParts(1);
+    const taking = proxy.takeFrame({ signal: AbortSignal.timeout(2000) });
+    assert.equal(proxy.viewerCount, 1, "a taker is not a viewer");
+    const frame = await taking;
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame)));
+
+    const before = viewer.data.length;
+    await until(() => viewer.data.length > before, "frames for the viewer after the frame");
+    assert.equal(source.connections, 1);
+    assert.equal(proxy.upstreamConnections, 1);
+    assert.equal(proxy.upstreamOpen, true, "the upstream stays open for the viewer");
+    assert.equal(prepared, 1);
+    viewer.close();
+    await source.waitForNoStreams();
+  });
+
+  it("takes a part that starts after `after` resolves", async () => {
+    await start();
+    const viewer = await Viewer.open(`${base}/camera`);
+    let release!: () => void;
+    const after = new Promise<void>((resolve) => (release = resolve));
+    const taking = proxy.takeFrame({ signal: AbortSignal.timeout(3000), after });
+    await viewer.waitForParts(5);
+    const seen = [...viewer.text.matchAll(/frame-(\d+)/g)].map((match) => Number(match[1]));
+    const highest = Math.max(...seen);
+    release();
+    const frame = await taking;
+    assert.ok(frameNumber(frame) > highest, `frame ${frameNumber(frame)} comes after frame ${highest}`);
+    viewer.close();
+    await source.waitForNoStreams();
+  });
+
+  it("keeps the upstream for a pending frame when the last viewer leaves, and closes it afterwards", async () => {
+    await start();
+    const viewer = await Viewer.open(`${base}/camera`);
+    await viewer.waitForParts(1);
+    let release!: () => void;
+    const after = new Promise<void>((resolve) => (release = resolve));
+    const taking = proxy.takeFrame({ signal: AbortSignal.timeout(3000), after });
+    viewer.close();
+    await until(() => proxy.viewerCount === 0, "the viewer to leave");
+    assert.equal(proxy.upstreamOpen, true, "the pending frame holds the upstream");
+
+    release();
+    const frame = await taking;
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame)), "a whole frame");
+    assert.equal(source.connections, 1, "no second connection");
+    await source.waitForNoStreams();
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("rejects when the signal aborts and closes the otherwise unused upstream", async () => {
+    await restartSource({ frameIntervalMs: 60_000 });
+    await start();
+    const controller = new AbortController();
+    const taking = proxy.takeFrame({ signal: controller.signal });
+    await until(() => source.open.size === 1, "the upstream stream");
+    const aborted = Date.now();
+    controller.abort();
+    await assert.rejects(taking, /photo timed out/);
+    assert.ok(Date.now() - aborted < 200, "rejects at the abort");
+    await source.waitForNoStreams();
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("rejects at once with an already aborted signal", async () => {
+    await start();
+    await assert.rejects(proxy.takeFrame({ signal: AbortSignal.abort() }), /photo timed out/);
+    assert.equal(proxy.upstreamOpen, false);
+    assert.equal(source.connections, 0);
+  });
+
+  it("rejects with the reason when the camera answers an error status", async () => {
+    source.status = 503;
+    await start();
+    await assert.rejects(proxy.takeFrame({ signal: AbortSignal.timeout(2000) }), /camera answered HTTP 503/);
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("rejects with the reason when the camera is unreachable", async () => {
+    const url = source.url;
+    await source.close();
+    source = await FakeMjpegSource.start(); // for afterEach
+    await start(url);
+    await assert.rejects(proxy.takeFrame({ signal: AbortSignal.timeout(2000) }), /camera unreachable/);
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("rejects a part that is not a JPEG", async () => {
+    await restartSource({ frame: (n) => Buffer.from(`not-a-jpeg-${n}`) });
+    await start();
+    await assert.rejects(proxy.takeFrame({ signal: AbortSignal.timeout(2000) }), /not a JPEG/);
+    await source.waitForNoStreams();
+    assert.equal(proxy.upstreamOpen, false);
+  });
+
+  it("rejects a part larger than 8 MiB", async () => {
+    await restartSource({ frameIntervalMs: 200, framePadBytes: 9 * 1024 * 1024 });
+    await start();
+    await assert.rejects(proxy.takeFrame({ signal: AbortSignal.timeout(5000) }), /larger than 8 MiB/);
+    await source.waitForNoStreams();
+  });
+
+  it("rejects a stream without a multipart boundary", async () => {
+    const plain = createHttpServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "image/jpeg" });
+      res.write(fakeJpeg(0));
+    });
+    plain.listen(0, "127.0.0.1");
+    await once(plain, "listening");
+    try {
+      await start(`http://127.0.0.1:${(plain.address() as AddressInfo).port}/video`);
+      await assert.rejects(proxy.takeFrame({ signal: AbortSignal.timeout(2000) }), /no multipart boundary/);
+      assert.equal(proxy.upstreamOpen, false);
+    } finally {
+      plain.closeAllConnections();
+      await new Promise<void>((resolve) => plain.close(() => resolve()));
+    }
+  });
+
+  it("takes a whole frame of several hundred kilobytes, which arrives in several chunks", async () => {
+    await restartSource({ frameIntervalMs: 100, framePadBytes: 300 * 1024 });
+    await start();
+    const frame = await proxy.takeFrame({ signal: AbortSignal.timeout(3000) });
+    assert.equal(frame.length, fakeJpeg(0, 300 * 1024).length, "no bytes lost between chunks");
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame), 300 * 1024));
+    await source.waitForNoStreams();
+  });
+
+  it("takes a whole frame when its delimiters, part headers, and body are split across chunks", async () => {
+    // Writes each part in pieces with a pause between them, so every piece
+    // reaches the proxy as its own chunk: the opening delimiter, the header
+    // end, the JPEG body, and the next part's delimiter are each cut in two.
+    const pieces = (n: number): Buffer[] => {
+      const jpeg = fakeJpeg(n, 64);
+      return [
+        Buffer.from(`--${FAKE_BOUNDARY.slice(0, 4)}`),
+        Buffer.from(`${FAKE_BOUNDARY.slice(4)}\r\nContent-Type: image/jpeg\r\n\r`),
+        Buffer.concat([Buffer.from("\n"), jpeg.subarray(0, 3)]),
+        jpeg.subarray(3, 40),
+        jpeg.subarray(40),
+        Buffer.from("\r\n"),
+      ];
+    };
+    let stopped = false;
+    const chunked = createHttpServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": `multipart/x-mixed-replace; boundary=${FAKE_BOUNDARY}` });
+      res.on("close", () => (stopped = true));
+      void (async () => {
+        for (let n = 0; !stopped && n < 50; n++) {
+          for (const piece of pieces(n)) {
+            if (stopped) return;
+            res.write(piece);
+            await new Promise((resolve) => setTimeout(resolve, 15));
+          }
+        }
+      })();
+    });
+    chunked.listen(0, "127.0.0.1");
+    await once(chunked, "listening");
+    try {
+      await start(`http://127.0.0.1:${(chunked.address() as AddressInfo).port}/video`);
+      const frame = await proxy.takeFrame({ signal: AbortSignal.timeout(3000) });
+      assert.deepEqual(frame, fakeJpeg(frameNumber(frame), 64), "the part bytes, unchanged");
+      assert.equal(proxy.upstreamOpen, false);
+    } finally {
+      chunked.closeAllConnections();
+      await new Promise<void>((resolve) => chunked.close(() => resolve()));
+    }
+  });
+
+  it("rejects a waiting taker when the stream ends", async () => {
+    await restartSource({ frameIntervalMs: 60_000 });
+    await start();
+    const taking = proxy.takeFrame({ signal: AbortSignal.timeout(2000) });
+    await until(() => source.open.size === 1, "the upstream stream");
+    source.endStreams();
+    await assert.rejects(taking, /camera stream ended/);
   });
 });
 

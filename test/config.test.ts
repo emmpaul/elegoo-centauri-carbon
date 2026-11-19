@@ -21,7 +21,7 @@ describe("loadConfig", () => {
     assert.equal(config.printerIp, null);
     assert.deepEqual(config.listen, { host: "0.0.0.0", port: 8080 });
     assert.equal(config.token, null);
-    assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: null });
+    assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: null, photos: false, photoLight: false });
     for (const event of EVENT_TYPES) assert.equal(config.events[event], true);
     assert.equal(config.dataDir, "data");
   });
@@ -38,7 +38,7 @@ describe("loadConfig", () => {
     assert.equal(config.printerIp, "192.168.0.96");
     assert.deepEqual(config.listen, { host: "0.0.0.0", port: 9000 });
     assert.equal(config.token, "secret");
-    assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: "my-printer" });
+    assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: "my-printer", photos: false, photoLight: false });
     assert.equal(config.events.started, false);
     assert.equal(config.events.finished, true);
   });
@@ -49,6 +49,8 @@ describe("loadConfig", () => {
     assert.deepEqual(config.listen, { host: "127.0.0.1", port: 8080 });
     assert.equal(config.token, null);
     assert.equal(listenAuthError(config.listen, config.token), null);
+    assert.equal(config.ntfy.photos, false);
+    assert.equal(config.ntfy.photoLight, false);
   });
 
   it("lets env variables override file values", () => {
@@ -73,7 +75,7 @@ describe("loadConfig", () => {
     assert.equal(config.printerIp, "10.0.0.5");
     assert.deepEqual(config.listen, { host: "192.168.0.10", port: 8181 });
     assert.equal(config.token, "env-token");
-    assert.deepEqual(config.ntfy, { url: "https://ntfy.local", topic: "env-topic" });
+    assert.deepEqual(config.ntfy, { url: "https://ntfy.local", topic: "env-topic", photos: false, photoLight: false });
     assert.deepEqual(
       EVENT_TYPES.filter((e) => config.events[e]),
       ["finished", "failed"],
@@ -113,6 +115,54 @@ describe("loadConfig", () => {
   it("turns every event off with NOTIFY_EVENTS=none", () => {
     const config = loadConfig({ path: join(dir, "missing.json"), env: { NOTIFY_EVENTS: "none" } });
     for (const event of EVENT_TYPES) assert.equal(config.events[event], false);
+  });
+
+  it("turns photos and the photo light off by default", () => {
+    const config = loadConfig({ path: join(dir, "missing.json"), env: {} });
+    assert.equal(config.ntfy.photos, false);
+    assert.equal(config.ntfy.photoLight, false);
+  });
+
+  it("reads ntfy.photos and ntfy.photoLight from the file", () => {
+    const path = writeConfig("photos.json", { ntfy: { photos: true, photoLight: true } });
+    const config = loadConfig({ path, env: {} });
+    assert.equal(config.ntfy.photos, true);
+    assert.equal(config.ntfy.photoLight, true);
+  });
+
+  it("lets NTFY_PHOTOS and NTFY_PHOTO_LIGHT turn the file values on", () => {
+    const path = writeConfig("photos-off.json", { ntfy: { photos: false, photoLight: false } });
+    for (const on of ["1", "true"]) {
+      const config = loadConfig({ path, env: { NTFY_PHOTOS: on, NTFY_PHOTO_LIGHT: on } });
+      assert.equal(config.ntfy.photos, true, on);
+      assert.equal(config.ntfy.photoLight, true, on);
+    }
+  });
+
+  it("lets NTFY_PHOTOS and NTFY_PHOTO_LIGHT turn the file values off", () => {
+    const path = writeConfig("photos-on.json", { ntfy: { photos: true, photoLight: true } });
+    for (const off of ["0", "false"]) {
+      const config = loadConfig({ path, env: { NTFY_PHOTOS: off, NTFY_PHOTO_LIGHT: off } });
+      assert.equal(config.ntfy.photos, false, off);
+      assert.equal(config.ntfy.photoLight, false, off);
+    }
+  });
+
+  it("ignores an empty NTFY_PHOTOS and NTFY_PHOTO_LIGHT", () => {
+    const path = writeConfig("photos-empty-env.json", { ntfy: { photos: true, photoLight: true } });
+    const config = loadConfig({ path, env: { NTFY_PHOTOS: "", NTFY_PHOTO_LIGHT: "" } });
+    assert.equal(config.ntfy.photos, true);
+    assert.equal(config.ntfy.photoLight, true);
+  });
+
+  it("rejects non-boolean photo settings, naming the key or variable", () => {
+    assert.throws(() => loadConfig({ path: writeConfig("photos-yes.json", { ntfy: { photos: "yes" } }), env: {} }), /ntfy\.photos/);
+    assert.throws(
+      () => loadConfig({ path: writeConfig("photo-light-yes.json", { ntfy: { photoLight: "yes" } }), env: {} }),
+      /ntfy\.photoLight/,
+    );
+    assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { NTFY_PHOTOS: "yes" } }), /NTFY_PHOTOS/);
+    assert.throws(() => loadConfig({ path: join(dir, "missing.json"), env: { NTFY_PHOTO_LIGHT: "yes" } }), /NTFY_PHOTO_LIGHT/);
   });
 
   it("finds the file through CONFIG_PATH", () => {

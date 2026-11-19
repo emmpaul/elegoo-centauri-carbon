@@ -1,6 +1,6 @@
 // Wires the service together (design D4): one printer session, the status
 // store, the event detector, print control, the camera proxy, the history
-// archive and its sync, and the HTTP API with the dashboard.
+// archive and its sync, Notification Photos, and the HTTP API with the dashboard.
 import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -11,6 +11,7 @@ import { EventDetector, isJobActive, type PrintEvent } from "./event-detector.ts
 import { HistoryStore } from "./history-store.ts";
 import { HistorySync } from "./history-sync.ts";
 import { createApiServer, type HistorySource } from "./http-server.ts";
+import { PHOTO_EVENTS, PhotoTaker } from "./notification-photo.ts";
 import type { Notifier } from "./notifier.ts";
 import { PrintControl } from "./print-control.ts";
 import { PrinterSession } from "./printer-session.ts";
@@ -31,6 +32,11 @@ export interface ServiceOptions {
   notifier?: Notifier | null;
   /** History archive file; `:memory:` (kept only while running) by default. */
   historyPath?: string;
+  /**
+   * Photos on the finished, failed, stopped, and paused Notifications;
+   * `light` turns the chamber light on for them. Null (no Photos) by default.
+   */
+  photos?: { light: boolean } | null;
 }
 
 export interface Service {
@@ -88,13 +94,6 @@ export async function startService(options: ServiceOptions): Promise<Service> {
   detector.on("event", (event) => {
     if (event.type === "finished" || event.type === "failed" || event.type === "stopped") historySync.trigger();
   });
-  const notifier = options.notifier ?? null;
-  detector.on("event", (event) => {
-    logger.info(`event: ${describeEvent(event)}`);
-    // Delivery runs on its own: its retries and failures never wait on or touch the session.
-    if (notifier !== null) void notifier.notify(event).catch((error: Error) => logger.error(`notification failed: ${error.message}`));
-  });
-  detector.attach(store);
   const control = new PrintControl(session, store);
   const camera = new CameraProxy({
     url: options.cameraUrl,
@@ -102,6 +101,20 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     // The web UI enables streaming before it shows the camera.
     beforeConnect: () => session.send(Cmd.EDIT_PRINTER_VIDEO_STREAMING, { Enable: 1 }),
   });
+  // The Photo comes through the dashboard's camera proxy, so the printer never serves a second stream.
+  const photos =
+    options.photos == null
+      ? null
+      : new PhotoTaker({ camera, light: options.photos.light ? { state: store, control } : null, logger });
+  const notifier = options.notifier ?? null;
+  detector.on("event", (event) => {
+    logger.info(`event: ${describeEvent(event)}`);
+    // The Photo is requested now, at detection, so its 5 s limit runs from here.
+    const photo = photos !== null && PHOTO_EVENTS.has(event.type) ? () => photos.take() : undefined;
+    // Delivery runs on its own: its retries and failures never wait on or touch the session.
+    if (notifier !== null) void notifier.notify(event, photo).catch((error: Error) => logger.error(`notification failed: ${error.message}`));
+  });
+  detector.attach(store);
   const historySource: HistorySource = {
     list: (before, limit) => history.list(before, limit),
     thumbnail: (taskId) => history.thumbnail(taskId),
@@ -139,8 +152,11 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     address: server.address() as AddressInfo,
     async close() {
       detector.close();
+      // Closing the camera ends a running Photo; its light restore must go out before the session stops.
+      const photosClosed = photos?.close();
       camera.close();
       historySync.close();
+      await photosClosed;
       session.stop();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

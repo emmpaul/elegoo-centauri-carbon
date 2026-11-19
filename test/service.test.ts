@@ -1,14 +1,19 @@
 import { strict as assert } from "node:assert";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { get, type IncomingMessage } from "node:http";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { CameraProxy } from "../src/camera-proxy.ts";
+import { EVENT_TYPES, type EventType } from "../src/config.ts";
 import { isJobActive, type PrintEvent } from "../src/event-detector.ts";
 import { FOLLOW_UP_DELAY_MS } from "../src/history-sync.ts";
-import type { Logger } from "../src/sdcp-client.ts";
-import { type Service, startService } from "../src/service.ts";
+import { NtfyNotifier } from "../src/notifier.ts";
+import type { Logger, StatusMessage } from "../src/sdcp-client.ts";
+import { type Service, type ServiceOptions, startService } from "../src/service.ts";
+import { FakeMjpegSource, fakeJpeg } from "./support/fake-mjpeg.ts";
+import { FakeNtfy, type NtfyRequest } from "./support/fake-ntfy.ts";
 import { FakePrinter, loadFixture } from "./support/fake-printer.ts";
 
 function silentLogger(): Logger {
@@ -335,5 +340,200 @@ describe("startService close", () => {
     // A sync still running would log the lost session as a failed sync.
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.deepEqual(warnings.filter((line) => line.startsWith("history sync")), []);
+  });
+});
+
+describe("startService photos", () => {
+  let printer: FakePrinter;
+  let camera: FakeMjpegSource;
+  let ntfy: FakeNtfy;
+  let service: Service | undefined;
+
+  beforeEach(async () => {
+    printer = await FakePrinter.start();
+    camera = await FakeMjpegSource.start();
+    ntfy = await FakeNtfy.start();
+  });
+
+  afterEach(async () => {
+    await service?.close();
+    service = undefined;
+    await printer.close();
+    await camera.close();
+    await ntfy.close();
+  });
+
+  /** A `print-complete.json` status push: seq 23 prints, seq 24 has finished. */
+  function statusFrame(seq: number): StatusMessage {
+    return structuredClone(loadFixture("print-complete.json").frames.find((f) => f.seq === seq)?.payload) as StatusMessage;
+  }
+
+  /** Resolves once `check` holds, polling every 10 ms (pushing `push` each time) for at most `ms`. */
+  async function until(check: () => boolean, what: string, push?: StatusMessage, ms = 3000): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (!check()) {
+      if (Date.now() > deadline) assert.fail(`timed out waiting for ${what}`);
+      if (push) printer.push(push);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  async function start(options: Partial<ServiceOptions>): Promise<Service> {
+    service = await startService({
+      printerUrl: printer.url,
+      cameraUrl: camera.url,
+      listen: { host: "127.0.0.1", port: 0 },
+      token: null,
+      logger: silentLogger(),
+      notifier: new NtfyNotifier({ url: ntfy.url, topic: "t", events: Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>, retryDelaysMs: [], logger: silentLogger() }),
+      ...options,
+    });
+    return service;
+  }
+
+  /** `statusFrame(seq)` with the chamber light (`LightStatus.SecondLight`) set to `light`. */
+  function withLight(frame: StatusMessage, light: 0 | 1): StatusMessage {
+    const status = frame.Status as { LightStatus: { SecondLight: number } };
+    status.LightStatus.SecondLight = light;
+    return frame;
+  }
+
+  /** Runs a job from printing (seq 23) to finished (seq 24), with the light as `light` (on in the fixture). */
+  async function finishAJob(s: Service, light: 0 | 1 = 1): Promise<void> {
+    await printer.waitForClient();
+    await until(() => s.store.snapshot.taskId !== null, "the printing status", withLight(statusFrame(23), light));
+    printer.push(withLight(statusFrame(24), light));
+  }
+
+  /** The `SecondLight` values of the Cmd 403 requests the printer received, in order. */
+  function lightCommands(): number[] {
+    return printer.received.flatMap((frame) => {
+      const data = (frame.payload as { Data?: { Cmd?: number; Data?: { LightStatus?: { SecondLight?: number } } } }).Data;
+      return data?.Cmd === 403 ? [data.Data?.LightStatus?.SecondLight ?? -1] : [];
+    });
+  }
+
+  /** Whether `raw` is one whole part of the fake camera (`fakeJpeg(n)`). */
+  function isFakeJpegPart(raw: Buffer): boolean {
+    const match = /frame-(\d+)/.exec(raw.toString("latin1"));
+    return match !== null && raw.equals(fakeJpeg(Number(match[1])));
+  }
+
+  function event(type: PrintEvent["type"]): PrintEvent {
+    return { type, at: Date.now(), printerName: null, jobId: "j", fileName: "test-print-1.gcode", progress: null, durationSeconds: null, errorCode: null };
+  }
+
+  it("uploads a Photo from the camera with a finished Notification and closes the camera afterwards", async () => {
+    const s = await start({ photos: { light: false } });
+    await finishAJob(s);
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    const [request] = ntfy.requests as [NtfyRequest];
+    assert.equal(request.method, "PUT");
+    assert.equal(request.path, "/t");
+    assert.equal(request.headers.filename, "photo-finished.jpg");
+    assert.ok(isFakeJpegPart(request.raw), "the body is one whole camera part");
+    await camera.waitForNoStreams();
+    assert.equal(camera.connections, 1);
+    assert.equal(ntfy.requests.length, 1);
+  });
+
+  it("publishes JSON and never contacts the camera with photos off", async () => {
+    const s = await start({ photos: null });
+    await finishAJob(s);
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(ntfy.requests.length, 1);
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print finished");
+    assert.equal(camera.connections, 0);
+  });
+
+  it("publishes a started Notification as JSON with photos on", async () => {
+    const s = await start({ photos: { light: false } });
+    await printer.waitForClient();
+    s.detector.emit("event", event("started"));
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print started");
+    assert.equal(camera.connections, 0);
+  });
+
+  it("takes the Photo from the stream a dashboard viewer already holds", async () => {
+    const s = await start({ photos: { light: false } });
+    const viewer = await new Promise<IncomingMessage>((resolve, reject) =>
+      get(`http://127.0.0.1:${s.address.port}/camera`, resolve).on("error", reject),
+    );
+    try {
+      assert.equal(viewer.statusCode, 200);
+      let received = 0;
+      viewer.on("data", (chunk: Buffer) => (received += chunk.length));
+      await until(() => received > 0, "the viewer's first bytes");
+      await finishAJob(s);
+      await until(() => ntfy.requests.length > 0, "the Notification");
+      assert.equal(ntfy.requests[0]?.method, "PUT");
+      assert.ok(isFakeJpegPart(ntfy.requests[0]!.raw));
+      const before = received;
+      await until(() => received > before, "the viewer still receiving");
+      assert.equal(camera.connections, 1);
+    } finally {
+      viewer.destroy();
+    }
+  });
+
+  it("turns the light on for the Photo, waits for the push showing it on, and turns it off again", async () => {
+    const s = await start({ photos: { light: true } });
+    let putsAtLightOn = -1;
+    printer.onFrame((frame) => {
+      const data = (frame.payload as { Data?: { Cmd?: number; Data?: { LightStatus?: { SecondLight?: number } } } }).Data;
+      if (data?.Cmd !== 403 || data.Data?.LightStatus?.SecondLight !== 1) return;
+      // The printer reports the light on a moment after the command, as its status push would.
+      setTimeout(() => {
+        putsAtLightOn = ntfy.requests.length;
+        printer.push(withLight(statusFrame(24), 1));
+      }, 100);
+    });
+    await finishAJob(s, 0);
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    assert.equal(ntfy.requests[0]?.method, "PUT");
+    assert.equal(putsAtLightOn, 0, "the upload came after the status push showing the light on");
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
+  });
+
+  it("takes the Photo and turns the light off again when no push shows the light on", async () => {
+    const s = await start({ photos: { light: true } });
+    await finishAJob(s, 0);
+    const detected = Date.now();
+    await until(() => ntfy.requests.length > 0, "the Notification", undefined, 6000);
+    assert.ok(Date.now() - detected < 6000);
+    assert.equal(ntfy.requests[0]?.method, "PUT");
+    assert.ok(isFakeJpegPart(ntfy.requests[0]!.raw));
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
+  });
+
+  it("turns the light off again when the service closes during a Photo-light Photo", async () => {
+    const s = await start({ photos: { light: true } });
+    await finishAJob(s, 0);
+    await until(() => lightCommands().length === 1, "the on command");
+    const closing = Date.now();
+    await s.close();
+    service = undefined;
+    assert.ok(Date.now() - closing < 2000, "close stays bounded");
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
+  });
+
+  it("sends the Notification as JSON within 6 s when the camera port is closed", async () => {
+    const closed = await FakeMjpegSource.start();
+    const closedUrl = closed.url;
+    await closed.close();
+    const s = await start({ photos: { light: false }, cameraUrl: closedUrl });
+    await finishAJob(s);
+    const detected = Date.now();
+    await until(() => ntfy.requests.length > 0, "the Notification", undefined, 6000);
+    assert.ok(Date.now() - detected < 6000);
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print finished");
   });
 });
