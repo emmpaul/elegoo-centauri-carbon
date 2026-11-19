@@ -412,9 +412,8 @@ function historyRow(job: HistoryState["jobs"][number]): HTMLLIElement {
   const row = historyRowView(job, Date.now());
   const item = document.createElement("li");
   item.className = "hist__row";
-  const src = row.thumbnail === null ? null : withToken(row.thumbnail);
-  // The src is in the key, so a row built with an earlier token is rebuilt and its image asks with the current one.
-  item.dataset.key = JSON.stringify([row, src]);
+  const { src, key } = historyRowKey(row, withToken);
+  item.dataset.key = key;
   let thumb: HTMLElement;
   if (src === null) {
     thumb = document.createElement("span");
