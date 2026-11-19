@@ -34,6 +34,32 @@ const MIGRATIONS: readonly string[] = [
 /** The schema version this code writes and reads. */
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
+/** Default cap on the stored thumbnails' total size (design D5). */
+export const THUMBNAIL_TOTAL_BYTES = 100 * 1024 * 1024;
+
+/**
+ * `thumbnail_attempts` of a job whose thumbnail was dropped to keep the total
+ * under its cap: above any attempt limit, so it is not fetched again.
+ */
+const THUMBNAIL_DROPPED = 1_000_000;
+
+export interface HistoryStoreOptions {
+  /** Cap on the total size of the stored thumbnails; the oldest jobs' go first. */
+  thumbnailTotalBytes?: number;
+}
+
+/** A stored thumbnail. */
+export interface Thumbnail {
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/** A job whose thumbnail is still to fetch. */
+export interface ThumbnailRequest {
+  taskId: string;
+  url: string;
+}
+
 /** `TaskStatus` of a job the printer still runs. */
 export const TASK_STATUS_RUNNING = 4;
 
@@ -147,9 +173,11 @@ export function jobOutcome(taskStatus: number, errorCode: number): JobOutcome {
 
 export class HistoryStore {
   readonly #db: DatabaseSync;
+  readonly #thumbnailTotalBytes: number;
 
-  private constructor(db: DatabaseSync) {
+  private constructor(db: DatabaseSync, thumbnailTotalBytes: number) {
     this.#db = db;
+    this.#thumbnailTotalBytes = thumbnailTotalBytes;
   }
 
   /**
@@ -158,7 +186,7 @@ export class HistoryStore {
    * the file cannot be opened or written, or when its schema is newer than
    * this code knows; a newer file is left unchanged.
    */
-  static open(path: string): HistoryStore {
+  static open(path: string, options: HistoryStoreOptions = {}): HistoryStore {
     let db: DatabaseSync | undefined;
     try {
       db = new DatabaseSync(path);
@@ -175,7 +203,7 @@ export class HistoryStore {
       // A read-only file or directory fails here, at start-up, and not on the first write.
       db.exec("BEGIN IMMEDIATE; COMMIT");
       migrate(db, version);
-      return new HistoryStore(db);
+      return new HistoryStore(db, options.thumbnailTotalBytes ?? THUMBNAIL_TOTAL_BYTES);
     } catch (error) {
       db?.close();
       if (error instanceof NewerSchemaError) throw error;
@@ -255,6 +283,63 @@ export class HistoryStore {
         ? encodeHistoryCursor({ beginTime: last.begin_time, taskId: last.task_id })
         : null,
     };
+  }
+
+  /**
+   * Stores a job's thumbnail, then drops the thumbnails of the jobs with the
+   * oldest start time while the total is over the cap. A dropped thumbnail's
+   * job stays listed, without a thumbnail, and is not fetched again.
+   */
+  putThumbnail(taskId: string, contentType: string, bytes: Uint8Array): void {
+    this.#transaction(() => {
+      this.#db
+        .prepare("INSERT OR REPLACE INTO thumbnails (task_id, content_type, bytes, size) VALUES (?, ?, ?, ?)")
+        .run(taskId, contentType, bytes, bytes.byteLength);
+      const total = this.#db.prepare("SELECT COALESCE(SUM(size), 0) AS total FROM thumbnails");
+      const oldest = this.#db.prepare(
+        `SELECT t.task_id, t.size FROM thumbnails t JOIN jobs j ON j.task_id = t.task_id
+         ORDER BY j.begin_time ASC, j.task_id ASC LIMIT 1`,
+      );
+      const drop = this.#db.prepare("DELETE FROM thumbnails WHERE task_id = ?");
+      const markDropped = this.#db.prepare("UPDATE jobs SET thumbnail_attempts = ? WHERE task_id = ?");
+      let sum = (total.get() as { total: number }).total;
+      while (sum > this.#thumbnailTotalBytes) {
+        const row = oldest.get() as { task_id: string; size: number } | undefined;
+        if (row === undefined) break;
+        drop.run(row.task_id);
+        markDropped.run(THUMBNAIL_DROPPED, row.task_id);
+        sum -= row.size;
+      }
+    });
+  }
+
+  /** The stored thumbnail of a job, or null. */
+  thumbnail(taskId: string): Thumbnail | null {
+    const row = this.#db.prepare("SELECT content_type, bytes FROM thumbnails WHERE task_id = ?").get(taskId) as
+      | { content_type: string; bytes: Uint8Array }
+      | undefined;
+    return row === undefined ? null : { contentType: row.content_type, bytes: row.bytes };
+  }
+
+  /**
+   * Jobs, newest first, that have a thumbnail URL but no stored thumbnail and
+   * fewer than `maxAttempts` failed fetches.
+   */
+  jobsNeedingThumbnail(maxAttempts: number): ThumbnailRequest[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT task_id, thumbnail_url FROM jobs
+         WHERE thumbnail_url IS NOT NULL AND thumbnail_attempts < ?
+           AND NOT EXISTS (SELECT 1 FROM thumbnails t WHERE t.task_id = jobs.task_id)
+         ORDER BY begin_time DESC, task_id DESC`,
+      )
+      .all(maxAttempts) as unknown as { task_id: string; thumbnail_url: string }[];
+    return rows.map((row) => ({ taskId: row.task_id, url: row.thumbnail_url }));
+  }
+
+  /** Counts one failed thumbnail fetch for a job. */
+  recordThumbnailFailure(taskId: string): void {
+    this.#db.prepare("UPDATE jobs SET thumbnail_attempts = thumbnail_attempts + 1 WHERE task_id = ?").run(taskId);
   }
 
   #transaction(work: () => void): void {

@@ -306,3 +306,76 @@ describe("HistoryStore.list", () => {
     store.close();
   });
 });
+
+describe("HistoryStore thumbnails", () => {
+  const png = (size: number, fill: number) => new Uint8Array(size).fill(fill);
+
+  it("stores and returns a thumbnail, which the job then lists", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([syntheticEntry({})]));
+    assert.equal(store.thumbnail("synthetic-1"), null);
+    store.putThumbnail("synthetic-1", "image/png", png(10, 7));
+    const thumbnail = store.thumbnail("synthetic-1");
+    assert.equal(thumbnail?.contentType, "image/png");
+    assert.deepEqual([...(thumbnail?.bytes ?? [])], Array(10).fill(7));
+    assert.equal(store.job("synthetic-1")?.thumbnail, "/api/history/thumbnail?id=synthetic-1");
+    assert.equal(store.thumbnail("unknown"), null);
+    store.close();
+  });
+
+  it("drops the oldest jobs' thumbnails past the total limit and keeps the jobs", () => {
+    const store = HistoryStore.open(":memory:", { thumbnailTotalBytes: 1024 });
+    const ids = ["old-1", "old-2", "new-3", "new-4"];
+    store.upsert(records(ids.map((id, i) => syntheticEntry({ TaskId: id, BeginTime: 1794600000 + i * 100 }))));
+
+    // Newest first, as the sync fetches them.
+    for (const id of [...ids].reverse()) store.putThumbnail(id, "image/png", png(400, 1));
+
+    assert.equal(store.thumbnail("new-4")?.bytes.byteLength, 400);
+    assert.equal(store.thumbnail("new-3")?.bytes.byteLength, 400);
+    assert.equal(store.thumbnail("old-2"), null);
+    assert.equal(store.thumbnail("old-1"), null);
+    const listed = store.list(null, 20).jobs;
+    assert.deepEqual(listed.map((job) => [job.id, job.thumbnail !== null]), [
+      ["new-4", true],
+      ["new-3", true],
+      ["old-2", false],
+      ["old-1", false],
+    ]);
+    // A dropped thumbnail is not fetched again.
+    assert.deepEqual(store.jobsNeedingThumbnail(3), []);
+    store.close();
+  });
+
+  it("lists jobs needing a thumbnail, newest first, until 3 failures", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([
+      syntheticEntry({ TaskId: "older", BeginTime: 1794500000, Thumbnail: "http://192.0.2.10/board-resource/history_image/older.png" }),
+      syntheticEntry({ TaskId: "newer", BeginTime: 1794600000, Thumbnail: "http://192.0.2.10/board-resource/history_image/newer.png" }),
+      syntheticEntry({ TaskId: "no-url", Thumbnail: undefined }),
+    ]));
+    assert.deepEqual(store.jobsNeedingThumbnail(3), [
+      { taskId: "newer", url: "http://192.0.2.10/board-resource/history_image/newer.png" },
+      { taskId: "older", url: "http://192.0.2.10/board-resource/history_image/older.png" },
+    ]);
+
+    store.recordThumbnailFailure("older");
+    store.recordThumbnailFailure("older");
+    assert.deepEqual(store.jobsNeedingThumbnail(3).map((job) => job.taskId), ["newer", "older"]);
+    store.recordThumbnailFailure("older");
+    assert.deepEqual(store.jobsNeedingThumbnail(3).map((job) => job.taskId), ["newer"]);
+
+    store.putThumbnail("newer", "image/jpeg", png(5, 2));
+    assert.deepEqual(store.jobsNeedingThumbnail(3), []);
+    store.close();
+  });
+
+  it("keeps a stored thumbnail across an upsert of the same job", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([syntheticEntry({ TaskStatus: 4 })]));
+    store.putThumbnail("synthetic-1", "image/png", png(3, 9));
+    store.upsert(records([syntheticEntry({ TaskStatus: 1 })]));
+    assert.equal(store.thumbnail("synthetic-1")?.bytes.byteLength, 3);
+    store.close();
+  });
+});
