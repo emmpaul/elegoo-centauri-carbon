@@ -15,12 +15,14 @@ How the pieces fit:
 - `package.json` `version` is the single source of truth for the version number.
 - `main` is protected (PR only, check `typecheck and test` required), so the version bump
   lands through a **release PR**.
-- Pushing a `vX.Y.Z` tag starts `.github/workflows/release.yml`. It re-runs the checks,
-  verifies the tag equals `v` + `package.json` version and sits on `main`, then creates
-  the GitHub release with generated notes. Tags with a `-` suffix (`v1.2.0-rc.1`)
-  become prereleases. In parallel, its `image` job pushes the container image
-  `ghcr.io/emmpaul/elegoo-centauri-carbon` as `X.Y.Z`, and as `latest` only for a
-  tag with no `-` suffix. Once both `release` and `image` have finished, its `sbom` job
+- Pushing a `vX.Y.Z` tag starts `.github/workflows/release.yml`. It re-runs the checks
+  and verifies the tag equals `v` + `package.json` version and sits on `main`. Its `image`
+  job then pushes the container image `ghcr.io/emmpaul/elegoo-centauri-carbon` as
+  `X.Y.Z`, and as `latest` only for a tag with no `-` suffix. Only after the image is
+  pushed does its `release` job create the GitHub release with generated notes, so a
+  release never exists without its image; a failed `image` job leaves the tag with no
+  release. Tags with a `-` suffix (`v1.2.0-rc.1`) become prereleases. Once both
+  `release` and `image` have finished, its `sbom` job
   scans the pushed image by digest and attaches one SPDX SBOM per platform
   (`elegoo-centauri-carbon-X.Y.Z-linux-amd64.spdx.json` and `-linux-arm64.spdx.json`)
   to the release, then appends a "Software bill of materials" section to the notes.
