@@ -306,3 +306,34 @@ describe("startService history", () => {
     });
   }
 });
+
+describe("startService close", () => {
+  it("ends a sync waiting on Cmd 321 without a warning", async () => {
+    const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
+    const entries = (frame?.payload as { Data: { Data: { HistoryDetailList: Record<string, unknown>[] } } }).Data.Data.HistoryDetailList;
+    const printer = await FakePrinter.start({ history: { entries }, replies: { 321: "silent" } });
+    const warnings: string[] = [];
+    const service = await startService({
+      printerUrl: printer.url,
+      cameraUrl: "http://127.0.0.1:9/video",
+      listen: { host: "127.0.0.1", port: 0 },
+      token: null,
+      logger: { info() {}, warn: (line) => warnings.push(line), error() {} },
+    });
+    try {
+      await printer.waitForClient();
+      printer.replay(loadFixture("connect-idle.json"), (frame) => frame.seq <= 32);
+      const deadline = Date.now() + 3000;
+      while (!printer.receivedCommands.includes(321)) {
+        if (Date.now() > deadline) assert.fail("timed out waiting for Cmd 321");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    } finally {
+      await service.close();
+      await printer.close();
+    }
+    // A sync still running would log the lost session as a failed sync.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(warnings.filter((line) => line.startsWith("history sync")), []);
+  });
+});

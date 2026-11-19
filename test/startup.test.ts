@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +11,13 @@ import { UDP_ATTEMPT_MARKER } from "./support/no-udp.ts";
 const dir = mkdtempSync(join(tmpdir(), "ecc-startup-"));
 const readOnlyDir = join(dir, "read-only");
 mkdirSync(readOnlyDir);
+const readOnlyParent = join(dir, "read-only-parent");
+mkdirSync(readOnlyParent, { mode: 0o500 });
+const plainFile = join(dir, "plain-file");
+writeFileSync(plainFile, "");
 after(() => {
   chmodSync(readOnlyDir, 0o700);
+  chmodSync(readOnlyParent, 0o700);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -119,4 +124,37 @@ describe("node src/main.ts", () => {
       for (const name of [dataDir, "DATA_DIR"]) assert.ok(stderr.includes(name), `stderr names ${name}: ${stderr}`);
     },
   );
+
+  for (const [parent, dataDir, skip] of [
+    ["a read-only parent", join(readOnlyParent, "data"), process.getuid?.() === 0 ? "root can write a read-only directory" : false],
+    ["a file as parent", join(plainFile, "data"), false],
+  ] as const) {
+    it(`exits non-zero with one line naming DATA_DIR when it cannot create the data directory under ${parent}`, { skip }, async () => {
+      const child = spawn(process.execPath, [fileURLToPath(new URL("../src/main.ts", import.meta.url))], {
+        env: {
+          PATH: process.env.PATH,
+          CONFIG_PATH: join(dir, "missing.json"),
+          PRINTER_IP: "127.0.0.1",
+          LISTEN_HOST: "127.0.0.1",
+          DATA_DIR: dataDir,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stderr = "";
+      child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+      child.stdout.resume();
+
+      const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+      const [code, signal] = await new Promise<[number | null, NodeJS.Signals | null]>((resolve) =>
+        child.once("exit", (exitCode, exitSignal) => resolve([exitCode, exitSignal])),
+      );
+      clearTimeout(timer);
+
+      assert.equal(signal, null, "exited on its own within 5 s");
+      assert.equal(code, 1);
+      assert.ok(stderr.startsWith(`cannot create the data directory ${dataDir} (set DATA_DIR`), stderr);
+      assert.equal(stderr.trimEnd().split("\n").length, 1, `one line, no stack trace: ${stderr}`);
+      assert.equal(existsSync(dataDir), false);
+    });
+  }
 });
