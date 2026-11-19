@@ -242,6 +242,37 @@ describe("HistorySync", () => {
     assert.ok(printer.receivedCommands.includes(320));
   });
 
+  it("stores and counts nothing once closed while a Cmd 321 is in flight", async () => {
+    await start();
+    const running = entries[0]!;
+    // Archived earlier with the newest job running: this sync asks for it again.
+    store.upsert(
+      entries
+        .map((entry) => (entry === running ? { ...entry, TaskStatus: 4 } : entry))
+        .map(jobFromDetail)
+        .filter((job) => job !== null),
+    );
+    let sync: HistorySync | undefined;
+    const closing: HistorySession = {
+      async send(cmd, data) {
+        const response = await session.send(cmd, data);
+        if (cmd === 321) sync!.close();
+        return response;
+      },
+    };
+    sync = new HistorySync({ session: closing, store, logger, printerHost: "127.0.0.1" });
+    let changes = 0;
+    sync.on("change", () => changes++);
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(detailRequests(printer), [[running.TaskId]]);
+    assert.equal(store.job(running.TaskId as string)?.outcome, "running");
+    // The fixture thumbnails are off the printer's host: a pass over them would count 26 failures.
+    assert.equal(store.jobsNeedingThumbnail(1).length, 26);
+    assert.equal(changes, 0);
+    assert.deepEqual(logger.warnings, []);
+  });
+
   describe("thumbnails", () => {
     let thumbnails: FakeThumbnails;
 
@@ -296,6 +327,24 @@ describe("HistorySync", () => {
         `1 history thumbnail(s) not fetched: the URL is not http:// on the printer's host 127.0.0.1 ` +
           `(first: ${entries[0]!.Thumbnail as string})`,
       ]);
+    });
+
+    it("escapes control characters of a printer-supplied task id and URL in its warnings", async () => {
+      await startWithThumbnails(2);
+      const [failing, offHost] = entries as [Record<string, unknown>, Record<string, unknown>];
+      failing.TaskId = "job-1\nforged: line";
+      failing.Thumbnail = thumbnails.urlFor("job-1");
+      offHost.Thumbnail = "http://192.0.2.10/a.png\r\nforged\u2028line";
+      thumbnails.answer = () => undefined;
+      const sync = thumbnailSync();
+      sync.trigger();
+      await sync.idle();
+      assert.deepEqual(logger.warnings, [
+        "thumbnail of history job job-1\\u000aforged: line not stored: answered HTTP 404",
+        "1 history thumbnail(s) not fetched: the URL is not http:// on the printer's host 127.0.0.1 " +
+          "(first: http://192.0.2.10/a.png\\u000d\\u000aforged\\u2028line)",
+      ]);
+      for (const warning of logger.warnings) assert.doesNotMatch(warning, /[\r\n\u2028]/);
     });
 
     for (const [name, answer] of [
@@ -388,6 +437,47 @@ describe("HistorySync", () => {
       assert.deepEqual(store.thumbnail(answered), { contentType: "image/png", bytes: new Uint8Array(fakePng(answered)) });
       assert.equal(logger.warnings.length, 1);
       assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${hanging} not stored`));
+    });
+    it("aborts a thumbnail download on close and stores or counts nothing", { timeout: 5_000 }, async () => {
+      await startWithThumbnails(2);
+      thumbnails.answer = () => ({ body: new Uint8Array(), hang: true });
+      // The default 10 s time limit outlasts the test: only the close can end the request.
+      const sync = new HistorySync({ session, store, logger, printerHost: "127.0.0.1" });
+      sync.trigger();
+      while (thumbnails.requests === 0) await new Promise((resolve) => setTimeout(resolve, 10));
+      sync.close();
+      await sync.idle();
+      assert.equal(thumbnails.requests, 1);
+      assert.equal(store.jobsNeedingThumbnail(1).length, 2, "no failure counted");
+      for (const entry of entries) assert.equal(store.thumbnail(entry.TaskId as string), null);
+      assert.deepEqual(logger.warnings, []);
+    });
+
+    it("does not store a thumbnail whose download ends after close", async () => {
+      await startWithThumbnails(2);
+      let sync: HistorySync | undefined;
+      let fetches = 0;
+      sync = new HistorySync({
+        session,
+        store,
+        logger,
+        printerHost: "127.0.0.1",
+        // An answer the close cannot abort: its body is already here.
+        fetch: async (input) => {
+          fetches++;
+          sync!.close();
+          return new Response(new Uint8Array(fakePng(String(input))), { headers: { "content-type": "image/png" } });
+        },
+      });
+      let changes = 0;
+      sync.on("change", () => changes++);
+      sync.trigger();
+      await sync.idle();
+      assert.equal(fetches, 1);
+      for (const entry of entries) assert.equal(store.thumbnail(entry.TaskId as string), null);
+      assert.equal(store.jobsNeedingThumbnail(1).length, 2);
+      assert.equal(changes, 0);
+      assert.deepEqual(logger.warnings, []);
     });
   });
 

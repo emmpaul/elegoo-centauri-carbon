@@ -200,7 +200,7 @@ export class HistorySync extends EventEmitter<SyncEvents> {
       } catch (error) {
         if (this.#closed) break;
         this.#store.recordThumbnailFailure(taskId);
-        this.#logger.warn(`thumbnail of history job ${taskId} not stored: ${(error as Error).message}`);
+        this.#logger.warn(`thumbnail of history job ${printable(taskId)} not stored: ${(error as Error).message}`);
       }
     }
     if (offHost.length > 0 && !this.#closed) {
