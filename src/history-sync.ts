@@ -183,11 +183,13 @@ export class HistorySync extends EventEmitter<SyncEvents> {
    */
   async #fetchThumbnails(): Promise<number> {
     let stored = 0;
+    const offHost: string[] = [];
     for (const { taskId, url } of this.#store.jobsNeedingThumbnail(this.#thumbnailMaxAttempts)) {
       if (this.#closed) break;
       if (!this.#fromPrinter(url)) {
         // Not the printer's host: never requested, and given up on after the attempt limit.
         this.#store.recordThumbnailFailure(taskId);
+        offHost.push(url);
         continue;
       }
       try {
@@ -200,6 +202,13 @@ export class HistorySync extends EventEmitter<SyncEvents> {
         this.#store.recordThumbnailFailure(taskId);
         this.#logger.warn(`thumbnail of history job ${taskId} not stored: ${(error as Error).message}`);
       }
+    }
+    if (offHost.length > 0 && !this.#closed) {
+      // One line per sync: a PRINTER_IP that names the printer by hostname skips every thumbnail.
+      this.#logger.warn(
+        `${offHost.length} history thumbnail(s) not fetched: the URL is not http:// on the printer's host ` +
+          `${this.#printerHost} (first: ${offHost[0]})`,
+      );
     }
     return stored;
   }

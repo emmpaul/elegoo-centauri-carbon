@@ -32,6 +32,9 @@ function recordingLogger(): RecordingLogger {
   return { warnings, info() {}, warn: (message) => warnings.push(message), error() {} };
 }
 
+/** The fixture thumbnails name 192.0.2.10, not the sync's printer host: one warning per sync. */
+const OFF_HOST_WARNING = /^26 history thumbnail\(s\) not fetched: the URL is not http:\/\/ on the printer's host 127\.0\.0\.1 \(first: http:\/\/192\.0\.2\.10\//;
+
 function cmdOf(frame: ReceivedFrame): number | undefined {
   return (frame.payload as { Data?: { Cmd?: number } }).Data?.Cmd;
 }
@@ -90,7 +93,8 @@ describe("HistorySync", () => {
     assert.deepEqual(new Set(page.jobs.map((job) => job.id)), new Set(entries.map((entry) => entry.TaskId)));
     assert.equal(changes, 1);
     assert.deepEqual(detailRequests(printer), [entries.map((entry) => entry.TaskId)]);
-    assert.deepEqual(logger.warnings, []);
+    assert.equal(logger.warnings.length, 1);
+    assert.match(logger.warnings[0]!, OFF_HOST_WARNING);
   });
 
   it("asks only for the job stored as running", async () => {
@@ -182,7 +186,8 @@ describe("HistorySync", () => {
     sync.trigger();
     await sync.idle();
     assert.equal(store.list(null, 100).jobs.length, 26);
-    assert.deepEqual(logger.warnings, []);
+    assert.equal(logger.warnings.length, 1);
+    assert.match(logger.warnings[0]!, OFF_HOST_WARNING);
   });
 
   it("warns once without a session", async () => {
@@ -274,6 +279,10 @@ describe("HistorySync", () => {
       assert.equal(thumbnails.requests, 0);
       assert.equal(store.thumbnail(id), null);
       assert.equal(store.job(id)?.thumbnail, null);
+      assert.deepEqual(logger.warnings, [
+        `1 history thumbnail(s) not fetched: the URL is not http:// on the printer's host 127.0.0.1 ` +
+          `(first: ${entries[0]!.Thumbnail as string})`,
+      ]);
     });
 
     for (const [name, answer] of [
