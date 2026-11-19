@@ -78,6 +78,23 @@ describe("NtfyNotifier against a fake ntfy endpoint", () => {
     await ntfy.close();
   });
 
+  it("records a binary PUT upload with its raw bytes and headers", async () => {
+    const bytes = Buffer.from([0xff, 0xd8, 0x00, 0x80, 0xfe, 0x0a, 0x0d, 0xc3, 0x28, 0xff, 0xd9]);
+    const response = await fetch(`${ntfy.url}/printer-abc123`, {
+      method: "PUT",
+      headers: { Filename: "photo-paused.jpg", "Content-Type": "image/jpeg" },
+      body: bytes,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(ntfy.requests.length, 1);
+    const [request] = ntfy.requests;
+    assert.equal(request?.method, "PUT");
+    assert.equal(request?.path, "/printer-abc123");
+    assert.equal(request?.headers.filename, "photo-paused.jpg");
+    assert.ok(Buffer.isBuffer(request?.raw));
+    assert.deepEqual(request?.raw, bytes);
+  });
+
   it("publishes an enabled event to the configured topic", async () => {
     const notifier = new NtfyNotifier({ url: `${ntfy.url}/`, topic: "printer-abc123", events: allOn(), logger: recordingLogger() });
     await notifier.notify(finished);

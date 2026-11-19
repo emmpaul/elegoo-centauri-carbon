@@ -9,7 +9,7 @@ Synthetic data follows the fixture redaction rules (`test-print-<n>.gcode`,
 ## 1. Settings and fakes
 
 - [x] 1.1 Add `ntfy.photos` and `ntfy.photoLight` to `Config` in `src/config.ts` (D1): both `false` by default, file values must be booleans (error names the key), env `NTFY_PHOTOS` / `NTFY_PHOTO_LIGHT` accept `1`/`true`/`0`/`false`, empty is unset, other values are an error naming the variable; add both keys (`false`) to `config.example.json`, rows to the README configuration table and the `docs/deployment.md` env table; verify new cases in `test/config.test.ts` (defaults false, file true, env over file both ways, empty env ignored, `"yes"` in the file and `NTFY_PHOTOS=yes` rejected with the key or variable in the message) and that the existing "loads config.example.json" case passes
-- [ ] 1.2 Extend `test/support/fake-ntfy.ts` (D8) to record `raw: Buffer` next to `body`; verify in `test/notifier.test.ts` that a `PUT` with binary bytes to the fake is recorded with method `PUT`, path `/<topic>`, the `filename` header, and `raw` equal to the bytes sent, and that the existing notifier tests still pass
+- [x] 1.2 Extend `test/support/fake-ntfy.ts` (D8) to record `raw: Buffer` next to `body`; verify in `test/notifier.test.ts` that a `PUT` with binary bytes to the fake is recorded with method `PUT`, path `/<topic>`, the `filename` header, and `raw` equal to the bytes sent, and that the existing notifier tests still pass
 
 ## 2. One frame from the camera proxy
 
