@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { once } from "node:events";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
 import { HistorySync } from "../src/history-sync.ts";
 import { PrinterSession } from "../src/printer-session.ts";
@@ -297,5 +297,83 @@ describe("HistorySync", () => {
         assert.match(logger.warnings[0]!, new RegExp(`thumbnail of history job ${id} not stored`));
       });
     }
+  });
+
+  describe("follow-up sync", () => {
+    afterEach(() => {
+      mock.timers.reset();
+    });
+
+    /** Starts with the newest fixture job still running, then mocks setTimeout. */
+    async function startRunning(): Promise<Record<string, unknown>> {
+      await start();
+      const running = entries[0]!;
+      running.TaskStatus = 4;
+      mock.timers.enable({ apis: ["setTimeout"] });
+      return running;
+    }
+
+    /** Moves the mocked clock past the follow-up delay. */
+    function tick(): void {
+      mock.timers.tick(10_000);
+    }
+
+    it("re-requests a job left running after 10 s, at most 3 times in a row", async () => {
+      const running = await startRunning();
+      const sync = newSync();
+      sync.trigger();
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 1);
+      mock.timers.tick(9_999);
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 1);
+      for (let i = 0; i < 3; i++) {
+        tick();
+        await sync.idle();
+        assert.deepEqual(detailRequests(printer).at(-1), [running.TaskId]);
+      }
+      assert.equal(detailRequests(printer).length, 4);
+      tick();
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 4);
+      assert.equal(printer.receivedCommands.filter((cmd) => cmd === 320).length, 4);
+    });
+
+    it("settles once the printer answers TaskStatus 1", async () => {
+      const running = await startRunning();
+      const sync = newSync();
+      sync.trigger();
+      await sync.idle();
+      running.TaskStatus = 1;
+      running.EndTime = 1794605500;
+      tick();
+      await sync.idle();
+      assert.deepEqual(detailRequests(printer).at(-1), [running.TaskId]);
+      assert.equal(store.job(running.TaskId as string)?.outcome, "completed");
+      tick();
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 2);
+    });
+
+    it("schedules no follow-up while a print is active", async () => {
+      await startRunning();
+      const sync = new HistorySync({ session, store, logger, printerHost: "127.0.0.1", printActive: () => true });
+      sync.trigger();
+      await sync.idle();
+      tick();
+      await sync.idle();
+      assert.equal(detailRequests(printer).length, 1);
+    });
+
+    it("cancels a pending follow-up on close", async () => {
+      await startRunning();
+      const sync = newSync();
+      sync.trigger();
+      await sync.idle();
+      sync.close();
+      tick();
+      await sync.idle();
+      assert.equal(printer.receivedCommands.filter((cmd) => cmd === 320).length, 1);
+    });
   });
 });

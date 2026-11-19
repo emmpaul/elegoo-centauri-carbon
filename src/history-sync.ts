@@ -19,6 +19,11 @@ export const THUMBNAIL_MAX_ATTEMPTS = 3;
 
 const THUMBNAIL_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg"]);
 
+/** Wait before re-asking for a job the printer still lists as running after its print ended. */
+export const FOLLOW_UP_DELAY_MS = 10_000;
+/** Follow-up syncs in a row at most. */
+export const MAX_FOLLOW_UPS = 3;
+
 /** What the sync needs of the printer session. */
 export interface HistorySession {
   send(cmd: number, data?: Record<string, unknown>): Promise<SdcpResponse>;
@@ -35,6 +40,10 @@ export interface HistorySyncOptions {
   thumbnailMaxBytes?: number;
   thumbnailTimeoutMs?: number;
   thumbnailMaxAttempts?: number;
+  /** Whether the status snapshot shows a job printing; false by default. */
+  printActive?: () => boolean;
+  followUpDelayMs?: number;
+  maxFollowUps?: number;
 }
 
 type SyncEvents = {
@@ -51,10 +60,17 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   readonly #thumbnailMaxBytes: number;
   readonly #thumbnailTimeoutMs: number;
   readonly #thumbnailMaxAttempts: number;
+  readonly #printActive: () => boolean;
+  readonly #followUpDelayMs: number;
+  readonly #maxFollowUps: number;
   readonly #abort = new AbortController();
   #running: Promise<void> | null = null;
   #again = false;
   #closed = false;
+  /** Whether the last sync left a listed job running while no print is active. */
+  #needsFollowUp = false;
+  #followUps = 0;
+  #followUpTimer: NodeJS.Timeout | undefined;
 
   constructor(options: HistorySyncOptions) {
     super();
@@ -66,14 +82,24 @@ export class HistorySync extends EventEmitter<SyncEvents> {
     this.#thumbnailMaxBytes = options.thumbnailMaxBytes ?? THUMBNAIL_MAX_BYTES;
     this.#thumbnailTimeoutMs = options.thumbnailTimeoutMs ?? THUMBNAIL_TIMEOUT_MS;
     this.#thumbnailMaxAttempts = options.thumbnailMaxAttempts ?? THUMBNAIL_MAX_ATTEMPTS;
+    this.#printActive = options.printActive ?? (() => false);
+    this.#followUpDelayMs = options.followUpDelayMs ?? FOLLOW_UP_DELAY_MS;
+    this.#maxFollowUps = options.maxFollowUps ?? MAX_FOLLOW_UPS;
   }
 
   /**
    * Starts a sync, or, while one runs, makes exactly one more run after it
-   * (spec: Overlapping triggers).
+   * (spec: Overlapping triggers). It also starts a new run of follow-ups.
    */
   trigger(): void {
+    this.#followUps = 0;
+    this.#run();
+  }
+
+  #run(): void {
     if (this.#closed) return;
+    clearTimeout(this.#followUpTimer);
+    this.#followUpTimer = undefined;
     if (this.#running !== null) {
       this.#again = true;
       return;
@@ -90,6 +116,8 @@ export class HistorySync extends EventEmitter<SyncEvents> {
   close(): void {
     this.#closed = true;
     this.#again = false;
+    clearTimeout(this.#followUpTimer);
+    this.#followUpTimer = undefined;
     this.#abort.abort();
   }
 
@@ -102,10 +130,31 @@ export class HistorySync extends EventEmitter<SyncEvents> {
     } finally {
       this.#running = null;
     }
+    this.#scheduleFollowUp();
+  }
+
+  /**
+   * A job can still read `TaskStatus` 4 right after its end push (design D4):
+   * while one does and no print is active, sync again after a delay, at most
+   * a few times in a row.
+   */
+  #scheduleFollowUp(): void {
+    if (this.#closed || this.#running !== null) return;
+    if (!this.#needsFollowUp) {
+      this.#followUps = 0;
+      return;
+    }
+    if (this.#followUps >= this.#maxFollowUps) return;
+    this.#followUps++;
+    this.#followUpTimer = setTimeout(() => {
+      this.#followUpTimer = undefined;
+      this.#run();
+    }, this.#followUpDelayMs);
   }
 
   async #syncOnce(): Promise<void> {
     let changed = 0;
+    this.#needsFollowUp = false;
     try {
       const ids = historyIds(await this.#request(Cmd.GET_PRINTER_HISTORY_ID, {}));
       const wanted = ids.filter((id) => {
@@ -118,6 +167,8 @@ export class HistorySync extends EventEmitter<SyncEvents> {
         if (this.#closed) break;
         changed += this.#store.upsert(jobs);
       }
+      this.#needsFollowUp =
+        !this.#printActive() && ids.some((id) => this.#store.job(id)?.taskStatus === TASK_STATUS_RUNNING);
       changed += await this.#fetchThumbnails();
     } catch (error) {
       if (!this.#closed) this.#logger.warn(`history sync failed: ${(error as Error).message}`);
