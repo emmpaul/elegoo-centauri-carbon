@@ -3,8 +3,10 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, it } from "node:test";
-import type { PrintEvent } from "../src/event-detector.ts";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import { CameraProxy } from "../src/camera-proxy.ts";
+import { isJobActive, type PrintEvent } from "../src/event-detector.ts";
+import { FOLLOW_UP_DELAY_MS } from "../src/history-sync.ts";
 import type { Logger } from "../src/sdcp-client.ts";
 import { type Service, startService } from "../src/service.ts";
 import { FakePrinter, loadFixture } from "./support/fake-printer.ts";
@@ -123,6 +125,39 @@ describe("startService listen rule", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("closes the detector's offline timer and the camera proxy when the port is taken", async () => {
+    const taken = createServer();
+    await new Promise<void>((resolve) => taken.listen(0, "127.0.0.1", resolve));
+    const { port } = taken.address() as { port: number };
+    const cameraClose = mock.method(CameraProxy.prototype, "close");
+    const logged: string[] = [];
+    const logger: Logger = { info: (line) => logged.push(line), warn() {}, error() {} };
+    try {
+      await assert.rejects(
+        startService({
+          printerUrl: printer.url,
+          cameraUrl: "http://127.0.0.1:9/video",
+          listen: { host: "127.0.0.1", port },
+          token: null,
+          logger,
+          // The detector starts its offline timer at once: the printer is not connected yet.
+          offlineAfterMs: 20,
+        }),
+        /EADDRINUSE/,
+      );
+      assert.equal(cameraClose.mock.callCount(), 1);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.deepEqual(
+        logged.filter((line) => line.startsWith("event:")),
+        [],
+        "the offline timer was cleared",
+      );
+    } finally {
+      cameraClose.mock.restore();
+      await new Promise<void>((resolve) => taken.close(() => resolve()));
+    }
+  });
 });
 
 describe("startService history", () => {
@@ -225,6 +260,49 @@ describe("startService history", () => {
       await until(() => syncs() > before, `a sync after the ${type} event`);
       await new Promise((resolve) => setTimeout(resolve, 100));
       assert.equal(syncs(), before + 1);
+    });
+  }
+
+  /** Lets `ms` of real time pass without `setTimeout`, which the mock timers replace. */
+  async function realWait(ms: number): Promise<void> {
+    const end = performance.now() + ms;
+    while (performance.now() < end) await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  for (const printing of [true, false]) {
+    it(`${printing ? "sends no" : "sends a"} follow-up sync for a job listed as running while the status ${printing ? "shows a print" : "is idle"}`, async () => {
+      // The printer lists the newest job as still running.
+      Object.assign(entries[0]!, { TaskStatus: 4 });
+      await printer.waitForClient();
+      if (printing) printer.replay(loadFixture("print-complete.json"), (frame) => frame.seq <= 9);
+      // connect-idle.json is idle up to seq 32; a print starts after it.
+      else printer.replay(loadFixture("connect-idle.json"), (frame) => frame.seq <= 32);
+      const snapshot = () => service!.store.snapshot;
+      await until(() => snapshot().machineState.code !== null && isJobActive(snapshot()) === printing, "the status");
+      await until(() => service!.history.job(endedId)?.outcome === "running", "the running job archived");
+      const syncs = () => printer.receivedCommands.filter((cmd) => cmd === 320).length;
+
+      mock.timers.enable({ apis: ["setTimeout"] });
+      try {
+        const before = syncs();
+        service!.detector.emit("event", {
+          type: "finished",
+          at: Date.now(),
+          printerName: null,
+          jobId: endedId,
+          fileName: null,
+          progress: null,
+          durationSeconds: null,
+          errorCode: null,
+        });
+        await realWait(300);
+        assert.equal(syncs(), before + 1, "the triggered sync ran");
+        mock.timers.tick(FOLLOW_UP_DELAY_MS);
+        await realWait(300);
+        assert.equal(syncs(), printing ? before + 1 : before + 2);
+      } finally {
+        mock.timers.reset();
+      }
     });
   }
 });
