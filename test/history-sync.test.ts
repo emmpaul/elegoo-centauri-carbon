@@ -97,6 +97,19 @@ describe("HistorySync", () => {
     assert.match(logger.warnings[0]!, OFF_HOST_WARNING);
   });
 
+  it("keeps the jobs a trimmed printer list no longer has (spec: Printer trims its list)", async () => {
+    await start();
+    const sync = newSync();
+    sync.trigger();
+    await sync.idle();
+    const before = store.list(null, 100);
+    assert.equal(before.jobs.length, 26);
+    entries.splice(10);
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(store.list(null, 100), before);
+  });
+
   it("asks only for the job stored as running", async () => {
     await start();
     const running = entries[3]!;
