@@ -152,8 +152,11 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     address: server.address() as AddressInfo,
     async close() {
       detector.close();
+      // Closing the camera ends a running Photo; its light restore must go out before the session stops.
+      const photosClosed = photos?.close();
       camera.close();
       historySync.close();
+      await photosClosed;
       session.stop();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));

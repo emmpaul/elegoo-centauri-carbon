@@ -512,6 +512,18 @@ describe("startService photos", () => {
     assert.deepEqual(lightCommands(), [1, 0]);
   });
 
+  it("turns the light off again when the service closes during a Photo-light Photo", async () => {
+    const s = await start({ photos: { light: true } });
+    await finishAJob(s, 0);
+    await until(() => lightCommands().length === 1, "the on command");
+    const closing = Date.now();
+    await s.close();
+    service = undefined;
+    assert.ok(Date.now() - closing < 2000, "close stays bounded");
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
+  });
+
   it("sends the Notification as JSON within 6 s when the camera port is closed", async () => {
     const closed = await FakeMjpegSource.start();
     const closedUrl = closed.url;

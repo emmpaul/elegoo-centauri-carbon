@@ -46,6 +46,7 @@ export interface PhotoTakerOptions {
 }
 
 const TIMED_OUT = "photo timed out";
+const CLOSED = "service is shutting down";
 /** The time a shortened light wait leaves for the frame. */
 const FRAME_RESERVE_MS = 2_000;
 
@@ -58,6 +59,7 @@ export class PhotoTaker {
   private readonly logger: Logger;
   /** The end of the last take requested; the next one starts after it. */
   private queue: Promise<unknown> = Promise.resolve();
+  private closed = false;
 
   constructor(options: PhotoTakerOptions) {
     this.camera = options.camera;
@@ -90,7 +92,26 @@ export class PhotoTaker {
     return Promise.race([run, timedOut]).finally(() => clearTimeout(timer));
   }
 
+  /**
+   * Stops taking Photos: a take still queued is not attempted. Resolves once
+   * the running take has ended and its light restore was sent, or after
+   * `waitMs` at most, so a shutdown can stop the session after the restore
+   * without ever hanging on a take. The caller ends the running take by
+   * closing the frame source.
+   */
+  close(waitMs = 1_000): Promise<void> {
+    this.closed = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => (timer = setTimeout(resolve, waitMs)));
+    const idle = this.queue.then(
+      () => {},
+      () => {},
+    );
+    return Promise.race([idle, bound]).finally(() => clearTimeout(timer));
+  }
+
   private async run(deadline: number, signal: AbortSignal): Promise<PhotoResult> {
+    if (this.closed) return { jpeg: null, reason: CLOSED };
     const remaining = deadline - Date.now();
     // Its time ran out while it waited: neither the camera nor the light.
     if (signal.aborted || remaining <= 0) return { jpeg: null, reason: TIMED_OUT };

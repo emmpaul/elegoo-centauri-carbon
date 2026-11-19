@@ -427,6 +427,38 @@ describe("PhotoTaker with the Photo light", () => {
     assert.deepEqual(warnings, []);
   });
 
+  it("on close, waits for the running take's light restore and skips a queued take", async () => {
+    const store = new StubStore("off");
+    const taker = takerWith(store);
+    const first = taker.take();
+    const second = taker.take();
+    await settle();
+    let closed = false;
+    const closing = taker.close().then(() => (closed = true));
+    await settle();
+    assert.equal(closed, false, "the running take has not ended");
+    camera.fail(0, new Error("camera proxy closed")); // the service closes the camera
+    await closing;
+    assert.deepEqual(control.sent, [true, false], "the off command went out before close resolved");
+    assert.deepEqual(await first, { jpeg: null, reason: "camera proxy closed" });
+    assert.deepEqual(await second, { jpeg: null, reason: "service is shutting down" });
+    assert.equal(camera.calls.length, 1, "the queued take never asked for a frame");
+  });
+
+  it("on close, gives up waiting for a take that does not end after 1000 ms", async () => {
+    const taker = takerWith(new StubStore("off"));
+    void taker.take();
+    await settle();
+    let closed = false;
+    void taker.close().then(() => (closed = true));
+    mock.timers.tick(999);
+    await settle();
+    assert.equal(closed, false);
+    mock.timers.tick(1);
+    await settle();
+    assert.equal(closed, true);
+  });
+
   it("sends no command when the Photo light is off", async () => {
     const pending = new PhotoTaker({ camera, light: null, logger }).take();
     await settle();
