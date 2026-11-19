@@ -22,6 +22,8 @@ export interface Config {
   /** ntfy server and topic; a null topic means no notifications are sent. */
   ntfy: { url: string; topic: string | null };
   events: Record<EventType, boolean>;
+  /** Directory of the history archive, relative to the working directory unless absolute. */
+  dataDir: string;
 }
 
 export function defaultConfig(): Config {
@@ -31,6 +33,7 @@ export function defaultConfig(): Config {
     token: null,
     ntfy: { url: "https://ntfy.sh", topic: null },
     events: Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>,
+    dataDir: "data",
   };
 }
 
@@ -113,6 +116,7 @@ function applyFile(config: Config, raw: unknown, path: string): void {
       config.events[event] = value;
     }
   }
+  if ("dataDir" in file) config.dataDir = string(file.dataDir, `${path}: dataDir`);
 }
 
 function applyEnv(config: Config, env: Record<string, string | undefined>): void {
@@ -136,6 +140,8 @@ function applyEnv(config: Config, env: Record<string, string | undefined>): void
     const enabled = new Set(names.map((name) => eventType(name, "NOTIFY_EVENTS")));
     for (const event of EVENT_TYPES) config.events[event] = enabled.has(event);
   }
+  const dataDir = nonEmpty(env.DATA_DIR);
+  if (dataDir !== undefined) config.dataDir = dataDir;
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

@@ -23,6 +23,7 @@ describe("loadConfig", () => {
     assert.equal(config.token, null);
     assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: null });
     for (const event of EVENT_TYPES) assert.equal(config.events[event], true);
+    assert.equal(config.dataDir, "data");
   });
 
   it("reads values from the file and keeps defaults for missing keys", () => {
@@ -84,6 +85,29 @@ describe("loadConfig", () => {
     const config = loadConfig({ path, env: { ACCESS_TOKEN: "", PRINTER_IP: "" } });
     assert.equal(config.token, "file-token");
     assert.equal(config.printerIp, null);
+  });
+
+  it("reads dataDir from the file", () => {
+    const path = writeConfig("data-dir.json", { dataDir: "/var/lib/printer" });
+    assert.equal(loadConfig({ path, env: {} }).dataDir, "/var/lib/printer");
+  });
+
+  it("lets DATA_DIR override the file's dataDir", () => {
+    const path = writeConfig("data-dir-env.json", { dataDir: "from-file" });
+    assert.equal(loadConfig({ path, env: { DATA_DIR: "/data" } }).dataDir, "/data");
+  });
+
+  it("ignores an empty DATA_DIR", () => {
+    const path = writeConfig("data-dir-empty-env.json", { dataDir: "from-file" });
+    assert.equal(loadConfig({ path, env: { DATA_DIR: "" } }).dataDir, "from-file");
+    assert.equal(loadConfig({ path: join(dir, "missing.json"), env: { DATA_DIR: "" } }).dataDir, "data");
+  });
+
+  it("rejects a dataDir that is not a non-empty string, naming the key", () => {
+    for (const value of [42, null, "", ["data"]]) {
+      const path = writeConfig("data-dir-bad.json", { dataDir: value });
+      assert.throws(() => loadConfig({ path, env: {} }), /dataDir/);
+    }
   });
 
   it("turns every event off with NOTIFY_EVENTS=none", () => {

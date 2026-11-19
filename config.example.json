@@ -17,5 +17,6 @@
     "stopped": true,
     "offline": true,
     "online": true
-  }
+  },
+  "dataDir": "data"
 }

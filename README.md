@@ -173,6 +173,7 @@ cp config.example.json config.json
 | `ntfy.url` | ntfy server (default `https://ntfy.sh`). | `NTFY_URL` |
 | `ntfy.topic` | ntfy topic. `null` turns notifications off. | `NTFY_TOPIC` |
 | `events` | Which events notify (`started`, `finished`, `failed`, `paused`, `stopped`, `offline`, `online`). | `NOTIFY_EVENTS` |
+| `dataDir` | Directory of the print history archive, relative to the working directory (default `data`). It is created when missing and must be writable. | `DATA_DIR` |
 
 Settings come from built-in defaults, then the config file, then environment
 variables, so an environment variable wins. An empty variable counts as unset.
