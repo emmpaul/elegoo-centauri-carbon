@@ -130,7 +130,7 @@ describe("NtfyNotifier against a fake ntfy endpoint", () => {
   it("builds no notifier without a topic", () => {
     assert.equal(notifierFromConfig(defaultConfig()), null);
     const config = defaultConfig();
-    config.ntfy = { url: ntfy.url, topic: "t" };
+    config.ntfy = { ...config.ntfy, url: ntfy.url, topic: "t" };
     assert.ok(notifierFromConfig(config) instanceof NtfyNotifier);
   });
 });

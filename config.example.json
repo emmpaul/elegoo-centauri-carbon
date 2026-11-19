@@ -7,7 +7,9 @@
   "token": null,
   "ntfy": {
     "url": "https://ntfy.sh",
-    "topic": "change-me-to-a-hard-to-guess-topic"
+    "topic": "change-me-to-a-hard-to-guess-topic",
+    "photos": false,
+    "photoLight": false
   },
   "events": {
     "started": true,
