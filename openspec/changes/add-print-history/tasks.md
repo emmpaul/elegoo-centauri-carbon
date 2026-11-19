@@ -24,7 +24,7 @@ rules (`test-print-<n>.gcode`, `192.0.2.10`, `00:00:00:00:00:00`).
 ## 3. History API
 
 - [x] 3.1 Add the `history` option and the routes `GET /api/history` and `GET /api/history/thumbnail` to `src/http-server.ts` (D6), passed from `src/service.ts`: `limit` 1 to 100 (default 20), `before` cursor, 400 `bad-request` for invalid values, 404 `not-found` for a missing thumbnail, GET only, behind `authorized()`; verify new cases in `test/http-server.test.ts`: first page of 20 with `next`, last page with `next` null, `limit=0` and `limit=101` and a bad `before` answer 400, no token answers 401, `?token=` works for the thumbnail, `POST /api/history` answers 405, a stored PNG answers 200 `image/png` with the same bytes and `nosniff`, and an unknown id answers 404
-- [ ] 3.2 Send the `history` event on `/api/events` (D7); verify in `test/http-server.test.ts` that a connected stream receives `event: history` after a sync stores a job and none after a sync that changes nothing, and that the existing `status` events are unchanged
+- [x] 3.2 Send the `history` event on `/api/events` (D7); verify in `test/http-server.test.ts` that a connected stream receives `event: history` after a sync stores a job and none after a sync that changes nothing, and that the existing `status` events are unchanged
 - [ ] 3.3 Document both routes, the job fields, the cursor, the limits, and the `history` event in `docs/api.md`; verify each documented `curl` command runs as written against `pnpm start:fake` (after group 4) and answers what the page shows
 
 ## 4. Fake printer history

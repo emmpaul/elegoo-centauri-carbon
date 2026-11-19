@@ -9,7 +9,8 @@ import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { dashboardFiles } from "../src/dashboard-files.ts";
 import { HistoryStore, jobFromDetail } from "../src/history-store.ts";
-import { createApiServer } from "../src/http-server.ts";
+import { HistorySync } from "../src/history-sync.ts";
+import { createApiServer, type HistorySource } from "../src/http-server.ts";
 import { type CommandSender, PrintControl } from "../src/print-control.ts";
 import { PrinterSession } from "../src/printer-session.ts";
 import { Cmd, CommandTimeoutError, type Logger, NotConnectedError, type StatusMessage } from "../src/sdcp-client.ts";
@@ -43,7 +44,7 @@ async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
-/** Reads `event: status` messages from an SSE response body. */
+/** Reads events from an SSE response body. */
 class SseReader {
   private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
   private readonly decoder = new TextDecoder();
@@ -55,6 +56,13 @@ class SseReader {
   }
 
   async next(): Promise<StatusSnapshot> {
+    const event = await this.nextEvent();
+    assert.equal(event.name, "status", `unexpected event: ${event.name}`);
+    return JSON.parse(event.data) as StatusSnapshot;
+  }
+
+  /** The next event of any name, skipping comments. */
+  async nextEvent(): Promise<{ name: string; data: string }> {
     for (;;) {
       const end = this.buffer.indexOf("\n\n");
       if (end !== -1) {
@@ -62,10 +70,10 @@ class SseReader {
         this.buffer = this.buffer.slice(end + 2);
         if (block.startsWith(":")) continue;
         const lines = block.split("\n");
-        assert.ok(lines.includes("event: status"), `unexpected event block: ${block}`);
+        const name = lines.find((line) => line.startsWith("event: "));
         const data = lines.find((line) => line.startsWith("data: "));
-        assert.ok(data);
-        return JSON.parse(data.slice("data: ".length)) as StatusSnapshot;
+        assert.ok(name && data, `unexpected event block: ${block}`);
+        return { name: name.slice("event: ".length), data: data.slice("data: ".length) };
       }
       const { value, done } = await this.reader.read();
       assert.ok(!done, "stream ended");
@@ -358,10 +366,20 @@ describe("HTTP API on malformed requests", () => {
 });
 
 /** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
-function historyEntries(): unknown[] {
+function historyEntries(): Record<string, unknown>[] {
   const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
-  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: unknown[] } } };
+  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: Record<string, unknown>[] } } };
   return payload.Data.Data.HistoryDetailList;
+}
+
+/** The archive as the server reads it, with `change` events from `changes`. */
+function historySource(history: HistoryStore, changes: EventEmitter = new EventEmitter()): HistorySource {
+  return {
+    list: (before, limit) => history.list(before, limit),
+    thumbnail: (taskId) => history.thumbnail(taskId),
+    on: (event, listener) => changes.on(event, listener),
+    off: (event, listener) => changes.off(event, listener),
+  };
 }
 
 interface HistoryBody {
@@ -385,7 +403,7 @@ describe("HTTP API print history", () => {
     firstId = jobs[0]!.taskId;
     history.putThumbnail(firstId, "image/png", PNG);
     const store = new StatusStore();
-    server = createApiServer({ store, control: {} as never, token: TOKEN, history, logger: quiet });
+    server = createApiServer({ store, control: {} as never, token: TOKEN, history: historySource(history), logger: quiet });
     base = await listen(server);
   });
 
@@ -472,6 +490,60 @@ describe("HTTP API print history", () => {
     } finally {
       await closeServer(plain);
     }
+  });
+});
+
+describe("HTTP API history event", () => {
+  let printer: FakePrinter;
+  let session: PrinterSession;
+  let history: HistoryStore;
+  let sync: HistorySync;
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    printer = await FakePrinter.start({ history: { entries: historyEntries() } });
+    session = new PrinterSession({ url: printer.url, logger: quiet });
+    const store = new StatusStore();
+    store.attach(session);
+    history = HistoryStore.open(":memory:");
+    // The fixture thumbnails name 192.0.2.10, another host: they are never requested.
+    sync = new HistorySync({ session, store: history, logger: quiet, printerHost: "127.0.0.1" });
+    server = createApiServer({ store, control: {} as never, token: null, history: historySource(history, sync), logger: quiet });
+    base = await listen(server);
+    const attributesRequest = printer.nextFrame(isCmd(Cmd.GET_PRINTER_ATTR));
+    session.start();
+    await attributesRequest;
+    const change = once(store, "change");
+    printer.push(PRINTING);
+    await change;
+  });
+
+  afterEach(async () => {
+    sync.close();
+    await closeServer(server);
+    session.stop();
+    history.close();
+    await printer.close();
+  });
+
+  it("sends a history event after a sync that stores jobs, none after one that changes nothing, and status events as before", async () => {
+    const events = new SseReader(await fetch(`${base}/api/events`));
+    assert.equal((await events.next()).connection, "online");
+
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(await events.nextEvent(), { name: "history", data: "{}" });
+    assert.equal(history.list(null, 100).jobs.length, 26);
+
+    sync.trigger();
+    await sync.idle();
+    printer.push(PAUSING);
+    // The next event is the status change: the empty sync sent nothing before it.
+    const snapshot = await events.next();
+    assert.equal(snapshot.connection, "online");
+    assert.equal(sync.listenerCount("change"), 1);
+    await events.cancel();
   });
 });
 

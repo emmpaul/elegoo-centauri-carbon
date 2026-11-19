@@ -33,6 +33,9 @@ export interface HistorySource {
   /** Throws a RangeError for a malformed cursor or limit. */
   list(before: string | null, limit: number): HistoryPage;
   thumbnail(taskId: string): Thumbnail | null;
+  /** Once per sync that stored something (a HistorySync's `change`). */
+  on(event: "change", listener: () => void): unknown;
+  off(event: "change", listener: () => void): unknown;
 }
 
 export interface ApiServerOptions {
@@ -97,7 +100,7 @@ export function createApiServer(options: ApiServerOptions): Server {
   };
   const routes: Record<string, Partial<Record<string, Handler>>> = {
     "/api/status": { GET: (_req, res) => sendJson(res, 200, options.store.snapshot) },
-    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, events, logger) },
+    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, options.history, events, logger) },
     "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
   };
   const camera = options.camera;
@@ -184,11 +187,19 @@ interface EventStreamLimits {
 }
 
 /**
- * Sends the current snapshot, then every change, as `status` events. A client
+ * Sends the current snapshot, then every change, as `status` events, and a
+ * `history` event (empty data) after each sync that stored something. A client
  * that does not read is dropped once its backlog passes the limit, so it
  * cannot grow server memory without bound.
  */
-function streamEvents(req: IncomingMessage, res: ServerResponse, store: SnapshotSource, limits: EventStreamLimits, logger: Logger): void {
+function streamEvents(
+  req: IncomingMessage,
+  res: ServerResponse,
+  store: SnapshotSource,
+  history: HistorySource | undefined,
+  limits: EventStreamLimits,
+  logger: Logger,
+): void {
   if (limits.clients >= limits.maxClients) {
     throw new ApiError(503, "too-many-clients", `at most ${limits.maxClients} event streams at once`);
   }
@@ -207,6 +218,7 @@ function streamEvents(req: IncomingMessage, res: ServerResponse, store: Snapshot
     }
   };
   const send = (snapshot: StatusSnapshot) => write(`event: status\ndata: ${JSON.stringify(snapshot)}\n\n`);
+  const sendHistory = () => write("event: history\ndata: {}\n\n");
   const keepAlive = setInterval(() => write(": keep-alive\n\n"), limits.keepAliveMs);
   keepAlive.unref();
   req.socket.setTimeout(0);
@@ -214,8 +226,10 @@ function streamEvents(req: IncomingMessage, res: ServerResponse, store: Snapshot
     limits.clients--;
     clearInterval(keepAlive);
     store.off("change", send);
+    history?.off("change", sendHistory);
   });
   store.on("change", send);
+  history?.on("change", sendHistory);
   send(store.snapshot);
 }
 

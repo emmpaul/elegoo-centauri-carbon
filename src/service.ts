@@ -10,7 +10,7 @@ import { dashboardFiles } from "./dashboard-files.ts";
 import { EventDetector, isJobActive, type PrintEvent } from "./event-detector.ts";
 import { HistoryStore } from "./history-store.ts";
 import { HistorySync } from "./history-sync.ts";
-import { createApiServer } from "./http-server.ts";
+import { createApiServer, type HistorySource } from "./http-server.ts";
 import type { Notifier } from "./notifier.ts";
 import { PrintControl } from "./print-control.ts";
 import { PrinterSession } from "./printer-session.ts";
@@ -102,7 +102,21 @@ export async function startService(options: ServiceOptions): Promise<Service> {
     // The web UI enables streaming before it shows the camera.
     beforeConnect: () => session.send(Cmd.EDIT_PRINTER_VIDEO_STREAMING, { Enable: 1 }),
   });
-  const server = createApiServer({ store, control, token: options.token, camera, history, dashboard: dashboardFiles(), logger });
+  const historySource: HistorySource = {
+    list: (before, limit) => history.list(before, limit),
+    thumbnail: (taskId) => history.thumbnail(taskId),
+    on: (event, listener) => historySync.on(event, listener),
+    off: (event, listener) => historySync.off(event, listener),
+  };
+  const server = createApiServer({
+    store,
+    control,
+    token: options.token,
+    camera,
+    history: historySource,
+    dashboard: dashboardFiles(),
+    logger,
+  });
   server.listen(options.listen.port, options.listen.host);
   try {
     await once(server, "listening");
