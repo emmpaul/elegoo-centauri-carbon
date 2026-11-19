@@ -129,8 +129,16 @@ notes end with the "Software bill of materials" section.
 
 When the run fails, read the failing job from `gh run view <run-id> --log-failed`:
 
-- `verify`, `release`, or `image` failed: the tag may have no release or no image.
-  Report the failing job and stop.
+- `verify` failed: nothing was published (no image, no release). Report the failing
+  job and stop.
+- `image` failed: `release` and `sbom` were skipped, so the tag has no release, and
+  normally no image. Report it and that `gh run rerun <run-id> --failed` re-runs
+  `image`, then the skipped `release` and `sbom`, once the cause is fixed. Do not
+  re-run it unasked.
+- `release` failed: the image (and `latest`, for a tag with no `-` suffix) is
+  already pushed, but the tag has no release. Report it, and that
+  `gh run rerun <run-id> --failed` creates the release and runs `sbom`. Do not re-run
+  it unasked.
 - Only `sbom` failed: the release and the image are published, but the release has no
   SBOM. Report it as a release without SBOM, and that `gh run rerun <run-id> --failed`
   re-runs the job (it replaces the assets and keeps one notes section). Do not re-run it
