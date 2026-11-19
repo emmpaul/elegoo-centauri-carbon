@@ -473,6 +473,14 @@ describe("HTTP API print history", () => {
     }
   });
 
+  it("answers 400 bad-request for a missing or empty id", async () => {
+    for (const path of ["/api/history/thumbnail", "/api/history/thumbnail?id="]) {
+      const response = await fetch(`${base}${path}`, { headers: auth });
+      assert.equal(response.status, 400, path);
+      assert.equal(await errorCode(response), "bad-request", path);
+    }
+  });
+
   it("answers 405 for anything but GET", async () => {
     for (const path of ["/api/history", "/api/history/thumbnail?id=x"]) {
       const response = await fetch(`${base}${path}`, { method: "POST", headers: auth });
