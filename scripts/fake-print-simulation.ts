@@ -49,6 +49,8 @@ interface FakeStatus {
 export interface FakePrintOptions {
   /** Address the fake printer and camera listen on. 127.0.0.1 by default. */
   host?: string;
+  /** Host the thumbnail URLs name (see FakeThumbnailsOptions.urlHost). */
+  thumbnailHost?: string;
   /** Fake printer port. A free port by default. */
   printerPort?: number;
   /** Fake camera port. A free port by default. */
@@ -128,6 +130,7 @@ export async function startFakePrint(options: FakePrintOptions = {}): Promise<Fa
   // Thumbnails are the camera frames, picked by the task id so each job keeps its own.
   const thumbnails = await FakeThumbnails.start({
     host: options.host,
+    urlHost: options.thumbnailHost,
     answer: (taskId) => ({ contentType: "image/jpeg", body: frames[taskId.charCodeAt(0) % frames.length] as Buffer }),
   });
   const history = { entries: seedHistory(state.Status.PrintInfo, speed, thumbnails) };

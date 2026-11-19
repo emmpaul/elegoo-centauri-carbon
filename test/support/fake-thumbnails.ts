@@ -26,6 +26,12 @@ export interface FakeThumbnailsOptions {
   answer?: (taskId: string) => ThumbnailAnswer | undefined;
   /** Address to listen on. 127.0.0.1 by default. */
   host?: string;
+  /**
+   * Host the thumbnail URLs name, as the printer names its own address: the
+   * address the service reaches it at. `host` by default, and 127.0.0.1 for a
+   * wildcard `host`.
+   */
+  urlHost?: string;
   /** Port to listen on. A free port by default. */
   port?: number;
 }
@@ -46,7 +52,7 @@ export class FakeThumbnails {
 
   private constructor(server: Server, options: FakeThumbnailsOptions) {
     this.server = server;
-    this.host = urlHost(options.host ?? "127.0.0.1");
+    this.host = urlHost(options.urlHost ?? options.host ?? "127.0.0.1");
     this.answer = options.answer ?? ((taskId) => ({ body: fakePng(taskId) }));
     server.on("request", (req: IncomingMessage, res: ServerResponse) => this.serve(req, res));
   }
