@@ -4,7 +4,35 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, describe, it } from "node:test";
-import { HistoryStore, SCHEMA_VERSION } from "../src/history-store.ts";
+import { HistoryStore, SCHEMA_VERSION, jobFromDetail } from "../src/history-store.ts";
+import type { JobRecord } from "../src/history-store.ts";
+import { loadFixture } from "./support/fake-printer.ts";
+
+/** The 26 `HistoryDetailList` entries of `print-complete.json#28`. */
+function fixtureEntries(): Record<string, unknown>[] {
+  const frame = loadFixture("print-complete.json").frames.find((f) => f.seq === 28);
+  const payload = frame?.payload as { Data: { Data: { HistoryDetailList: Record<string, unknown>[] } } };
+  return payload.Data.Data.HistoryDetailList;
+}
+
+function records(entries: unknown[]): JobRecord[] {
+  return entries.map(jobFromDetail).filter((job) => job !== null);
+}
+
+function syntheticEntry(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    Thumbnail: "http://192.0.2.10/board-resource/history_image/synthetic-1.png",
+    TaskName: "/local/test-print-90.gcode",
+    BeginTime: 1794600000,
+    EndTime: 1794603600,
+    TaskStatus: 1,
+    SliceInformation: { total_layer_numbers: 50 },
+    AlreadyPrintLayer: 50,
+    TaskId: "synthetic-1",
+    ErrorStatusReason: 0,
+    ...overrides,
+  };
+}
 
 const dir = mkdtempSync(join(tmpdir(), "ecc-history-"));
 after(() => {
@@ -98,4 +126,100 @@ describe("HistoryStore.open", () => {
       }
     },
   );
+});
+
+describe("HistoryStore.upsert", () => {
+  it("stores the 26 fixture entries as 26 jobs", () => {
+    const store = HistoryStore.open(":memory:");
+    const entries = fixtureEntries();
+    assert.equal(entries.length, 26);
+    assert.equal(store.upsert(records(entries)), 26);
+
+    const jobs = entries.map((entry) => store.job(entry.TaskId as string));
+    assert.ok(jobs.every((job) => job !== null));
+    const stopped = jobs.filter((job) => job?.fileName === "test-print-15.gcode");
+    assert.deepEqual(
+      stopped.map((job) => [job?.outcome, job?.layers.printed, job?.layers.total]),
+      [["stopped", 16, 19], ["stopped", 11, 19]],
+    );
+    store.close();
+  });
+
+  it("reads the completed fixture job in the API shape", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records(fixtureEntries()));
+    assert.deepEqual(store.job("27febebe-8552-40e8-9e82-086c014a5502"), {
+      id: "27febebe-8552-40e8-9e82-086c014a5502",
+      fileName: "test-print-1.gcode",
+      startedAt: 1794600358000,
+      endedAt: 1794604693000,
+      durationSeconds: 4335,
+      layers: { printed: 180, total: 180 },
+      outcome: "completed",
+      taskStatus: 1,
+      errorCode: null,
+      thumbnail: null,
+    });
+    store.close();
+  });
+
+  it("reads a non-zero ErrorStatusReason as failed", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([syntheticEntry({ ErrorStatusReason: 45 })]));
+    const job = store.job("synthetic-1");
+    assert.equal(job?.outcome, "failed");
+    assert.equal(job?.errorCode, 45);
+    assert.equal(job?.taskStatus, 1);
+    store.close();
+  });
+
+  it("reads TaskStatus 4 as running with no end or duration", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([syntheticEntry({ TaskStatus: 4, AlreadyPrintLayer: 10 })]));
+    const job = store.job("synthetic-1");
+    assert.equal(job?.outcome, "running");
+    assert.equal(job?.startedAt, 1794600000000);
+    assert.equal(job?.endedAt, null);
+    assert.equal(job?.durationSeconds, null);
+    store.close();
+  });
+
+  it("counts no change when the same entries are stored again", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records(fixtureEntries()));
+    assert.equal(store.upsert(records(fixtureEntries())), 0);
+    store.close();
+  });
+
+  it("counts a job whose details changed", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([syntheticEntry({ TaskStatus: 4 })]));
+    assert.equal(store.upsert(records([syntheticEntry({ TaskStatus: 1 })])), 1);
+    assert.equal(store.job("synthetic-1")?.outcome, "completed");
+    store.close();
+  });
+
+  it("skips an entry without a TaskId and stores the rest", () => {
+    const store = HistoryStore.open(":memory:");
+    const entries: unknown[] = [
+      syntheticEntry({ TaskId: undefined }),
+      syntheticEntry({ TaskId: "" }),
+      null,
+      syntheticEntry({ TaskId: "synthetic-2" }),
+      syntheticEntry({ TaskId: "synthetic-3" }),
+    ];
+    assert.equal(jobFromDetail(entries[0]), null);
+    assert.equal(store.upsert(records(entries)), 2);
+    assert.notEqual(store.job("synthetic-2"), null);
+    assert.notEqual(store.job("synthetic-3"), null);
+    store.close();
+  });
+
+  it("defaults missing numbers to 0 and takes the last path segment as the file name", () => {
+    const job = jobFromDetail({ TaskId: "synthetic-4", TaskName: "/local/sub/test-print-91.gcode", BeginTime: "x" });
+    assert.equal(job?.fileName, "test-print-91.gcode");
+    assert.equal(job?.beginTime, 0);
+    assert.equal(job?.layersTotal, 0);
+    assert.equal(job?.thumbnailUrl, null);
+  });
 });
