@@ -109,7 +109,11 @@ limitMs = 5000, lightWaitMs = 3000, logger }` with
 
 ### D4. The Photo light
 
-Only when `photoLight` is on and `snapshot.light === "off"`:
+Only when `photoLight` is on and `snapshot.light === "off"`, or when it still shows
+`"on"` but `lightCommands` equals the value right after the last take's own off command
+(the push showing that off has not arrived and no one sent a light command since). In
+that case only a change *to* `"on"` arms the frame, so neither the stale `"on"` nor the
+`"off"` push of the earlier off command arms it or counts as switched off after on:
 
 1. Remember `PrintControl.lightCommands` (a new counter incremented each time a light
    command passes the guard and is sent, by anyone: the dashboard's `POST
