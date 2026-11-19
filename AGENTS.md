@@ -23,7 +23,7 @@ node scripts/visual-check.ts a1 c3 # shoots the dashboard per design state and d
 ```
 
 `scripts/visual-check.ts` is the visual harness: it serves the dashboard with a mocked
-API per state id (a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2; none means all),
+API per state id (a1–a8, b1–b2, c1–c5, d1–d2, e1–e4, f1–f2, g1, g2, h1–h2; none means all),
 shoots each in both themes, and writes reference | actual | diff with the share of
 differing pixels to `scratch/visual/index.html`. It needs `pnpm fonts:fetch` first and
 a full Chromium (`CHROMIUM_PATH`, else Playwright's own, `pnpm exec playwright-core
