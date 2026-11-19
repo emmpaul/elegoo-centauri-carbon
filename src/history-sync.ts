@@ -207,7 +207,7 @@ export class HistorySync extends EventEmitter<SyncEvents> {
       // One line per sync: a PRINTER_IP that names the printer by hostname skips every thumbnail.
       this.#logger.warn(
         `${offHost.length} history thumbnail(s) not fetched: the URL is not http:// on the printer's host ` +
-          `${this.#printerHost} (first: ${offHost[0]})`,
+          `${this.#printerHost} (first: ${printable(offHost[0]!)})`,
       );
     }
     return stored;
