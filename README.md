@@ -361,6 +361,8 @@ docker run -d --name printer --restart unless-stopped \
   HTTPS through Dokploy and Tailscale, upgrades, and the post-deploy checks.
 - [docs/sdcp-protocol.md](docs/sdcp-protocol.md): the printer's SDCP protocol
   as this project uses it.
+- [ROADMAP.md](ROADMAP.md): planned and possible features, and what each
+  needs from the protocol.
 
 ## License
 
