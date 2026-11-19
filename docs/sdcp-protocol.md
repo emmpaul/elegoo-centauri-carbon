@@ -242,8 +242,8 @@ responses were sent on the owner's own connection and are *static-only*.
 | 258 | `GET_PRINTER_FILE_LIST` | `{Url: "/local"}` | main@783113 | sent on connect and again after `CurrentStatus` 8 clears; answer `Data.Data.FileList[]` with `name`, `type`, `CreateTime`, `FileSize`, `LayerHeight`, `TotalLayers`, `EstFilamentLength` | *observed* (`connect-loading.json#8`, `#24`; `connect-idle.json#28`) |
 | 259 | `DELETE_PRINTER_FILE_LIST` | file list | c25@335583 | out of scope | *static-only* |
 | 260 | `GET_PRINTER_FILE_DETAIL` | file name | c25@327761 | answer has `Data.Data.FileInfo` (`EstTime`, `EstWeight`, `TotalLayers`, `ColorNum`) (c25@328317) | *static-only* |
-| 320 | `GET_PRINTER_HISTORY_ID` | none | main@782964 | answer `Data.Data.HistoryData` is a list of task ids, newest first; the UI sends it again when a job completes | *observed* (`connect-loading.json#6`, `#19`; `print-complete.json#25`, `#26`) |
-| 321 | `GET_PRINTER_TASK_DETAIL` | `{Id: [<TaskId>, ...]}` | main@780760 | answer `Data.Data.HistoryDetailList[]` with `TaskId`, `TaskName`, `BeginTime`, `EndTime` (0 while running), `TaskStatus` (4 while running, 1 after completion), `SliceInformation`, `AlreadyPrintLayer`, `MD5`, `Thumbnail`, `ErrorStatusReason`, `TimeLapseVideoStatus`, `TimeLapseVideoUrl` | *observed* (`connect-loading.json#38`, `#39`; `print-complete.json#28`) |
+| 320 | `GET_PRINTER_HISTORY_ID` | none | main@782964 | answer `Data.Data.HistoryData` is a list of task ids, newest first; the UI sends it again when a job completes. The service's history sync (`src/history-sync.ts`) is the first sender in this project, see Job history | *observed* (`connect-loading.json#6`, `#19`; `print-complete.json#25`, `#26`) |
+| 321 | `GET_PRINTER_TASK_DETAIL` | `{Id: [<TaskId>, ...]}` | main@780760 | answer `Data.Data.HistoryDetailList[]` with `TaskId`, `TaskName`, `BeginTime`, `EndTime` (not 0 while running, see Job history), `TaskStatus` (4 while running, 1 after completion, 3 on jobs that stopped before their last layer, read as "stopped" by inference), `SliceInformation`, `AlreadyPrintLayer`, `MD5`, `Thumbnail`, `ErrorStatusReason`, `TimeLapseVideoStatus`, `TimeLapseVideoUrl` | *observed* (`connect-loading.json#38`, `#39`; `print-complete.json#17`, `#28`) |
 | 322 | `DELETE_PRINTER_HISTORY` | ids | c25@332063 | out of scope | *static-only* |
 | 323 | `GET_PRINTER_HISTORY_VIDEO` | id | c25@337975 | out of scope | *static-only* |
 | 324 | `GET_MATERIAL_DATA` | - | c25@328736 | AMS material data | *static-only* |
@@ -279,6 +279,30 @@ the button `disabled-img` bindings at c25@263398:
 - pause/resume picks 131 when `PrintInfo.Status === 6`, else 129;
 - the pause/stop block is shown only when `CurrentStatus` includes 1
   (c25@265917).
+
+### Job history (Cmd 320, 321)
+
+- *observed*: Cmd 320 answers the printer's job ids, newest first (26 in
+  `print-complete.json#26`); the web UI then asks for all of them in one
+  Cmd 321 (`print-complete.json#27`, `#28`).
+- *observed*: `TaskStatus` 4 on the running job, also with a non-zero
+  `EndTime` (`print-complete.json#17`); 1 on the same job after completion,
+  with `EndTime` and `AlreadyPrintLayer` updated (`print-complete.json#28`).
+- *observed*: `TaskStatus` 3 on 4 of the 26 jobs in `print-complete.json#28`,
+  each with `AlreadyPrintLayer` below `SliceInformation.total_layer_numbers`
+  (16 and 11 of 19 for `test-print-15.gcode`, 0 of 137, 33 of 192). Reading 3
+  as "stopped" is an **inference**: no stop was captured, so the code is not
+  confirmed as the stop outcome. The service keeps the raw value next to the
+  outcome it derives.
+- *observed*: `Thumbnail` has the shape
+  `http://<printer IP>/board-resource/history_image/<TaskId>.png` on every
+  entry (`print-complete.json#28`). Fetching it over HTTP is **unconfirmed**:
+  no capture shows a request to that URL or its answer.
+- The service's history sync (`src/history-sync.ts`) sends Cmd 320 on each
+  connect and job end, then Cmd 321 in chunks of at most 26 ids for the jobs
+  its archive lacks or holds at `TaskStatus` 4, and fetches each thumbnail
+  only from the printer's own host. Its requests have run only against the
+  fake printer so far, so they are not *tested* yet.
 
 ## Status message (`sdcp/status`)
 
