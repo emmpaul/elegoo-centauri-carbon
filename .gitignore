@@ -6,3 +6,4 @@ captures/
 *.pcapng
 printer.env
 web/fonts/
+data/
