@@ -1,7 +1,10 @@
 // Shared by scripts/run-fake-service.ts and scripts/run-fake-printer.ts: starts
 // the fake printer and a fake camera and simulates a running print on them.
 // Progress, layers, and time advance, and pause, resume, stop, and the light
-// change its state as the printer would.
+// change its state as the printer would. The fake printer also keeps a job
+// history (Cmd 320/321): the 26 recorded jobs of print-complete.json#28 plus
+// the simulated job, running until it completes or is stopped, with thumbnails
+// (the committed camera frames) on a fake thumbnail server on the same host.
 //
 // Environment (read by startFakePrint):
 //   FAKE_SPEED    simulated print seconds per real second (default 10)
@@ -15,6 +18,7 @@
 import { readFileSync } from "node:fs";
 import { FakeMjpegSource } from "../test/support/fake-mjpeg.ts";
 import { FakePrinter, loadFixture, type ReceivedFrame, type Reply } from "../test/support/fake-printer.ts";
+import { FakeThumbnails } from "../test/support/fake-thumbnails.ts";
 
 interface PrintInfo {
   Status: number;
@@ -54,6 +58,7 @@ export interface FakePrintOptions {
 export interface FakePrint {
   printer: FakePrinter;
   camera: FakeMjpegSource;
+  thumbnails: FakeThumbnails;
   /** Pushes the current status to every connected client. */
   pushStatus(): void;
   /** Stops the simulation and closes the fake printer and camera. */
@@ -64,6 +69,40 @@ function fixturePayload(fixture: string, seq: number): unknown {
   const payload = loadFixture(fixture).frames.find((f) => f.seq === seq)?.payload;
   if (payload === undefined) throw new Error(`${fixture}#${seq} is missing`);
   return payload;
+}
+
+/** `TaskStatus` of a job still printing (docs/sdcp-protocol.md). */
+const TASK_STATUS_RUNNING = 4;
+
+type HistoryEntry = Record<string, unknown> & { TaskStatus: number; EndTime: number; AlreadyPrintLayer: number };
+
+/**
+ * The fake's job history, newest first: the simulated job (running), then the
+ * 26 recorded jobs of print-complete.json#28, every thumbnail on the fake
+ * thumbnail server.
+ */
+function seedHistory(info: PrintInfo, speed: number, thumbnails: FakeThumbnails): HistoryEntry[] {
+  const recorded = (fixturePayload("print-complete.json", 28) as { Data: { Data: { HistoryDetailList: HistoryEntry[] } } })
+    .Data.Data.HistoryDetailList;
+  const now = Math.floor(Date.now() / 1000);
+  const running: HistoryEntry = {
+    Thumbnail: thumbnails.urlFor(info.TaskId),
+    TaskName: `/local/${info.Filename}`,
+    BeginTime: now - Math.round(info.CurrentTicks / speed),
+    EndTime: 0,
+    TaskStatus: TASK_STATUS_RUNNING,
+    SliceInformation: { layer_height: 0, total_layer_numbers: info.TotalLayer, model_size_x: 0, model_size_y: 0, model_size_z: 0, print_time: info.TotalTicks },
+    AlreadyPrintLayer: info.CurrentLayer,
+    TaskId: info.TaskId,
+    MD5: "",
+    TimeLapseVideoStatus: 0,
+    TimeLapseVideoUrl: `/local/${info.Filename}`,
+    ErrorStatusReason: 0,
+  };
+  return [
+    running,
+    ...structuredClone(recorded).map((entry) => ({ ...entry, Thumbnail: thumbnails.urlFor(String(entry.TaskId)) })),
+  ];
 }
 
 /** Parses FAKE_REPLIES ("129=silent,131=2"). */
@@ -86,10 +125,27 @@ export async function startFakePrint(options: FakePrintOptions = {}): Promise<Fa
   const speed = Number(process.env.FAKE_SPEED || 10);
   const frames = [1, 2].map((n) => readFileSync(new URL(`../test/fixtures/camera-frame-${n}.jpg`, import.meta.url)));
 
+  // Thumbnails are the camera frames, picked by the task id so each job keeps its own.
+  const thumbnails = await FakeThumbnails.start({
+    host: options.host,
+    answer: (taskId) => ({ contentType: "image/jpeg", body: frames[taskId.charCodeAt(0) % frames.length] as Buffer }),
+  });
+  const history = { entries: seedHistory(state.Status.PrintInfo, speed, thumbnails) };
+  const job = history.entries[0] as HistoryEntry;
+
+  /** Ends the simulated job in the history as the printer records it. */
+  function endJob(taskStatus: number): void {
+    if (job.TaskStatus !== TASK_STATUS_RUNNING) return;
+    job.TaskStatus = taskStatus;
+    job.EndTime = Math.floor(Date.now() / 1000);
+    if (taskStatus === 1) job.AlreadyPrintLayer = state.Status.PrintInfo.TotalLayer;
+  }
+
   const printer = await FakePrinter.start({
     replies: parseReplies(process.env.FAKE_REPLIES ?? ""),
     host: options.host,
     port: options.printerPort,
+    history,
   });
   const camera = await FakeMjpegSource.start({
     frameIntervalMs: 200,
@@ -132,6 +188,7 @@ export async function startFakePrint(options: FakePrintOptions = {}): Promise<Fa
         setTimeout(() => setPrintStatus(13), 1500);
         break;
       case 130: // stop: stopping, then stopped
+        endJob(3);
         setPrintStatus(1, 0);
         setTimeout(() => setPrintStatus(8, 0), 1500);
         break;
@@ -156,7 +213,9 @@ export async function startFakePrint(options: FakePrintOptions = {}): Promise<Fa
       const fraction = info.CurrentTicks / info.TotalTicks;
       info.Progress = Math.floor(fraction * 100);
       info.CurrentLayer = Math.max(1, Math.round(fraction * info.TotalLayer));
+      if (job.TaskStatus === TASK_STATUS_RUNNING) job.AlreadyPrintLayer = info.CurrentLayer;
       if (info.CurrentTicks >= info.TotalTicks) {
+        endJob(1);
         // The printer clears the file name and progress once the job completes.
         Object.assign(info, { Status: 9, Progress: 0, Filename: "", TaskId: "" });
         s.CurrentStatus = [0];
@@ -186,11 +245,13 @@ export async function startFakePrint(options: FakePrintOptions = {}): Promise<Fa
   return {
     printer,
     camera,
+    thumbnails,
     pushStatus,
     async stop() {
       clearInterval(ticker);
       await printer.close();
       await camera.close();
+      await thumbnails.close();
     },
   };
 }

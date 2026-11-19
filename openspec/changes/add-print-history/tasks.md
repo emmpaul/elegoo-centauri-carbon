@@ -29,7 +29,7 @@ rules (`test-print-<n>.gcode`, `192.0.2.10`, `00:00:00:00:00:00`).
 
 ## 4. Fake printer history
 
-- [ ] 4.1 Seed the fake history in `scripts/fake-print-simulation.ts` (D9): the 26 entries of `print-complete.json#28` with thumbnails on the fake thumbnail server, the simulated job at `TaskStatus` 4, set to 1 with `EndTime` and all layers on completion and to 3 on stop; mention history in the header comments of `scripts/run-fake-service.ts` and `scripts/run-fake-printer.ts`; verify with `pnpm start:fake` that `curl -s 127.0.0.1:8080/api/history?limit=100` lists 27 jobs with the simulated one `running`, its thumbnail answers 200 `image/jpeg`, and with `FAKE_SPEED=2000` the simulated job reads `completed` with an end time within a minute
+- [x] 4.1 Seed the fake history in `scripts/fake-print-simulation.ts` (D9): the 26 entries of `print-complete.json#28` with thumbnails on the fake thumbnail server, the simulated job at `TaskStatus` 4, set to 1 with `EndTime` and all layers on completion and to 3 on stop; mention history in the header comments of `scripts/run-fake-service.ts` and `scripts/run-fake-printer.ts`; verify with `pnpm start:fake` that `curl -s 127.0.0.1:8080/api/history?limit=100` lists 27 jobs with the simulated one `running`, its thumbnail answers 200 `image/jpeg`, and with `FAKE_SPEED=2000` the simulated job reads `completed` with an end time within a minute
 
 ## 5. Dashboard History section
 

@@ -3,7 +3,9 @@
 // container image can be pointed at them with PRINTER_IP. The fake printer
 // simulates a running print (scripts/fake-print-simulation.ts): progress,
 // layers, and time advance, and pause, resume, stop, and the light change its
-// state as the printer would. Stop it with Ctrl-C.
+// state as the printer would. It also keeps a job history (Cmd 320/321: the 26
+// recorded jobs plus the simulated one) whose thumbnails are served over HTTP
+// on a free port of the same host. Stop it with Ctrl-C.
 //
 // Environment:
 //   FAKE_HOST     address to listen on (default 127.0.0.1; 0.0.0.0 to reach it
