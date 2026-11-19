@@ -10,9 +10,9 @@ it is configured and health-checked, and which image tags a release produces.
 ### Requirement: Image runs the service from environment settings
 
 The image SHALL start the service with no config file, reading `PRINTER_IP`,
-`LISTEN_HOST`, `LISTEN_PORT`, `ACCESS_TOKEN`, `NTFY_URL`, `NTFY_TOPIC`, and
-`NOTIFY_EVENTS` from the environment, and SHALL honor a mounted file named by
-`CONFIG_PATH`. It listens on `0.0.0.0:8080` inside the container by default.
+`LISTEN_HOST`, `LISTEN_PORT`, `ACCESS_TOKEN`, `NTFY_URL`, `NTFY_TOPIC`,
+`NOTIFY_EVENTS`, and `DATA_DIR` from the environment, and SHALL honor a mounted file
+named by `CONFIG_PATH`. It listens on `0.0.0.0:8080` inside the container by default.
 
 #### Scenario: Run against a printer address
 
@@ -140,3 +140,20 @@ release workflow for a tag SHALL NOT add the section twice.
 
 - **WHEN** the SBOM step is re-run for a release that already has the section and assets
 - **THEN** the assets are replaced and the notes still contain exactly one "Software bill of materials" section
+
+### Requirement: Archive on a volume
+
+The image SHALL set `DATA_DIR` to `/data`, create `/data` writable by the non-root
+service user, and declare it a volume. The shipped compose file SHALL mount a named
+volume at `/data`, so replacing the container with a newer image keeps the job archive.
+
+#### Scenario: Default data directory
+
+- **WHEN** the image runs without `DATA_DIR` set
+- **THEN** the service writes its archive under `/data` as the non-root user and stays healthy
+
+#### Scenario: Image update keeps history
+
+- **GIVEN** a container started from `compose.yaml` has stored jobs
+- **WHEN** it is recreated from a newer image with the same compose file
+- **THEN** `GET /api/history` returns the same jobs
