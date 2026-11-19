@@ -113,18 +113,42 @@ export interface HistoryCursor {
   taskId: string;
 }
 
-const CURSOR = /^(\d{1,12})_([A-Za-z0-9-]{1,64})$/;
+/** A task id written into a cursor as it is; any other id is written as `~` and its base64url. */
+const PLAIN_TASK_ID = /^[A-Za-z0-9-]{1,64}$/;
+const ENCODED_TASK_ID = /^~([A-Za-z0-9_-]+)$/;
 
-/** Encodes a cursor as `<beginTime>_<taskId>`; clients treat it as opaque. */
+/**
+ * Encodes a cursor as `<beginTime>_<taskId>`; clients treat it as opaque. An
+ * id outside letters, digits, and dashes (or over 64 characters) is written
+ * as `~<base64url>`, so every cursor parses back to the same position.
+ */
 export function encodeHistoryCursor(cursor: HistoryCursor): string {
-  return `${cursor.beginTime}_${cursor.taskId}`;
+  const id = PLAIN_TASK_ID.test(cursor.taskId)
+    ? cursor.taskId
+    : `~${Buffer.from(cursor.taskId, "utf8").toString("base64url")}`;
+  return `${String(cursor.beginTime)}_${id}`;
 }
 
-/** Parses a cursor made by {@link encodeHistoryCursor}, or returns null for a malformed one. */
+/** Parses a cursor made by {@link encodeHistoryCursor}, or returns null for any other text. */
 export function parseHistoryCursor(text: string): HistoryCursor | null {
-  const match = CURSOR.exec(text);
-  if (match === null) return null;
-  return { beginTime: Number(match[1]), taskId: match[2]! };
+  const split = text.indexOf("_");
+  if (split < 1) return null;
+  const time = text.slice(0, split);
+  const id = text.slice(split + 1);
+  const beginTime = Number(time);
+  // Only the form encodeHistoryCursor writes: no "+1", "01", "1e3", or " 1".
+  if (!Number.isInteger(beginTime) || String(beginTime) !== time) return null;
+  let taskId: string;
+  if (PLAIN_TASK_ID.test(id)) {
+    taskId = id;
+  } else {
+    const encoded = ENCODED_TASK_ID.exec(id)?.[1];
+    if (encoded === undefined) return null;
+    taskId = Buffer.from(encoded, "base64url").toString("utf8");
+  }
+  const cursor = { beginTime, taskId };
+  // Rejects base64url that does not decode to UTF-8 text the encoder would write back the same way.
+  return taskId !== "" && encodeHistoryCursor(cursor) === text ? cursor : null;
 }
 
 /**

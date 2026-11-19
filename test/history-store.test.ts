@@ -283,10 +283,41 @@ describe("HistoryStore.list", () => {
     assert.deepEqual(parseHistoryCursor(encodeHistoryCursor(cursor)), cursor);
   });
 
+  it("round-trips a cursor for any task id and start time", () => {
+    const ids = ["b_2", "a".repeat(65), "id with space", "id;DROP", "id\n", "~x", "é", "_", "-"];
+    for (const taskId of ids) {
+      for (const beginTime of [0, -1, 1794600358, 1e20]) {
+        const cursor = { beginTime, taskId };
+        assert.deepEqual(parseHistoryCursor(encodeHistoryCursor(cursor)), cursor, JSON.stringify(cursor));
+      }
+    }
+    assert.equal(encodeHistoryCursor({ beginTime: 101, taskId: "b_2" }), "101_~Yl8y");
+  });
+
+  it("pages past jobs whose cursor needs encoding", () => {
+    const store = HistoryStore.open(":memory:");
+    store.upsert(records([
+      syntheticEntry({ TaskId: "b_2", BeginTime: -5 }),
+      syntheticEntry({ TaskId: "a".repeat(70), BeginTime: -5 }),
+      syntheticEntry({ TaskId: "c 3", BeginTime: 101 }),
+    ]));
+    const seen: string[] = [];
+    let before: string | null = null;
+    for (let pages = 0; pages < 10; pages++) {
+      const page = store.list(before, 1);
+      seen.push(...page.jobs.map((job) => job.id));
+      before = page.next;
+      if (before === null) break;
+    }
+    assert.deepEqual(seen, ["c 3", "b_2", "a".repeat(70)]);
+    store.close();
+  });
+
   it("rejects malformed cursors", () => {
     const store = HistoryStore.open(":memory:");
-    const bad = ["", "abc", "_id", "123_", "123", "-1_id", "1.5_id", "1234567890123_id", "123_id with space",
-      "123_id;DROP", `123_${"a".repeat(65)}`, "123_id\n"];
+    const bad = ["", "abc", "_id", "123_", "123", "1.5_id", "+1_id", "01_id", "1e3_id", " 1_id", "-0_id",
+      "NaN_id", "Infinity_id", "123_id with space", "123_id;DROP", `123_${"a".repeat(65)}`, "123_id\n",
+      "123_~", "123_~!!", "123_~YWJj", "123_~Yl8y=", "123_~gA"];
     for (const cursor of bad) {
       assert.equal(parseHistoryCursor(cursor), null, cursor);
       assert.throws(() => store.list(cursor, 20), RangeError, cursor);
