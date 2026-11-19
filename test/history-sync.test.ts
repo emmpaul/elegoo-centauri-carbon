@@ -298,6 +298,22 @@ describe("HistorySync", () => {
       });
     }
 
+    for (const [sent, stored] of [
+      ["image/jpeg", "image/jpeg"],
+      ["Image/PNG; charset=binary", "image/png"],
+    ] as const) {
+      it(`stores a thumbnail answered as ${sent} with type ${stored}`, async () => {
+        await startWithThumbnails(1);
+        const id = entries[0]!.TaskId as string;
+        thumbnails.answer = (taskId) => ({ contentType: sent, body: fakePng(taskId) });
+        const sync = thumbnailSync();
+        sync.trigger();
+        await sync.idle();
+        assert.deepEqual(store.thumbnail(id), { contentType: stored, bytes: new Uint8Array(fakePng(id)) });
+        assert.deepEqual(logger.warnings, []);
+      });
+    }
+
     it("never requests an https URL, even on the printer's host", async () => {
       await startWithThumbnails(1);
       const id = entries[0]!.TaskId as string;
