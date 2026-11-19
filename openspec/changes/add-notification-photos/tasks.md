@@ -38,7 +38,7 @@ Synthetic data follows the fixture redaction rules (`test-print-<n>.gcode`,
 
 ## 6. Integration check
 
-- [ ] 6.1 Verify `pnpm typecheck && pnpm test` pass, `openspec validate add-notification-photos --strict` passes, `grep -rn -i "snapshot" src/notification-photo.ts src/notify-test.ts docs/notifications.md` finds no use of "snapshot" for a Photo, and `pnpm start:fake` still serves the dashboard with the camera (a viewer on `/camera` gets frames)
+- [x] 6.1 Verify `pnpm typecheck && pnpm test` pass, `openspec validate add-notification-photos --strict` passes, `grep -rn -i "snapshot" src/notification-photo.ts src/notify-test.ts docs/notifications.md` finds no use of "snapshot" for a Photo, and `pnpm start:fake` still serves the dashboard with the camera (a viewer on `/camera` gets frames)
 
 ## Workflow follow-up
 
