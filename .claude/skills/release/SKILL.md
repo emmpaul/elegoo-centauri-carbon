@@ -15,12 +15,14 @@ How the pieces fit:
 - `package.json` `version` is the single source of truth for the version number.
 - `main` is protected (PR only, check `typecheck and test` required), so the version bump
   lands through a **release PR**.
-- Pushing a `vX.Y.Z` tag starts `.github/workflows/release.yml`. It re-runs the checks,
-  verifies the tag equals `v` + `package.json` version and sits on `main`, then creates
-  the GitHub release with generated notes. Tags with a `-` suffix (`v1.2.0-rc.1`)
-  become prereleases. In parallel, its `image` job pushes the container image
-  `ghcr.io/emmpaul/elegoo-centauri-carbon` as `X.Y.Z`, and as `latest` only for a
-  tag with no `-` suffix. Once both `release` and `image` have finished, its `sbom` job
+- Pushing a `vX.Y.Z` tag starts `.github/workflows/release.yml`. It re-runs the checks
+  and verifies the tag equals `v` + `package.json` version and sits on `main`. Its `image`
+  job then pushes the container image `ghcr.io/emmpaul/elegoo-centauri-carbon` as
+  `X.Y.Z`, and as `latest` only for a tag with no `-` suffix. Only after the image is
+  pushed does its `release` job create the GitHub release with generated notes, so a
+  release never exists without its image; a failed `image` job leaves the tag with no
+  release. Tags with a `-` suffix (`v1.2.0-rc.1`) become prereleases. Once both
+  `release` and `image` have finished, its `sbom` job
   scans the pushed image by digest and attaches one SPDX SBOM per platform
   (`elegoo-centauri-carbon-X.Y.Z-linux-amd64.spdx.json` and `-linux-arm64.spdx.json`)
   to the release, then appends a "Software bill of materials" section to the notes.
@@ -127,8 +129,16 @@ notes end with the "Software bill of materials" section.
 
 When the run fails, read the failing job from `gh run view <run-id> --log-failed`:
 
-- `verify`, `release`, or `image` failed: the tag may have no release or no image.
-  Report the failing job and stop.
+- `verify` failed: nothing was published (no image, no release). Report the failing
+  job and stop.
+- `image` failed: `release` and `sbom` were skipped, so the tag has no release, and
+  normally no image. Report it and that `gh run rerun <run-id> --failed` re-runs
+  `image`, then the skipped `release` and `sbom`, once the cause is fixed. Do not
+  re-run it unasked.
+- `release` failed: the image (and `latest`, for a tag with no `-` suffix) is
+  already pushed, but the tag has no release. Report it, and that
+  `gh run rerun <run-id> --failed` creates the release and runs `sbom`. Do not re-run
+  it unasked.
 - Only `sbom` failed: the release and the image are published, but the release has no
   SBOM. Report it as a release without SBOM, and that `gh run rerun <run-id> --failed`
   re-runs the job (it replaces the assets and keeps one notes section). Do not re-run it
