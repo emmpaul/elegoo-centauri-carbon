@@ -59,7 +59,11 @@ clone:
 | `NOTIFY_EVENTS` | no | Comma-separated events that notify, or `none` (default: all). |
 
 Leave `LISTEN_HOST` and `LISTEN_PORT` unset: `compose.yaml` publishes the
-container's port 8080. Leave `DATA_DIR` unset too: the image keeps the print
+container's port 8080. A config file works too: mount it and set
+`CONFIG_PATH` to its path in the container. The settings are the ones in the
+README's [Configure](../README.md#configure) table.
+
+Leave `DATA_DIR` unset too: the image keeps the print
 history archive (`history.sqlite`) in `/data`, and `compose.yaml` mounts the
 named volume `printer-data` there, so the history survives recreating and
 upgrading the container. Compose names the volume after the project, which is
@@ -79,9 +83,7 @@ docker compose start
 
 To restore one, stop the service, unpack it into the volume with the same
 `docker run` and `tar xzf /backup/printer-data-<date>.tar.gz -C /data` (and
-the volume mounted without `:ro`), then start it. A config file works too: mount it and set
-`CONFIG_PATH` to its path in the container. The settings are the ones in the
-README's [Configure](../README.md#configure) table.
+the volume mounted without `:ro`), then start it.
 
 Generate the token with the command below and set `ACCESS_TOKEN` in
 `printer.env` to its output. Don't reuse a token from the repository or
