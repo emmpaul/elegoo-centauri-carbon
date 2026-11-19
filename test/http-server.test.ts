@@ -545,6 +545,34 @@ describe("HTTP API history event", () => {
     assert.equal(sync.listenerCount("change"), 1);
     await events.cancel();
   });
+
+  it("sends the history event to more SSE clients than the emitter's listener warning allows, with one listener", async () => {
+    const warnings: Error[] = [];
+    const onWarning = (warning: Error) => warnings.push(warning);
+    process.on("warning", onWarning);
+    try {
+      const clients = await Promise.all(
+        Array.from({ length: 12 }, async () => new SseReader(await fetch(`${base}/api/events`))),
+      );
+      for (const client of clients) assert.equal((await client.next()).connection, "online");
+      assert.equal(sync.listenerCount("change"), 1);
+
+      sync.trigger();
+      await sync.idle();
+      for (const client of clients) assert.deepEqual(await client.nextEvent(), { name: "history", data: "{}" });
+
+      await Promise.all(clients.map((client) => client.cancel()));
+      for (let i = 0; i < 400 && sync.listenerCount("change") > 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      assert.equal(sync.listenerCount("change"), 0);
+      await new Promise((resolve) => setImmediate(resolve));
+      const leaks = warnings.filter((warning) => warning.name === "MaxListenersExceededWarning");
+      assert.deepEqual(leaks.filter((warning) => warning.message.includes("[HistorySync]")), []);
+    } finally {
+      process.off("warning", onWarning);
+    }
+  });
 });
 
 /** A store whose snapshot the test sets and announces. */

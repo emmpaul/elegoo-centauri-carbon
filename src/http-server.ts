@@ -92,6 +92,7 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 /** Creates (but does not start) the API server. */
 export function createApiServer(options: ApiServerOptions): Server {
   const logger = options.logger ?? console;
+  const historyChanges = options.history === undefined ? undefined : new ChangeFanOut<[]>(options.history);
   const events: EventStreamLimits = {
     keepAliveMs: options.keepAliveMs ?? 15_000,
     maxBacklogBytes: options.maxEventBacklogBytes ?? 1024 * 1024,
@@ -100,7 +101,7 @@ export function createApiServer(options: ApiServerOptions): Server {
   };
   const routes: Record<string, Partial<Record<string, Handler>>> = {
     "/api/status": { GET: (_req, res) => sendJson(res, 200, options.store.snapshot) },
-    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, options.history, events, logger) },
+    "/api/events": { GET: (req, res) => streamEvents(req, res, options.store, historyChanges, events, logger) },
     "/api/command": { POST: (req, res) => runCommand(req, res, options.control) },
   };
   const camera = options.camera;
@@ -178,6 +179,39 @@ function sameToken(given: string, expected: string): boolean {
   return timingSafeEqual(digest(given), digest(expected));
 }
 
+/** An emitter of `change` events. */
+interface ChangeSource<Args extends unknown[]> {
+  on(event: "change", listener: (...args: Args) => void): unknown;
+  off(event: "change", listener: (...args: Args) => void): unknown;
+}
+
+/**
+ * One `change` listener on a source for all SSE clients, so their number (up
+ * to maxEventClients) is not bounded by the emitter's listener-leak warning
+ * (used for the history, whose HistorySync keeps the default limit of 10).
+ */
+class ChangeFanOut<Args extends unknown[]> {
+  readonly #source: ChangeSource<Args>;
+  readonly #listeners = new Set<(...args: Args) => void>();
+  readonly #notify = (...args: Args) => {
+    for (const listener of this.#listeners) listener(...args);
+  };
+
+  constructor(source: ChangeSource<Args>) {
+    this.#source = source;
+  }
+
+  on(listener: (...args: Args) => void): void {
+    if (this.#listeners.size === 0) this.#source.on("change", this.#notify);
+    this.#listeners.add(listener);
+  }
+
+  off(listener: (...args: Args) => void): void {
+    if (!this.#listeners.delete(listener)) return;
+    if (this.#listeners.size === 0) this.#source.off("change", this.#notify);
+  }
+}
+
 interface EventStreamLimits {
   keepAliveMs: number;
   maxBacklogBytes: number;
@@ -196,7 +230,7 @@ function streamEvents(
   req: IncomingMessage,
   res: ServerResponse,
   store: SnapshotSource,
-  history: HistorySource | undefined,
+  history: ChangeFanOut<[]> | undefined,
   limits: EventStreamLimits,
   logger: Logger,
 ): void {
@@ -226,10 +260,10 @@ function streamEvents(
     limits.clients--;
     clearInterval(keepAlive);
     store.off("change", send);
-    history?.off("change", sendHistory);
+    history?.off(sendHistory);
   });
   store.on("change", send);
-  history?.on("change", sendHistory);
+  history?.on(sendHistory);
   send(store.snapshot);
 }
 
