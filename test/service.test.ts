@@ -391,11 +391,26 @@ describe("startService photos", () => {
     return service;
   }
 
-  /** Runs a job from printing (seq 23) to finished (seq 24). */
-  async function finishAJob(s: Service): Promise<void> {
+  /** `statusFrame(seq)` with the chamber light (`LightStatus.SecondLight`) set to `light`. */
+  function withLight(frame: StatusMessage, light: 0 | 1): StatusMessage {
+    const status = frame.Status as { LightStatus: { SecondLight: number } };
+    status.LightStatus.SecondLight = light;
+    return frame;
+  }
+
+  /** Runs a job from printing (seq 23) to finished (seq 24), with the light as `light` (on in the fixture). */
+  async function finishAJob(s: Service, light: 0 | 1 = 1): Promise<void> {
     await printer.waitForClient();
-    await until(() => s.store.snapshot.taskId !== null, "the printing status", statusFrame(23));
-    printer.push(statusFrame(24));
+    await until(() => s.store.snapshot.taskId !== null, "the printing status", withLight(statusFrame(23), light));
+    printer.push(withLight(statusFrame(24), light));
+  }
+
+  /** The `SecondLight` values of the Cmd 403 requests the printer received, in order. */
+  function lightCommands(): number[] {
+    return printer.received.flatMap((frame) => {
+      const data = (frame.payload as { Data?: { Cmd?: number; Data?: { LightStatus?: { SecondLight?: number } } } }).Data;
+      return data?.Cmd === 403 ? [data.Data?.LightStatus?.SecondLight ?? -1] : [];
+    });
   }
 
   /** Whether `raw` is one whole part of the fake camera (`fakeJpeg(n)`). */
@@ -463,6 +478,38 @@ describe("startService photos", () => {
     } finally {
       viewer.destroy();
     }
+  });
+
+  it("turns the light on for the Photo, waits for the push showing it on, and turns it off again", async () => {
+    const s = await start({ photos: { light: true } });
+    let putsAtLightOn = -1;
+    printer.onFrame((frame) => {
+      const data = (frame.payload as { Data?: { Cmd?: number; Data?: { LightStatus?: { SecondLight?: number } } } }).Data;
+      if (data?.Cmd !== 403 || data.Data?.LightStatus?.SecondLight !== 1) return;
+      // The printer reports the light on a moment after the command, as its status push would.
+      setTimeout(() => {
+        putsAtLightOn = ntfy.requests.length;
+        printer.push(withLight(statusFrame(24), 1));
+      }, 100);
+    });
+    await finishAJob(s, 0);
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    assert.equal(ntfy.requests[0]?.method, "PUT");
+    assert.equal(putsAtLightOn, 0, "the upload came after the status push showing the light on");
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
+  });
+
+  it("takes the Photo and turns the light off again when no push shows the light on", async () => {
+    const s = await start({ photos: { light: true } });
+    await finishAJob(s, 0);
+    const detected = Date.now();
+    await until(() => ntfy.requests.length > 0, "the Notification", undefined, 6000);
+    assert.ok(Date.now() - detected < 6000);
+    assert.equal(ntfy.requests[0]?.method, "PUT");
+    assert.ok(isFakeJpegPart(ntfy.requests[0]!.raw));
+    await until(() => lightCommands().length === 2, "the off command");
+    assert.deepEqual(lightCommands(), [1, 0]);
   });
 
   it("sends the Notification as JSON within 6 s when the camera port is closed", async () => {
