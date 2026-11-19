@@ -233,6 +233,33 @@ describe("HistorySync", () => {
     assert.equal(store.list(null, 100).jobs.length, 30);
   });
 
+  it("keeps the jobs of an answered chunk when a later Cmd 321 fails (spec: Later detail request fails)", async () => {
+    await start();
+    entries.push({ ...entries[0], TaskId: "synthetic-27", TaskName: "/local/test-print-80.gcode" });
+    printer.replies.set(321, (data) => {
+      printer.replies.set(321, "silent");
+      const ids = data.Id as string[];
+      return { Ack: 0, HistoryDetailList: entries.filter((entry) => ids.includes(entry.TaskId as string)) };
+    });
+    const sync = newSync();
+    let changes = 0;
+    sync.on("change", () => changes++);
+    sync.trigger();
+    await sync.idle();
+    assert.equal(store.list(null, 100).jobs.length, 26);
+    assert.equal(store.job("synthetic-27"), null);
+    assert.equal(logger.warnings.filter((message) => message.startsWith("history sync failed")).length, 1);
+    assert.match(logger.warnings.find((message) => message.startsWith("history sync failed"))!, /321/);
+    assert.equal(changes, 1);
+    assert.equal(session.state, "online");
+
+    printer.replies.delete(321);
+    sync.trigger();
+    await sync.idle();
+    assert.deepEqual(detailRequests(printer).at(-1), ["synthetic-27"]);
+    assert.equal(store.list(null, 100).jobs.length, 27);
+  });
+
   it("sends no command other than 0, 1, 320, and 321", async () => {
     await start();
     const sync = newSync();
