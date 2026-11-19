@@ -121,6 +121,9 @@ export async function startService(options: ServiceOptions): Promise<Service> {
   try {
     await once(server, "listening");
   } catch (error) {
+    // Nothing started yet: release what was opened, including the detector's offline timer.
+    detector.close();
+    camera.close();
     historySync.close();
     history.close();
     throw error;
