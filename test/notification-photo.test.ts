@@ -168,13 +168,17 @@ class StubControl {
   refuse = false;
   /** Refuse the commands after this many were sent. */
   refuseAfter = Infinity;
+  /** The printer's answer to each sent command, in order; a command past the end is never answered. */
+  results: CommandResult[] = [];
 
   setLight(on: boolean): Promise<CommandResult> {
     if (this.refuse || this.sent.length >= this.refuseAfter) {
       return Promise.reject(new ControlRejectedError("light", "not-allowed"));
     }
+    const result = this.results[this.sent.length];
     this.sent.push(on);
     this.lightCommands++;
+    if (result !== undefined) return Promise.resolve(result);
     // Never answers: the Photo light must not wait for the response.
     return new Promise<CommandResult>(() => {});
   }
@@ -384,6 +388,43 @@ describe("PhotoTaker with the Photo light", () => {
     assert.equal(await armed(1), false, "not armed at 1499 ms");
     mock.timers.tick(1);
     assert.equal(await armed(1), true, "armed at 1500 ms, leaving 2000 ms for the frame");
+  });
+
+  it("warns when the printer answers the light commands with a failure or not at all", async () => {
+    control.results = [
+      { action: "light", outcome: "failed", code: 7 },
+      { action: "light", outcome: "timeout" },
+    ];
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    assert.deepEqual(warnings, [
+      "photo: turning the light on failed with code 7",
+      "photo: turning the light off got no response",
+    ]);
+  });
+
+  it("does not warn when the printer acknowledges the light commands", async () => {
+    control.results = [
+      { action: "light", outcome: "acknowledged" },
+      { action: "light", outcome: "acknowledged" },
+    ];
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    await pending;
+    await settle();
+    assert.deepEqual(control.sent, [true, false]);
+    assert.deepEqual(warnings, []);
   });
 
   it("sends no command when the Photo light is off", async () => {
