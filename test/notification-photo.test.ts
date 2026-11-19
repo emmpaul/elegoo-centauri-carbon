@@ -1,6 +1,10 @@
 import { strict as assert } from "node:assert";
+import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { PHOTO_EVENTS, type PhotoResult, PhotoTaker } from "../src/notification-photo.ts";
+import { type CommandResult, ControlRejectedError } from "../src/print-control.ts";
+import { emptySnapshot, type StatusSnapshot } from "../src/status-store.ts";
+import type { Logger } from "../src/sdcp-client.ts";
 
 /** Lets pending promise callbacks run while timers are mocked. */
 async function settle(): Promise<void> {
@@ -97,5 +101,176 @@ describe("PhotoTaker without the light", () => {
 
   it("takes Photos for finished, failed, stopped, and paused only", () => {
     assert.deepEqual([...PHOTO_EVENTS].sort(), ["failed", "finished", "paused", "stopped"]);
+  });
+});
+
+type Light = StatusSnapshot["light"];
+
+/** A status store reduced to the light: `show()` emits a change. */
+class StubStore extends EventEmitter<{ change: [StatusSnapshot] }> {
+  private light: Light;
+  constructor(light: Light) {
+    super();
+    this.light = light;
+  }
+  get snapshot(): StatusSnapshot {
+    return { ...emptySnapshot("online"), light: this.light };
+  }
+  show(light: Light): void {
+    this.light = light;
+    this.emit("change", this.snapshot);
+  }
+}
+
+/** A PrintControl reduced to the light: records commands, counts the sent ones. */
+class StubControl {
+  readonly sent: boolean[] = [];
+  lightCommands = 0;
+  /** Refuse every command, as the guard does offline or with LightStatus unknown. */
+  refuse = false;
+  /** Refuse the commands after this many were sent. */
+  refuseAfter = Infinity;
+
+  setLight(on: boolean): Promise<CommandResult> {
+    if (this.refuse || this.sent.length >= this.refuseAfter) {
+      return Promise.reject(new ControlRejectedError("light", "not-allowed"));
+    }
+    this.sent.push(on);
+    this.lightCommands++;
+    // Never answers: the Photo light must not wait for the response.
+    return new Promise<CommandResult>(() => {});
+  }
+}
+
+describe("PhotoTaker with the Photo light", () => {
+  let camera: StubCamera;
+  let control: StubControl;
+  let warnings: string[];
+  let logger: Logger;
+
+  beforeEach(() => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    camera = new StubCamera();
+    control = new StubControl();
+    warnings = [];
+    logger = { info: () => {}, warn: (message) => warnings.push(message), error: (message) => warnings.push(message) };
+  });
+
+  afterEach(() => mock.timers.reset());
+
+  function takerWith(store: StubStore): PhotoTaker {
+    return new PhotoTaker({ camera, light: { state: store, control }, logger });
+  }
+
+  /** True once the frame source's `after` has settled. */
+  async function armed(index = 0): Promise<boolean> {
+    let done = false;
+    void camera.calls[index]!.after!.then(() => (done = true));
+    await settle();
+    return done;
+  }
+
+  it("turns the light on, arms the frame on the 'on' change, and turns it off after", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    assert.deepEqual(control.sent, [true]);
+    assert.equal(camera.calls.length, 1, "the camera opens in parallel");
+    assert.equal(await armed(), false, "not armed before the light shows on");
+
+    store.show("on");
+    assert.equal(await armed(), true);
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    assert.deepEqual(control.sent, [true, false]);
+  });
+
+  it("arms the frame at 3000 ms without a change, and the result arrives before 5000 ms", async () => {
+    const store = new StubStore("off");
+    let result: PhotoResult | undefined;
+    const pending = takerWith(store)
+      .take()
+      .then((r) => (result = r));
+    await settle();
+    mock.timers.tick(2_999);
+    assert.equal(await armed(), false);
+    mock.timers.tick(1);
+    assert.equal(await armed(), true);
+
+    mock.timers.tick(500);
+    camera.answer(0, JPEG);
+    await pending;
+    assert.deepEqual(result?.jpeg, JPEG);
+  });
+
+  for (const light of ["on", "unknown"] as const) {
+    it(`sends no light command when the light is ${light}`, async () => {
+      const pending = takerWith(new StubStore(light)).take();
+      await settle();
+      assert.equal(camera.calls[0]!.after, undefined);
+      camera.answer(0, JPEG);
+      assert.deepEqual((await pending).jpeg, JPEG);
+      assert.deepEqual(control.sent, []);
+    });
+  }
+
+  it("takes the Photo as it is when the guard refuses the command", async () => {
+    control.refuse = true;
+    const pending = takerWith(new StubStore("off")).take();
+    await settle();
+    assert.equal(camera.calls[0]!.after, undefined, "no wait for a light that was never asked for");
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    assert.deepEqual(control.sent, []);
+    assert.deepEqual(warnings, []);
+  });
+
+  it("leaves the light on when someone else sent a light command meanwhile", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    control.lightCommands++; // the dashboard's command
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    await pending;
+    assert.deepEqual(control.sent, [true]);
+  });
+
+  it("sends no off command when a change showed the light off after on", async () => {
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    store.show("off");
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    await pending;
+    assert.deepEqual(control.sent, [true]);
+  });
+
+  it("sends no command when the Photo light is off", async () => {
+    const pending = new PhotoTaker({ camera, light: null, logger }).take();
+    await settle();
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    assert.deepEqual(control.sent, []);
+  });
+
+  it("logs a warning when the restore is refused, and the take still resolves", async () => {
+    control.refuseAfter = 1;
+    const store = new StubStore("off");
+    const pending = takerWith(store).take();
+    await settle();
+    store.show("on");
+    await settle();
+    camera.answer(0, JPEG);
+    assert.deepEqual((await pending).jpeg, JPEG);
+    await settle();
+    assert.deepEqual(control.sent, [true]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /light/);
+    assert.match(warnings[0]!, /not allowed/);
   });
 });
