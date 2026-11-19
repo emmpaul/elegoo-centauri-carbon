@@ -232,9 +232,22 @@ describe("history loader", () => {
   it("drops an answer for a list replaced meanwhile", async () => {
     const { api, list, scroll } = setUpList();
     await list.open();
+    // Hold the next-page answer (of the old 27-job list) until the reload has finished.
+    const answer = api.fetch.bind(api);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    api.fetch = (path) => {
+      api.fetch = answer;
+      const response = answer(path);
+      return held.then(() => response);
+    };
     const more = list.more();
     api.jobs = JOBS.slice(0, 3);
     await list.reload();
+    assert.deepEqual(list.state.jobs.map((j) => j.id), ["job-1", "job-2", "job-3"]);
+    release();
     await more;
     await scroll();
     assert.deepEqual(list.state.jobs.map((j) => j.id), ["job-1", "job-2", "job-3"]);
