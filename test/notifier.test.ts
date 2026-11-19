@@ -214,6 +214,53 @@ describe("NtfyNotifier against a fake ntfy endpoint", () => {
     assert.equal(ntfy.requests.length, 0);
   });
 
+  for (const status of [400, 413]) {
+    it(`falls back to one text-only publish when ntfy rejects the upload with ${status}`, async () => {
+      ntfy.statuses.push(status);
+      const logger = recordingLogger();
+      const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), retryDelaysMs: [10, 10, 10], logger });
+      const delivery = await notifier.deliver(formatEvent(paused), "paused", { jpeg });
+      assert.deepEqual(
+        ntfy.requests.map((r) => r.method),
+        ["PUT", "POST"],
+      );
+      assert.equal((ntfy.requests[1]?.json as { title: string }).title, "Print paused");
+      assert.deepEqual(logger.warnings, [`ntfy: photo upload for paused rejected (HTTP ${status}); sending text only`]);
+      assert.deepEqual(logger.errors, []);
+      assert.deepEqual(delivery, { delivered: true, photo: false, fallback: `HTTP ${status}` });
+    });
+  }
+
+  it("retries an upload answered with 503 and sends no text fallback", async () => {
+    ntfy.statuses.push(503, 200);
+    const logger = recordingLogger();
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), retryDelaysMs: [10, 10, 10], logger });
+    const delivery = await notifier.deliver(formatEvent(paused), "paused", { jpeg });
+    assert.deepEqual(
+      ntfy.requests.map((r) => r.method),
+      ["PUT", "PUT"],
+    );
+    assert.deepEqual(ntfy.requests[1]?.raw, jpeg);
+    assert.equal(logger.warnings.length, 1);
+    assert.match(logger.warnings[0] as string, /HTTP 503.*retry 1 of 3/);
+    assert.deepEqual(delivery, { delivered: true, photo: true, fallback: null });
+  });
+
+  it("gives up on an upload after 3 retries on server errors, without a text fallback", async () => {
+    ntfy.statuses.push(503, 503, 503, 503);
+    const logger = recordingLogger();
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events: allOn(), retryDelaysMs: [10, 10, 10], logger });
+    const delivery = await notifier.deliver(formatEvent(paused), "paused", { jpeg });
+    assert.deepEqual(
+      ntfy.requests.map((r) => r.method),
+      ["PUT", "PUT", "PUT", "PUT"],
+    );
+    assert.equal(logger.errors.length, 1);
+    assert.match(logger.errors[0] as string, /gave up on paused after 3 retries: HTTP 503/);
+    assert.equal(delivery.delivered, false);
+    assert.equal(delivery.photo, false);
+  });
+
   it("builds no notifier without a topic", () => {
     assert.equal(notifierFromConfig(defaultConfig()), null);
     const config = defaultConfig();

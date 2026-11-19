@@ -124,12 +124,20 @@ export class NtfyNotifier implements Notifier {
       this.logger.info(`ntfy: ${label} sent without a photo: ${photo.reason}`);
       return { delivered: await this.publish(push, label), photo: false, fallback: photo.reason };
     }
-    const delivered = await this.upload(push, label, photo.jpeg);
-    return { delivered, photo: delivered, fallback: null };
+    const outcome = await this.upload(push, label, photo.jpeg);
+    if (typeof outcome === "boolean") return { delivered: outcome, photo: outcome, fallback: null };
+    // A 4xx is the server refusing this attachment (none configured, too
+    // large, quota): the text alone still gets through.
+    this.logger.warn(`ntfy: photo upload for ${label} rejected (HTTP ${outcome}); sending text only`);
+    return { delivered: await this.publish(push, label), photo: false, fallback: `HTTP ${outcome}` };
   }
 
-  /** Uploads the Photo as an attachment, the message in headers, retrying with back-off. */
-  private async upload(push: PushMessage, label: string, jpeg: Buffer): Promise<boolean> {
+  /**
+   * Uploads the Photo as an attachment, the message in headers. Network
+   * errors and 5xx are retried with back-off (true once delivered, false
+   * after giving up); a 4xx is not retried and resolves with its status.
+   */
+  private async upload(push: PushMessage, label: string, jpeg: Buffer): Promise<boolean | number> {
     const headers = {
       Title: headerValue(push.title),
       Message: headerValue(push.message),
@@ -138,8 +146,10 @@ export class NtfyNotifier implements Notifier {
       Filename: headerValue(`photo-${label}.jpg`),
       "Content-Type": "image/jpeg",
     };
-    return this.withRetries(label, () =>
-      fetch(`${this.url}/${encodeURIComponent(this.topic)}`, { method: "PUT", headers, body: new Uint8Array(jpeg), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+    return this.withRetries(
+      label,
+      () => fetch(`${this.url}/${encodeURIComponent(this.topic)}`, { method: "PUT", headers, body: new Uint8Array(jpeg), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+      (status) => status >= 400 && status < 500,
     );
   }
 
@@ -159,14 +169,21 @@ export class NtfyNotifier implements Notifier {
     );
   }
 
-  /** Sends one request, retrying every failure with back-off; true once a 2xx answers. */
-  private async withRetries(label: string, send: () => Promise<Response>): Promise<boolean> {
+  /**
+   * Sends one request, retrying failures with back-off: true once a 2xx
+   * answers, false after the last retry failed (logged). A status that
+   * `final` accepts ends the attempts at once and is returned as is.
+   */
+  private async withRetries(label: string, send: () => Promise<Response>, final: (status: number) => boolean): Promise<boolean | number>;
+  private async withRetries(label: string, send: () => Promise<Response>): Promise<boolean>;
+  private async withRetries(label: string, send: () => Promise<Response>, final?: (status: number) => boolean): Promise<boolean | number> {
     let failure = "";
     for (let attempt = 0; ; attempt++) {
       try {
         const response = await send();
         await response.body?.cancel();
         if (response.ok) return true;
+        if (final?.(response.status)) return response.status;
         failure = `HTTP ${response.status}`;
       } catch (error) {
         const cause = (error as Error & { cause?: Error }).cause;
