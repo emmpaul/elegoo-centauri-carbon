@@ -441,6 +441,57 @@ describe("CameraProxy.takeFrame with a fake MJPEG source", () => {
     }
   });
 
+  it("takes a whole frame of several hundred kilobytes, which arrives in several chunks", async () => {
+    await restartSource({ frameIntervalMs: 100, framePadBytes: 300 * 1024 });
+    await start();
+    const frame = await proxy.takeFrame({ signal: AbortSignal.timeout(3000) });
+    assert.equal(frame.length, fakeJpeg(0, 300 * 1024).length, "no bytes lost between chunks");
+    assert.deepEqual(frame, fakeJpeg(frameNumber(frame), 300 * 1024));
+    await source.waitForNoStreams();
+  });
+
+  it("takes a whole frame when its delimiters, part headers, and body are split across chunks", async () => {
+    // Writes each part in pieces with a pause between them, so every piece
+    // reaches the proxy as its own chunk: the opening delimiter, the header
+    // end, the JPEG body, and the next part's delimiter are each cut in two.
+    const pieces = (n: number): Buffer[] => {
+      const jpeg = fakeJpeg(n, 64);
+      return [
+        Buffer.from(`--${FAKE_BOUNDARY.slice(0, 4)}`),
+        Buffer.from(`${FAKE_BOUNDARY.slice(4)}\r\nContent-Type: image/jpeg\r\n\r`),
+        Buffer.concat([Buffer.from("\n"), jpeg.subarray(0, 3)]),
+        jpeg.subarray(3, 40),
+        jpeg.subarray(40),
+        Buffer.from("\r\n"),
+      ];
+    };
+    let stopped = false;
+    const chunked = createHttpServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": `multipart/x-mixed-replace; boundary=${FAKE_BOUNDARY}` });
+      res.on("close", () => (stopped = true));
+      void (async () => {
+        for (let n = 0; !stopped && n < 50; n++) {
+          for (const piece of pieces(n)) {
+            if (stopped) return;
+            res.write(piece);
+            await new Promise((resolve) => setTimeout(resolve, 15));
+          }
+        }
+      })();
+    });
+    chunked.listen(0, "127.0.0.1");
+    await once(chunked, "listening");
+    try {
+      await start(`http://127.0.0.1:${(chunked.address() as AddressInfo).port}/video`);
+      const frame = await proxy.takeFrame({ signal: AbortSignal.timeout(3000) });
+      assert.deepEqual(frame, fakeJpeg(frameNumber(frame), 64), "the part bytes, unchanged");
+      assert.equal(proxy.upstreamOpen, false);
+    } finally {
+      chunked.closeAllConnections();
+      await new Promise<void>((resolve) => chunked.close(() => resolve()));
+    }
+  });
+
   it("rejects a waiting taker when the stream ends", async () => {
     await restartSource({ frameIntervalMs: 60_000 });
     await start();
