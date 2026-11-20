@@ -672,3 +672,6 @@ function start(): void {
 }
 
 start();
+
+// PROTOTYPE (branch prototype/charts-q9): chart placement variants, only with ?variant=.
+if (new URL(location.href).searchParams.has("variant")) void import("./prototype-charts.js");
