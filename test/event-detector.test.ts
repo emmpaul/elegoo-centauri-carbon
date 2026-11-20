@@ -72,6 +72,7 @@ describe("EventDetector with recorded status pushes", () => {
         progress: 100,
         durationSeconds: 398,
         errorCode: null,
+        remainingSeconds: null,
       },
     ]);
     detector.close();
@@ -106,6 +107,7 @@ describe("EventDetector with recorded status pushes", () => {
         progress: 0,
         durationSeconds: 0,
         errorCode: null,
+        remainingSeconds: null,
       },
     ]);
     detector.close();
@@ -177,6 +179,7 @@ describe("EventDetector failed events", () => {
         progress: 92,
         durationSeconds: 398,
         errorCode: 45,
+        remainingSeconds: null,
       },
     ]);
     detector.close();

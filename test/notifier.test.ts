@@ -20,6 +20,7 @@ const finished: PrintEvent = {
   progress: 100,
   durationSeconds: 398,
   errorCode: null,
+  remainingSeconds: null,
 };
 
 const allOn = () => Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>;

@@ -258,6 +258,7 @@ describe("startService history", () => {
         progress: null,
         durationSeconds: null,
         errorCode: null,
+        remainingSeconds: null,
       });
       // A pause that triggered too would run a second sync for the end that follows it.
       service!.detector.emit("event", event("paused"));
@@ -299,6 +300,7 @@ describe("startService history", () => {
           progress: null,
           durationSeconds: null,
           errorCode: null,
+          remainingSeconds: null,
         });
         await realWait(300);
         assert.equal(syncs(), before + 1, "the triggered sync ran");
@@ -420,7 +422,7 @@ describe("startService photos", () => {
   }
 
   function event(type: PrintEvent["type"]): PrintEvent {
-    return { type, at: Date.now(), printerName: null, jobId: "j", fileName: "test-print-1.gcode", progress: null, durationSeconds: null, errorCode: null };
+    return { type, at: Date.now(), printerName: null, jobId: "j", fileName: "test-print-1.gcode", progress: null, durationSeconds: null, errorCode: null, remainingSeconds: null };
   }
 
   it("uploads a Photo from the camera with a finished Notification and closes the camera afterwards", async () => {

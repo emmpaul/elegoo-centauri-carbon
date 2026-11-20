@@ -27,6 +27,8 @@ export interface PrintEvent {
   durationSeconds: number | null;
   /** Raw `ErrorStatusReason` of the job (failed events); null when unknown. */
   errorCode: number | null;
+  /** Seconds left by the printer's estimate (almost-done events); null on every other event. */
+  remainingSeconds: number | null;
 }
 
 export interface EventDetectorOptions {
@@ -217,7 +219,7 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
   }
 
   private event(type: EventType, printerName: string | null, jobId: string | null): PrintEvent {
-    return { type, at: this.now(), printerName, jobId, fileName: null, progress: null, durationSeconds: null, errorCode: null };
+    return { type, at: this.now(), printerName, jobId, fileName: null, progress: null, durationSeconds: null, errorCode: null, remainingSeconds: null };
   }
 
   private emitOnce(key: string, event: PrintEvent): void {
