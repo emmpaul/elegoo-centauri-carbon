@@ -15,15 +15,6 @@ Items that need only observed commands, or none, come first. Items that need sta
 commands wait for a live capture, and anything that moves the printer or starts a print
 gets the same per-state guards and confirmation as stop does today.
 
-## Next
-
-### Progress notifications
-
-Optional notifications at useful points in a print: when the first layer is done (when
-most prints fail) and when about ten minutes are left. They come from the status the
-service already reads, and the same event dedupe applies.
-**Protocol:** none needed.
-
 ## Later
 
 ### Temperature and progress charts

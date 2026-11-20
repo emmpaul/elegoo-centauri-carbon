@@ -18,7 +18,9 @@
     "paused": true,
     "stopped": true,
     "offline": true,
-    "online": true
+    "online": true,
+    "first-layer": false,
+    "almost-done": false
   },
   "dataDir": "data"
 }

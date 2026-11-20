@@ -1,8 +1,8 @@
 // Detects print lifecycle events from status snapshot changes (design D4):
 // started, finished, failed, paused, stopped, offline (after 2 minutes
-// unreachable), and back online. Every event occurrence is emitted at most
-// once, keyed on the job plus the event type, so repeated status pushes and
-// reconnects never repeat an event.
+// unreachable), back online, and the first-layer and almost-done milestones.
+// Every event occurrence is emitted at most once, keyed on the job plus the
+// event type, so repeated status pushes and reconnects never repeat an event.
 //
 // The printer clears `TaskId`, `Filename`, and `Progress` in the push that
 // reports a completed job (docs/sdcp-protocol.md, "Is `TaskId` a stable job
@@ -27,6 +27,8 @@ export interface PrintEvent {
   durationSeconds: number | null;
   /** Raw `ErrorStatusReason` of the job (failed events); null when unknown. */
   errorCode: number | null;
+  /** Seconds left by the printer's estimate (almost-done events); null on every other event. */
+  remainingSeconds: number | null;
 }
 
 export interface EventDetectorOptions {
@@ -60,7 +62,14 @@ interface Job {
   /** Pause occurrences so far; each resume arms the next one. */
   pauses: number;
   ended: boolean;
+  /** Seen on layer 0 or 1, so a later layer 2 is the end of the first layer (design D2). */
+  layerArmed: boolean;
+  /** Seen with more than ALMOST_DONE_SECONDS left, so a later drop to it or below is "almost done" (design D2). */
+  remainingArmed: boolean;
 }
+
+/** Remaining time, by the printer's estimate, at which a job is "almost done". */
+const ALMOST_DONE_SECONDS = 600;
 
 /** Machine states during which a job runs (`printing`, and the mid-job material change). */
 const ACTIVE_MACHINE_STATES = new Set(["printing", "loading-material"]);
@@ -152,6 +161,8 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
         paused: false,
         pauses: 0,
         ended: false,
+        layerArmed: false,
+        remainingArmed: false,
       };
       this.job = job;
       // Joining a job that was already running is not a start.
@@ -170,8 +181,29 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
       job.pauses++;
     }
 
+    this.trackMilestones(snapshot, job);
+
     if (snapshot.errorCode !== null && snapshot.errorCode !== 0) {
       this.emitOnce(`${job.key}:failed`, this.jobEvent("failed", snapshot, job, snapshot.errorCode));
+    }
+  }
+
+  /**
+   * Emits the progress milestones once a crossing is seen within the job: a
+   * value on the far side arms each one first, so the previous job's stale
+   * layer or a late join never fires it.
+   */
+  private trackMilestones(snapshot: StatusSnapshot, job: Job): void {
+    const layer = snapshot.layer.current;
+    if (layer === 0 || layer === 1) job.layerArmed = true;
+    else if (job.layerArmed && layer !== null && layer >= 2) {
+      this.emitOnce(`${job.key}:first-layer`, this.jobEvent("first-layer", snapshot, job));
+    }
+    const remaining = snapshot.remaining;
+    if (remaining === null) return;
+    if (remaining > ALMOST_DONE_SECONDS) job.remainingArmed = true;
+    else if (job.remainingArmed) {
+      this.emitOnce(`${job.key}:almost-done`, { ...this.jobEvent("almost-done", snapshot, job), remainingSeconds: remaining });
     }
   }
 
@@ -217,7 +249,7 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
   }
 
   private event(type: EventType, printerName: string | null, jobId: string | null): PrintEvent {
-    return { type, at: this.now(), printerName, jobId, fileName: null, progress: null, durationSeconds: null, errorCode: null };
+    return { type, at: this.now(), printerName, jobId, fileName: null, progress: null, durationSeconds: null, errorCode: null, remainingSeconds: null };
   }
 
   private emitOnce(key: string, event: PrintEvent): void {

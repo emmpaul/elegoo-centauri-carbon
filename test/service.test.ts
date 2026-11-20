@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { CameraProxy } from "../src/camera-proxy.ts";
-import { EVENT_TYPES, type EventType } from "../src/config.ts";
+import { defaultConfig, EVENT_TYPES, type EventType } from "../src/config.ts";
 import { isJobActive, type PrintEvent } from "../src/event-detector.ts";
 import { FOLLOW_UP_DELAY_MS } from "../src/history-sync.ts";
 import { NtfyNotifier } from "../src/notifier.ts";
@@ -258,6 +258,7 @@ describe("startService history", () => {
         progress: null,
         durationSeconds: null,
         errorCode: null,
+        remainingSeconds: null,
       });
       // A pause that triggered too would run a second sync for the end that follows it.
       service!.detector.emit("event", event("paused"));
@@ -299,6 +300,7 @@ describe("startService history", () => {
           progress: null,
           durationSeconds: null,
           errorCode: null,
+          remainingSeconds: null,
         });
         await realWait(300);
         assert.equal(syncs(), before + 1, "the triggered sync ran");
@@ -420,7 +422,7 @@ describe("startService photos", () => {
   }
 
   function event(type: PrintEvent["type"]): PrintEvent {
-    return { type, at: Date.now(), printerName: null, jobId: "j", fileName: "test-print-1.gcode", progress: null, durationSeconds: null, errorCode: null };
+    return { type, at: Date.now(), printerName: null, jobId: "j", fileName: "test-print-1.gcode", progress: null, durationSeconds: null, errorCode: null, remainingSeconds: null };
   }
 
   it("uploads a Photo from the camera with a finished Notification and closes the camera afterwards", async () => {
@@ -455,6 +457,29 @@ describe("startService photos", () => {
     await until(() => ntfy.requests.length > 0, "the Notification");
     assert.equal(ntfy.requests[0]?.method, "POST");
     assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print started");
+    assert.equal(camera.connections, 0);
+  });
+
+  it("uploads a Photo with a first-layer Notification", async () => {
+    const s = await start({ photos: { light: false } });
+    await printer.waitForClient();
+    s.detector.emit("event", event("first-layer"));
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    const [request] = ntfy.requests as [NtfyRequest];
+    assert.equal(request.method, "PUT");
+    assert.equal(request.headers.filename, "photo-first-layer.jpg");
+    assert.ok(isFakeJpegPart(request.raw), "the body is one whole camera part");
+    await camera.waitForNoStreams();
+    assert.equal(ntfy.requests.length, 1);
+  });
+
+  it("publishes an almost-done Notification as JSON with photos on", async () => {
+    const s = await start({ photos: { light: false } });
+    await printer.waitForClient();
+    s.detector.emit("event", { ...event("almost-done"), remainingSeconds: 590 });
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Almost done");
     assert.equal(camera.connections, 0);
   });
 
@@ -535,5 +560,93 @@ describe("startService photos", () => {
     assert.ok(Date.now() - detected < 6000);
     assert.equal(ntfy.requests[0]?.method, "POST");
     assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Print finished");
+  });
+});
+
+describe("startService progress notifications", () => {
+  const TASK = "00000000-0000-4000-8000-00000000000a";
+  let printer: FakePrinter;
+  let ntfy: FakeNtfy;
+  let service: Service | undefined;
+
+  beforeEach(async () => {
+    printer = await FakePrinter.start();
+    ntfy = await FakeNtfy.start();
+  });
+
+  afterEach(async () => {
+    await service?.close();
+    service = undefined;
+    await printer.close();
+    await ntfy.close();
+  });
+
+  /** A printing push of one job on `layer` with `current` of 1500 ticks elapsed. */
+  function push(layer: number, current: number, progress: number): StatusMessage {
+    const frame = structuredClone(loadFixture("control-pause-resume-light.json").frames.find((f) => f.seq === 11)?.payload) as StatusMessage;
+    frame.Status.CurrentStatus = [1];
+    frame.Status.PrintInfo = {
+      ...(frame.Status.PrintInfo as Record<string, unknown>),
+      Status: 13,
+      TaskId: TASK,
+      Filename: "test-print-1.gcode",
+      CurrentLayer: layer,
+      TotalLayer: 50,
+      CurrentTicks: current,
+      TotalTicks: 1500,
+      Progress: progress,
+    };
+    return frame;
+  }
+
+  /** Pushes `message` every 10 ms until `check` holds, for at most 3 s. */
+  async function pushUntil(message: StatusMessage, check: () => boolean): Promise<void> {
+    const deadline = Date.now() + 3000;
+    while (!check()) {
+      if (Date.now() > deadline) assert.fail("timed out waiting for the status push");
+      printer.push(message);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /** Runs one job across its first layer and the ten-minute mark; returns the titles sent. */
+  async function runAJob(events: Record<EventType, boolean>): Promise<string[]> {
+    const s = await startService({
+      printerUrl: printer.url,
+      cameraUrl: "http://127.0.0.1:9/video",
+      listen: { host: "127.0.0.1", port: 0 },
+      token: null,
+      logger: silentLogger(),
+      notifier: new NtfyNotifier({ url: ntfy.url, topic: "t", events, retryDelaysMs: [], logger: silentLogger() }),
+    });
+    service = s;
+    await printer.waitForClient();
+    await pushUntil(push(0, 0, 0), () => s.store.snapshot.taskId === TASK && s.store.snapshot.layer.current === 0);
+    await pushUntil(push(1, 30, 2), () => s.store.snapshot.layer.current === 1);
+    await pushUntil(push(2, 60, 4), () => s.store.snapshot.layer.current === 2);
+    const last = push(40, 910, 93);
+    await pushUntil(last, () => s.store.snapshot.remaining === 590);
+    for (let i = 0; i < 5; i++) printer.push(last);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return ntfy.requests.map((r) => (r.json as { title: string }).title);
+  }
+
+  it("sends one first-layer and one almost-done Notification, in that order, with both on", async () => {
+    const events = { ...defaultConfig().events, "first-layer": true, "almost-done": true };
+    const titles = await runAJob(events);
+    assert.deepEqual(
+      titles.filter((t) => t === "First layer done" || t === "Almost done"),
+      ["First layer done", "Almost done"],
+    );
+    const almost = ntfy.requests.find((r) => (r.json as { title: string }).title === "Almost done");
+    assert.equal((almost?.json as { message: string }).message, "test-print-1.gcode has about 10 min left (93%).");
+  });
+
+  it("sends neither with the default event settings", async () => {
+    const titles = await runAJob(defaultConfig().events);
+    assert.deepEqual(
+      titles.filter((t) => t === "First layer done" || t === "Almost done"),
+      [],
+    );
   });
 });

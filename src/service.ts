@@ -33,8 +33,8 @@ export interface ServiceOptions {
   /** History archive file; `:memory:` (kept only while running) by default. */
   historyPath?: string;
   /**
-   * Photos on the finished, failed, stopped, and paused Notifications;
-   * `light` turns the chamber light on for them. Null (no Photos) by default.
+   * Photos on the finished, failed, stopped, paused, and first-layer
+   * Notifications; `light` turns the chamber light on for them. Null (no Photos) by default.
    */
   photos?: { light: boolean } | null;
 }

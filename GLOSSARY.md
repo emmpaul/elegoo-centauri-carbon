@@ -11,7 +11,8 @@ _Avoid_: Status frame, state (for the whole thing)
 
 **Event**:
 Something worth telling the owner about a print or the printer: started, finished,
-failed, paused, stopped, offline, or online.
+failed, paused, stopped, offline, or online, and the progress Events first-layer
+(the first layer is done) and almost-done (about ten minutes left).
 _Avoid_: Alert, notification (for the occurrence itself)
 
 **Notification**:

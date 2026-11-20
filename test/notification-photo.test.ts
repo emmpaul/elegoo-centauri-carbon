@@ -137,8 +137,8 @@ describe("PhotoTaker without the light", () => {
     assert.equal(camera.calls.length, 1, "the stalled source saw one call");
   });
 
-  it("takes Photos for finished, failed, stopped, and paused only", () => {
-    assert.deepEqual([...PHOTO_EVENTS].sort(), ["failed", "finished", "paused", "stopped"]);
+  it("takes Photos for finished, failed, stopped, paused, and first-layer only", () => {
+    assert.deepEqual([...PHOTO_EVENTS].sort(), ["failed", "finished", "first-layer", "paused", "stopped"]);
   });
 });
 
