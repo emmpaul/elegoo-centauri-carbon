@@ -315,6 +315,76 @@ describe("EventDetector first-layer events", () => {
   });
 });
 
+describe("EventDetector almost-done events", () => {
+  const BASE = () => statusFrame("control-pause-resume-light.json", 11);
+  const TASK_A = "00000000-0000-4000-8000-00000000000a";
+  /** A push of job `taskId` at `current` of `total` ticks, in print state `status` (13 printing, 6 paused). */
+  const ticks = (current: number, total: number, status = 13, taskId = TASK_A) =>
+    withPrint(BASE(), 1, { Status: status, TaskId: taskId, Filename: "test-print-1.gcode", CurrentLayer: 3, Progress: 50, CurrentTicks: current, TotalTicks: total });
+  const almostDone = (events: PrintEvent[]) => events.filter((e) => e.type === "almost-done");
+
+  it("emits one almost-done event, on the push with 590 s left, with the remaining time", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(600, 1500)]);
+    assert.deepEqual(almostDone(events), []);
+    apply([ticks(910, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    assert.deepEqual(almostDone(events)[0], {
+      type: "almost-done",
+      at: T,
+      printerName: null,
+      jobId: TASK_A,
+      fileName: "test-print-1.gcode",
+      progress: 50,
+      durationSeconds: 910,
+      errorCode: null,
+      remainingSeconds: 590,
+    });
+    apply([ticks(1000, 1500), ticks(1200, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    detector.close();
+  });
+
+  it("emits none for a print estimated at 400 s, through its end", async () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 400), ticks(200, 400), ticks(399, 400), withPrint(ticks(400, 400), 0, { Status: 9, TaskId: "", Filename: "", Progress: 0 })]);
+    await settle();
+    assert.deepEqual(almostDone(events), []);
+    assert.deepEqual(types(events), ["finished"]);
+    detector.close();
+  });
+
+  it("emits none on a new job's pushes that carry the previous job's 397.5 of 399 ticks, then 0 of 12819", () => {
+    const { events, apply, detector } = setup();
+    apply([withPrint(ticks(397.5, 399), 0, { Status: 0, TaskId: "", Filename: "", Progress: 0 })]);
+    apply([ticks(397.5, 399), ticks(0, 12819)]);
+    assert.deepEqual(almostDone(events), []);
+    detector.close();
+  });
+
+  it("sends no second one when the remaining time rises back above 600 s and falls again", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(910, 1500), ticks(700, 1500), ticks(1000, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    detector.close();
+  });
+
+  it("emits one across a pause and resume that straddle the threshold", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(850, 1500), ticks(850, 1500, 6), ticks(850, 1500, 6), ticks(850, 1500), ticks(910, 1500), ticks(950, 1500)]);
+    assert.deepEqual(types(events), ["paused", "almost-done"]);
+    assert.equal(almostDone(events)[0]?.remainingSeconds, 590);
+    detector.close();
+  });
+
+  it("emits none for the recorded print near its end (connect-printing.json, TotalTicks 399)", () => {
+    const { events, apply, detector } = setup();
+    apply(statusFrames("connect-printing.json"));
+    assert.deepEqual(almostDone(events), []);
+    detector.close();
+  });
+});
+
 describe("EventDetector offline and online", () => {
   beforeEach(() => mock.timers.enable({ apis: ["setTimeout"] }));
   afterEach(() => mock.timers.reset());
