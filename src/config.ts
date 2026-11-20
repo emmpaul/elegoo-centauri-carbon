@@ -26,8 +26,8 @@ export interface Config {
   token: string | null;
   /**
    * ntfy server and topic; a null topic means no notifications are sent.
-   * `photos` attaches a Photo to the finished, failed, stopped, and paused
-   * Notifications; `photoLight` turns the chamber light on for the Photo and
+   * `photos` attaches a Photo to the finished, failed, stopped, paused, and
+   * first-layer Notifications; `photoLight` turns the chamber light on for the Photo and
    * has no effect without `photos`.
    */
   ntfy: { url: string; topic: string | null; photos: boolean; photoLight: boolean };

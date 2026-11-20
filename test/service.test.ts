@@ -460,6 +460,29 @@ describe("startService photos", () => {
     assert.equal(camera.connections, 0);
   });
 
+  it("uploads a Photo with a first-layer Notification", async () => {
+    const s = await start({ photos: { light: false } });
+    await printer.waitForClient();
+    s.detector.emit("event", event("first-layer"));
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    const [request] = ntfy.requests as [NtfyRequest];
+    assert.equal(request.method, "PUT");
+    assert.equal(request.headers.filename, "photo-first-layer.jpg");
+    assert.ok(isFakeJpegPart(request.raw), "the body is one whole camera part");
+    await camera.waitForNoStreams();
+    assert.equal(ntfy.requests.length, 1);
+  });
+
+  it("publishes an almost-done Notification as JSON with photos on", async () => {
+    const s = await start({ photos: { light: false } });
+    await printer.waitForClient();
+    s.detector.emit("event", { ...event("almost-done"), remainingSeconds: 590 });
+    await until(() => ntfy.requests.length > 0, "the Notification");
+    assert.equal(ntfy.requests[0]?.method, "POST");
+    assert.equal((ntfy.requests[0]?.json as { title: string }).title, "Almost done");
+    assert.equal(camera.connections, 0);
+  });
+
   it("takes the Photo from the stream a dashboard viewer already holds", async () => {
     const s = await start({ photos: { light: false } });
     const viewer = await new Promise<IncomingMessage>((resolve, reject) =>
