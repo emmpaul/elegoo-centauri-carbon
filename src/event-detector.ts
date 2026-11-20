@@ -62,6 +62,8 @@ interface Job {
   /** Pause occurrences so far; each resume arms the next one. */
   pauses: number;
   ended: boolean;
+  /** Seen on layer 0 or 1, so a later layer 2 is the end of the first layer (design D2). */
+  layerArmed: boolean;
 }
 
 /** Machine states during which a job runs (`printing`, and the mid-job material change). */
@@ -154,6 +156,7 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
         paused: false,
         pauses: 0,
         ended: false,
+        layerArmed: false,
       };
       this.job = job;
       // Joining a job that was already running is not a start.
@@ -172,8 +175,23 @@ export class EventDetector extends EventEmitter<DetectorEvents> {
       job.pauses++;
     }
 
+    this.trackMilestones(snapshot, job);
+
     if (snapshot.errorCode !== null && snapshot.errorCode !== 0) {
       this.emitOnce(`${job.key}:failed`, this.jobEvent("failed", snapshot, job, snapshot.errorCode));
+    }
+  }
+
+  /**
+   * Emits the progress milestones once a crossing is seen within the job: a
+   * value on the far side arms each one first, so the previous job's stale
+   * layer or a late join never fires it.
+   */
+  private trackMilestones(snapshot: StatusSnapshot, job: Job): void {
+    const layer = snapshot.layer.current;
+    if (layer === 0 || layer === 1) job.layerArmed = true;
+    else if (job.layerArmed && layer !== null && layer >= 2) {
+      this.emitOnce(`${job.key}:first-layer`, this.jobEvent("first-layer", snapshot, job));
     }
   }
 

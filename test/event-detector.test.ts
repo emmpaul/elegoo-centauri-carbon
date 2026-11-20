@@ -224,6 +224,97 @@ describe("EventDetector failed events", () => {
   });
 });
 
+describe("EventDetector first-layer events", () => {
+  const BASE = () => statusFrame("control-pause-resume-light.json", 11);
+  const TASK_A = "00000000-0000-4000-8000-00000000000a";
+  const TASK_B = "00000000-0000-4000-8000-00000000000b";
+  /** A printing push of job `taskId` on `layer`. */
+  const onLayer = (taskId: string, layer: number, progress = 0, fileName = "test-print-1.gcode") =>
+    withPrint(BASE(), 1, { Status: 13, TaskId: taskId, Filename: fileName, CurrentLayer: layer, Progress: progress });
+  /** An idle push that still carries the previous job's layer. */
+  const idle = (layer: number, status = 0) => withPrint(BASE(), 0, { Status: status, TaskId: "", Filename: "", Progress: 0, CurrentLayer: layer });
+  const firstLayers = (events: PrintEvent[]) => events.filter((e) => e.type === "first-layer");
+
+  it("emits one first-layer event, on the push reporting layer 2, with the file name and progress", () => {
+    const { events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 0, 0), onLayer(TASK_A, 1, 1)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 2, 3)]);
+    assert.equal(firstLayers(events).length, 1);
+    assert.deepEqual(firstLayers(events)[0], {
+      type: "first-layer",
+      at: T,
+      printerName: null,
+      jobId: TASK_A,
+      fileName: "test-print-1.gcode",
+      progress: 3,
+      durationSeconds: 240,
+      errorCode: null,
+      remainingSeconds: null,
+    });
+    apply([onLayer(TASK_A, 3, 5), onLayer(TASK_A, 3, 5)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("emits none for a job first seen on layer 5, at the baseline or after it", () => {
+    const joined = setup();
+    joined.apply([onLayer(TASK_A, 5), onLayer(TASK_A, 6), onLayer(TASK_A, 7)]);
+    assert.deepEqual(firstLayers(joined.events), []);
+    joined.detector.close();
+
+    const started = setup();
+    started.apply([idle(0), onLayer(TASK_A, 5), onLayer(TASK_A, 6), onLayer(TASK_A, 7)]);
+    assert.deepEqual(types(started.events), ["started"]);
+    started.detector.close();
+  });
+
+  it("ignores the previous job's stale layer 12 and emits once, on layer 2", () => {
+    const { events, apply, detector } = setup();
+    apply([idle(12), onLayer(TASK_A, 12)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 0)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 2)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("sends no second one after a session drop and reconnect on a later layer", () => {
+    const { store, events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 1), onLayer(TASK_A, 2)]);
+    assert.equal(firstLayers(events).length, 1);
+    store.setConnection("offline");
+    store.setConnection("connecting");
+    store.setConnection("online");
+    apply([onLayer(TASK_A, 4), onLayer(TASK_A, 4)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("emits one for the next job with a new TaskId", async () => {
+    const { events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 1), onLayer(TASK_A, 2), idle(2, 9)]);
+    await settle();
+    apply([onLayer(TASK_B, 2, 0, "test-print-2.gcode"), onLayer(TASK_B, 0, 0, "test-print-2.gcode"), onLayer(TASK_B, 1, 0, "test-print-2.gcode"), onLayer(TASK_B, 2, 1, "test-print-2.gcode")]);
+    assert.deepEqual(
+      firstLayers(events).map((e) => [e.jobId, e.fileName]),
+      [
+        [TASK_A, "test-print-1.gcode"],
+        [TASK_B, "test-print-2.gcode"],
+      ],
+    );
+    detector.close();
+  });
+
+  it("emits none for the recorded pause and resume, joined late on layer 5 (control-pause-resume-light.json)", () => {
+    const { events, apply, detector } = setup();
+    apply(statusFrames("control-pause-resume-light.json"));
+    assert.deepEqual(firstLayers(events), []);
+    detector.close();
+  });
+});
+
 describe("EventDetector offline and online", () => {
   beforeEach(() => mock.timers.enable({ apis: ["setTimeout"] }));
   afterEach(() => mock.timers.reset());
