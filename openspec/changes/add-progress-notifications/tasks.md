@@ -25,7 +25,7 @@ implement. Every test named here runs under `pnpm test`, and each task keeps
 
 ## 4. Integration check
 
-- [ ] 4.1 Verify `pnpm typecheck && pnpm test` pass, `openspec validate add-progress-notifications --strict` passes, `git diff main -- docs/api.md docs/sdcp-protocol.md web/` is empty, and `pnpm start:fake` still starts and serves `/api/status`
+- [x] 4.1 Verify `pnpm typecheck && pnpm test` pass, `openspec validate add-progress-notifications --strict` passes, `git diff main -- docs/api.md docs/sdcp-protocol.md web/` is empty, and `pnpm start:fake` still starts and serves `/api/status`
 
 ## Workflow follow-up
 
