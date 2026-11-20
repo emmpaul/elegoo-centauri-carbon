@@ -9,9 +9,14 @@ export const EVENT_TYPES = [
   "stopped",
   "offline",
   "online",
+  "first-layer",
+  "almost-done",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
+
+/** Events that are off unless the user turns them on. */
+const DEFAULT_OFF_EVENTS: ReadonlySet<EventType> = new Set(["first-layer", "almost-done"]);
 
 export interface Config {
   /** Printer address; null means find it with UDP discovery. */
@@ -21,8 +26,8 @@ export interface Config {
   token: string | null;
   /**
    * ntfy server and topic; a null topic means no notifications are sent.
-   * `photos` attaches a Photo to the finished, failed, stopped, and paused
-   * Notifications; `photoLight` turns the chamber light on for the Photo and
+   * `photos` attaches a Photo to the finished, failed, stopped, paused, and
+   * first-layer Notifications; `photoLight` turns the chamber light on for the Photo and
    * has no effect without `photos`.
    */
   ntfy: { url: string; topic: string | null; photos: boolean; photoLight: boolean };
@@ -37,7 +42,7 @@ export function defaultConfig(): Config {
     listen: { host: "0.0.0.0", port: 8080 },
     token: null,
     ntfy: { url: "https://ntfy.sh", topic: null, photos: false, photoLight: false },
-    events: Object.fromEntries(EVENT_TYPES.map((e) => [e, true])) as Record<EventType, boolean>,
+    events: Object.fromEntries(EVENT_TYPES.map((e) => [e, !DEFAULT_OFF_EVENTS.has(e)])) as Record<EventType, boolean>,
     dataDir: "data",
   };
 }

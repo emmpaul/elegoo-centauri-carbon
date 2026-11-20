@@ -2,7 +2,8 @@
 
 The service can push a notification to your phone when a print starts,
 finishes, fails, pauses, or stops, and when the printer goes offline or comes
-back. It sends them through [ntfy](https://ntfy.sh), a free publish/subscribe
+back. Two progress notifications, when the first layer is done and when a print
+is almost done, are there too but off until you turn them on. It sends them through [ntfy](https://ntfy.sh), a free publish/subscribe
 push service: the service publishes to a *topic*, and the ntfy app on your
 phone subscribes to the same topic. No account is needed.
 
@@ -58,7 +59,9 @@ start):
     "paused": true,
     "stopped": true,
     "offline": true,
-    "online": true
+    "online": true,
+    "first-layer": false,
+    "almost-done": false
   }
 }
 ```
@@ -67,19 +70,21 @@ start):
 - `ntfy.topic`: your topic. `null` (the default when the file doesn't set it)
   turns notifications off.
 - `ntfy.photos`: attach a Photo from the camera to the finished, failed,
-  stopped, and paused notifications (see [Photos](#photos)). `false` by
+  stopped, paused, and first-layer notifications (see [Photos](#photos)). `false` by
   default.
 - `ntfy.photoLight`: turn the chamber light on for the Photo (see
   [The Photo light](#the-photo-light)). `false` by default, and no effect
   without `ntfy.photos`.
 - `events`: turn each kind of notification on (`true`) or off (`false`).
-  All are on by default.
+  All are on by default except `first-layer` and `almost-done`.
 
 Environment variables override the file: `NTFY_URL`, `NTFY_TOPIC`,
 `NTFY_PHOTOS`, `NTFY_PHOTO_LIGHT` (`1` or `true` turn them on, `0` or
 `false` off), and `NOTIFY_EVENTS`, a comma-separated list of the events to send (every event
 not listed is turned off; `none` turns them all off), for example
-`NOTIFY_EVENTS=finished,failed,offline`.
+`NOTIFY_EVENTS=finished,failed,offline`. To keep every default event and add
+both progress ones, list all nine:
+`NOTIFY_EVENTS=started,finished,failed,paused,stopped,offline,online,first-layer,almost-done`.
 
 On start the service logs `notifications to <url>`, followed by
 ` (with photos)` or ` (with photos and the photo light)` when those are on,
@@ -130,6 +135,8 @@ curl -d "Hello from the printer" https://ntfy.sh/printer-3f9c2a7be41d08c5a6e2f91
 | `stopped` | A print is stopped | `<file> stopped at <progress>%.` |
 | `offline` | The printer has been unreachable for 2 minutes in a row | `<printer> has been unreachable for 2 minutes.` (high priority) |
 | `online` | The printer is reachable again after an `offline` notification | `<printer> is reachable again.` |
+| `first-layer` | The printer reports the print on layer 2 (off by default) | `<file> finished its first layer.` |
+| `almost-done` | About ten minutes of the printer's estimate are left (off by default) | `<file> has about <n> min left (<progress>%).` |
 
 Notes:
 
@@ -139,6 +146,13 @@ Notes:
   dashboard shows), not the wall-clock time from start to finish.
 - When the service starts in the middle of a print, it doesn't announce that
   print as started; it does report how it ends.
+- `first-layer` and `almost-done` are each sent at most once per print, and
+  only when the service saw the print before that point: after a restart
+  past the first layer, or with less than ten minutes left, they aren't sent
+  for that print. A print with one layer never sends `first-layer`, and a
+  print estimated at ten minutes or less never sends `almost-done`. The time
+  left is the printer's own estimate (the time the dashboard shows), not a
+  wall-clock time, so a pause or a filament change stretches it.
 - The error code in `failed` is the printer's raw `ErrorStatusReason`. Elegoo
   documents only code 45 ("Consumables are about to run out"); see
   `docs/sdcp-protocol.md`, "Error codes".
@@ -151,10 +165,10 @@ Notes:
 ## Photos
 
 The service can attach a Photo, one still from the printer's camera, to the
-`finished`, `failed`, `stopped`, and `paused` notifications, so you see the
-print without opening the dashboard. `started`, `offline`, and `online`
-never carry one. Photos are off by default; one setting turns them on for
-all four events, and `events` still decides whether an event is sent at all:
+`finished`, `failed`, `stopped`, `paused`, and `first-layer` notifications,
+so you see the print without opening the dashboard. `started`,
+`almost-done`, `offline`, and `online` never carry one. Photos are off by
+default; one setting turns them on for all five events, and `events` still decides whether an event is sent at all:
 
 ```json
 { "ntfy": { "url": "https://ntfy.sh", "topic": "printer-3f9c2a7be41d08c5a6e2f913", "photos": true } }
@@ -218,8 +232,8 @@ service turns the light on for the Photo:
 This is the one command the service sends to the printer on its own,
 without a person pressing a button; see
 [ADR 0001](adr/0001-photo-light-automatic-command.md) for why it is allowed
-and how it is bounded. The light comes on briefly during a pause too, while
-a print is still in progress.
+and how it is bounded. The light comes on briefly during a pause or after the
+first layer too, while a print is still in progress.
 
 ### Privacy
 

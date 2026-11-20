@@ -72,6 +72,7 @@ describe("EventDetector with recorded status pushes", () => {
         progress: 100,
         durationSeconds: 398,
         errorCode: null,
+        remainingSeconds: null,
       },
     ]);
     detector.close();
@@ -106,6 +107,7 @@ describe("EventDetector with recorded status pushes", () => {
         progress: 0,
         durationSeconds: 0,
         errorCode: null,
+        remainingSeconds: null,
       },
     ]);
     detector.close();
@@ -177,6 +179,7 @@ describe("EventDetector failed events", () => {
         progress: 92,
         durationSeconds: 398,
         errorCode: 45,
+        remainingSeconds: null,
       },
     ]);
     detector.close();
@@ -217,6 +220,167 @@ describe("EventDetector failed events", () => {
     assert.deepEqual(types(events), ["failed"]);
     assert.equal(events[0]?.errorCode, 45);
     assert.equal(events[0]?.fileName, "test-print-2.gcode");
+    detector.close();
+  });
+});
+
+describe("EventDetector first-layer events", () => {
+  const BASE = () => statusFrame("control-pause-resume-light.json", 11);
+  const TASK_A = "00000000-0000-4000-8000-00000000000a";
+  const TASK_B = "00000000-0000-4000-8000-00000000000b";
+  /** A printing push of job `taskId` on `layer`. */
+  const onLayer = (taskId: string, layer: number, progress = 0, fileName = "test-print-1.gcode") =>
+    withPrint(BASE(), 1, { Status: 13, TaskId: taskId, Filename: fileName, CurrentLayer: layer, Progress: progress });
+  /** An idle push that still carries the previous job's layer. */
+  const idle = (layer: number, status = 0) => withPrint(BASE(), 0, { Status: status, TaskId: "", Filename: "", Progress: 0, CurrentLayer: layer });
+  const firstLayers = (events: PrintEvent[]) => events.filter((e) => e.type === "first-layer");
+
+  it("emits one first-layer event, on the push reporting layer 2, with the file name and progress", () => {
+    const { events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 0, 0), onLayer(TASK_A, 1, 1)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 2, 3)]);
+    assert.equal(firstLayers(events).length, 1);
+    assert.deepEqual(firstLayers(events)[0], {
+      type: "first-layer",
+      at: T,
+      printerName: null,
+      jobId: TASK_A,
+      fileName: "test-print-1.gcode",
+      progress: 3,
+      durationSeconds: 240,
+      errorCode: null,
+      remainingSeconds: null,
+    });
+    apply([onLayer(TASK_A, 3, 5), onLayer(TASK_A, 3, 5)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("emits none for a job first seen on layer 5, at the baseline or after it", () => {
+    const joined = setup();
+    joined.apply([onLayer(TASK_A, 5), onLayer(TASK_A, 6), onLayer(TASK_A, 7)]);
+    assert.deepEqual(firstLayers(joined.events), []);
+    joined.detector.close();
+
+    const started = setup();
+    started.apply([idle(0), onLayer(TASK_A, 5), onLayer(TASK_A, 6), onLayer(TASK_A, 7)]);
+    assert.deepEqual(types(started.events), ["started"]);
+    started.detector.close();
+  });
+
+  it("ignores the previous job's stale layer 12 and emits once, on layer 2", () => {
+    const { events, apply, detector } = setup();
+    apply([idle(12), onLayer(TASK_A, 12)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 0)]);
+    assert.deepEqual(firstLayers(events), []);
+    apply([onLayer(TASK_A, 2)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("sends no second one after a session drop and reconnect on a later layer", () => {
+    const { store, events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 1), onLayer(TASK_A, 2)]);
+    assert.equal(firstLayers(events).length, 1);
+    store.setConnection("offline");
+    store.setConnection("connecting");
+    store.setConnection("online");
+    apply([onLayer(TASK_A, 4), onLayer(TASK_A, 4)]);
+    assert.equal(firstLayers(events).length, 1);
+    detector.close();
+  });
+
+  it("emits one for the next job with a new TaskId", async () => {
+    const { events, apply, detector } = setup();
+    apply([onLayer(TASK_A, 1), onLayer(TASK_A, 2), idle(2, 9)]);
+    await settle();
+    apply([onLayer(TASK_B, 2, 0, "test-print-2.gcode"), onLayer(TASK_B, 0, 0, "test-print-2.gcode"), onLayer(TASK_B, 1, 0, "test-print-2.gcode"), onLayer(TASK_B, 2, 1, "test-print-2.gcode")]);
+    assert.deepEqual(
+      firstLayers(events).map((e) => [e.jobId, e.fileName]),
+      [
+        [TASK_A, "test-print-1.gcode"],
+        [TASK_B, "test-print-2.gcode"],
+      ],
+    );
+    detector.close();
+  });
+
+  it("emits none for the recorded pause and resume, joined late on layer 5 (control-pause-resume-light.json)", () => {
+    const { events, apply, detector } = setup();
+    apply(statusFrames("control-pause-resume-light.json"));
+    assert.deepEqual(firstLayers(events), []);
+    detector.close();
+  });
+});
+
+describe("EventDetector almost-done events", () => {
+  const BASE = () => statusFrame("control-pause-resume-light.json", 11);
+  const TASK_A = "00000000-0000-4000-8000-00000000000a";
+  /** A push of job `taskId` at `current` of `total` ticks, in print state `status` (13 printing, 6 paused). */
+  const ticks = (current: number, total: number, status = 13, taskId = TASK_A) =>
+    withPrint(BASE(), 1, { Status: status, TaskId: taskId, Filename: "test-print-1.gcode", CurrentLayer: 3, Progress: 50, CurrentTicks: current, TotalTicks: total });
+  const almostDone = (events: PrintEvent[]) => events.filter((e) => e.type === "almost-done");
+
+  it("emits one almost-done event, on the push with 590 s left, with the remaining time", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(600, 1500)]);
+    assert.deepEqual(almostDone(events), []);
+    apply([ticks(910, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    assert.deepEqual(almostDone(events)[0], {
+      type: "almost-done",
+      at: T,
+      printerName: null,
+      jobId: TASK_A,
+      fileName: "test-print-1.gcode",
+      progress: 50,
+      durationSeconds: 910,
+      errorCode: null,
+      remainingSeconds: 590,
+    });
+    apply([ticks(1000, 1500), ticks(1200, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    detector.close();
+  });
+
+  it("emits none for a print estimated at 400 s, through its end", async () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 400), ticks(200, 400), ticks(399, 400), withPrint(ticks(400, 400), 0, { Status: 9, TaskId: "", Filename: "", Progress: 0 })]);
+    await settle();
+    assert.deepEqual(almostDone(events), []);
+    assert.deepEqual(types(events), ["finished"]);
+    detector.close();
+  });
+
+  it("emits none on a new job's pushes that carry the previous job's 397.5 of 399 ticks, then 0 of 12819", () => {
+    const { events, apply, detector } = setup();
+    apply([withPrint(ticks(397.5, 399), 0, { Status: 0, TaskId: "", Filename: "", Progress: 0 })]);
+    apply([ticks(397.5, 399), ticks(0, 12819)]);
+    assert.deepEqual(almostDone(events), []);
+    detector.close();
+  });
+
+  it("sends no second one when the remaining time rises back above 600 s and falls again", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(910, 1500), ticks(700, 1500), ticks(1000, 1500)]);
+    assert.equal(almostDone(events).length, 1);
+    detector.close();
+  });
+
+  it("emits one across a pause and resume that straddle the threshold", () => {
+    const { events, apply, detector } = setup();
+    apply([ticks(0, 1500), ticks(850, 1500), ticks(850, 1500, 6), ticks(850, 1500, 6), ticks(850, 1500), ticks(910, 1500), ticks(950, 1500)]);
+    assert.deepEqual(types(events), ["paused", "almost-done"]);
+    assert.equal(almostDone(events)[0]?.remainingSeconds, 590);
+    detector.close();
+  });
+
+  it("emits none for the recorded print near its end (connect-printing.json, TotalTicks 399)", () => {
+    const { events, apply, detector } = setup();
+    apply(statusFrames("connect-printing.json"));
+    assert.deepEqual(almostDone(events), []);
     detector.close();
   });
 });

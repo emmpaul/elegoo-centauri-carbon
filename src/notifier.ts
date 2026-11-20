@@ -64,6 +64,13 @@ export function formatEvent(event: PrintEvent): PushMessage {
       return { title: "Printer offline", message: `${printer} has been unreachable for 2 minutes.`, priority: 4, tags: ["warning"] };
     case "online":
       return { title: "Printer back online", message: `${printer} is reachable again.`, priority: 3, tags: ["electric_plug"] };
+    case "first-layer":
+      return { title: "First layer done", message: `${file} finished its first layer.`, priority: 3, tags: ["mag"] };
+    case "almost-done": {
+      const minutes = event.remainingSeconds === null ? 10 : Math.max(1, Math.ceil(event.remainingSeconds / 60));
+      const done = event.progress === null ? "" : ` (${event.progress}%)`;
+      return { title: "Almost done", message: `${file} has about ${minutes} min left${done}.`, priority: 3, tags: ["hourglass_flowing_sand"] };
+    }
   }
 }
 

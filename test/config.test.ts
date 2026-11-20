@@ -22,7 +22,15 @@ describe("loadConfig", () => {
     assert.deepEqual(config.listen, { host: "0.0.0.0", port: 8080 });
     assert.equal(config.token, null);
     assert.deepEqual(config.ntfy, { url: "https://ntfy.sh", topic: null, photos: false, photoLight: false });
-    for (const event of EVENT_TYPES) assert.equal(config.events[event], true);
+    for (const event of EVENT_TYPES) {
+      assert.equal(config.events[event], event !== "first-layer" && event !== "almost-done", event);
+    }
+    assert.deepEqual(
+      EVENT_TYPES.filter((e) => config.events[e]),
+      ["started", "finished", "failed", "paused", "stopped", "offline", "online"],
+    );
+    assert.equal(config.events["first-layer"], false);
+    assert.equal(config.events["almost-done"], false);
     assert.equal(config.dataDir, "data");
   });
 
@@ -51,6 +59,37 @@ describe("loadConfig", () => {
     assert.equal(listenAuthError(config.listen, config.token), null);
     assert.equal(config.ntfy.photos, false);
     assert.equal(config.ntfy.photoLight, false);
+    assert.equal(config.events["first-layer"], false);
+    assert.equal(config.events["almost-done"], false);
+    assert.deepEqual(
+      EVENT_TYPES.filter((e) => config.events[e]),
+      ["started", "finished", "failed", "paused", "stopped", "offline", "online"],
+    );
+  });
+
+  it("turns on only first-layer when the file enables it", () => {
+    const path = writeConfig("first-layer.json", { events: { "first-layer": true } });
+    const config = loadConfig({ path, env: {} });
+    assert.equal(config.events["first-layer"], true);
+    assert.equal(config.events["almost-done"], false);
+    assert.equal(config.events.started, true);
+  });
+
+  it("turns on exactly the listed events with NOTIFY_EVENTS, progress events included", () => {
+    const config = loadConfig({ path: join(dir, "missing.json"), env: { NOTIFY_EVENTS: "finished,almost-done" } });
+    assert.deepEqual(
+      EVENT_TYPES.filter((e) => config.events[e]),
+      ["finished", "almost-done"],
+    );
+  });
+
+  it("lists the progress events in the unknown event error", () => {
+    for (const load of [
+      () => loadConfig({ path: writeConfig("event-names.json", { events: { exploded: true } }), env: {} }),
+      () => loadConfig({ path: join(dir, "missing.json"), env: { NOTIFY_EVENTS: "bogus" } }),
+    ]) {
+      assert.throws(load, (err: Error) => err.message.includes("first-layer") && err.message.includes("almost-done"));
+    }
   });
 
   it("lets env variables override file values", () => {

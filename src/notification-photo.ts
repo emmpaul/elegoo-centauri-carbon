@@ -12,7 +12,7 @@ import type { Logger } from "./sdcp-client.ts";
 import type { StatusSnapshot } from "./status-store.ts";
 
 /** The Events whose Notification carries a Photo when photos are on. */
-export const PHOTO_EVENTS: ReadonlySet<EventType> = new Set<EventType>(["finished", "failed", "stopped", "paused"]);
+export const PHOTO_EVENTS: ReadonlySet<EventType> = new Set<EventType>(["finished", "failed", "stopped", "paused", "first-layer"]);
 
 export type PhotoResult = { jpeg: Buffer } | { jpeg: null; reason: string };
 
