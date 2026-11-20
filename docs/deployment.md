@@ -56,7 +56,7 @@ clone:
 | `ACCESS_TOKEN` | yes | Token for the dashboard and API; generate it as shown below. The example leaves it empty, and the service refuses to start without one, because it listens on `0.0.0.0` inside the container. |
 | `NTFY_URL` | no | ntfy server (default `https://ntfy.sh`). |
 | `NTFY_TOPIC` | no | ntfy topic; unset means no notifications. See [notifications.md](notifications.md). |
-| `NOTIFY_EVENTS` | no | Comma-separated events that notify, or `none` (default: all). |
+| `NOTIFY_EVENTS` | no | Comma-separated events that notify, or `none` (default: all but `first-layer` and `almost-done`). |
 | `NTFY_PHOTOS` | no | `1` attaches a camera Photo to the finished, failed, stopped, and paused notifications (default `0`). |
 | `NTFY_PHOTO_LIGHT` | no | `1` turns the chamber light on for the Photo when it is off (default `0`; no effect without `NTFY_PHOTOS`). |
 

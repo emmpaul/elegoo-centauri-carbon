@@ -2,7 +2,8 @@
 
 The service can push a notification to your phone when a print starts,
 finishes, fails, pauses, or stops, and when the printer goes offline or comes
-back. It sends them through [ntfy](https://ntfy.sh), a free publish/subscribe
+back. Two progress notifications, when the first layer is done and when a print
+is almost done, are there too but off until you turn them on. It sends them through [ntfy](https://ntfy.sh), a free publish/subscribe
 push service: the service publishes to a *topic*, and the ntfy app on your
 phone subscribes to the same topic. No account is needed.
 
@@ -58,7 +59,9 @@ start):
     "paused": true,
     "stopped": true,
     "offline": true,
-    "online": true
+    "online": true,
+    "first-layer": false,
+    "almost-done": false
   }
 }
 ```
@@ -73,13 +76,15 @@ start):
   [The Photo light](#the-photo-light)). `false` by default, and no effect
   without `ntfy.photos`.
 - `events`: turn each kind of notification on (`true`) or off (`false`).
-  All are on by default.
+  All are on by default except `first-layer` and `almost-done`.
 
 Environment variables override the file: `NTFY_URL`, `NTFY_TOPIC`,
 `NTFY_PHOTOS`, `NTFY_PHOTO_LIGHT` (`1` or `true` turn them on, `0` or
 `false` off), and `NOTIFY_EVENTS`, a comma-separated list of the events to send (every event
 not listed is turned off; `none` turns them all off), for example
-`NOTIFY_EVENTS=finished,failed,offline`.
+`NOTIFY_EVENTS=finished,failed,offline`. To keep every default event and add
+both progress ones, list all nine:
+`NOTIFY_EVENTS=started,finished,failed,paused,stopped,offline,online,first-layer,almost-done`.
 
 On start the service logs `notifications to <url>`, followed by
 ` (with photos)` or ` (with photos and the photo light)` when those are on,
