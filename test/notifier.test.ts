@@ -70,6 +70,30 @@ describe("push messages", () => {
     for (const type of EVENT_TYPES) assert.ok(formatEvent({ ...finished, type }).message.length > 0, type);
   });
 
+  it("carry the file name for first-layer, and the minutes left and progress for almost-done", () => {
+    const firstLayer: PrintEvent = { ...finished, type: "first-layer", fileName: "test-print-1.gcode", progress: 3, durationSeconds: 120 };
+    assert.deepEqual(formatEvent(firstLayer), {
+      title: "First layer done",
+      message: "test-print-1.gcode finished its first layer.",
+      priority: 3,
+      tags: ["mag"],
+    });
+    assert.equal(formatEvent({ ...firstLayer, fileName: null }).message, "The print finished its first layer.");
+
+    const almostDone: PrintEvent = { ...finished, type: "almost-done", fileName: "test-print-1.gcode", progress: 93, durationSeconds: 7000, remainingSeconds: 590 };
+    assert.deepEqual(formatEvent(almostDone), {
+      title: "Almost done",
+      message: "test-print-1.gcode has about 10 min left (93%).",
+      priority: 3,
+      tags: ["hourglass_flowing_sand"],
+    });
+    assert.equal(formatEvent({ ...almostDone, remainingSeconds: 30 }).message, "test-print-1.gcode has about 1 min left (93%).");
+    assert.equal(formatEvent({ ...almostDone, remainingSeconds: 0 }).message, "test-print-1.gcode has about 1 min left (93%).");
+    assert.equal(formatEvent({ ...almostDone, remainingSeconds: null }).message, "test-print-1.gcode has about 10 min left (93%).");
+    assert.equal(formatEvent({ ...almostDone, progress: null }).message, "test-print-1.gcode has about 10 min left.");
+    assert.equal(formatEvent({ ...almostDone, fileName: null }).message, "The print has about 10 min left (93%).");
+  });
+
   it("formats durations", () => {
     assert.equal(formatDuration(45), "45s");
     assert.equal(formatDuration(398), "6m 38s");
@@ -131,6 +155,22 @@ describe("NtfyNotifier against a fake ntfy endpoint", () => {
     assert.equal(ntfy.requests.length, 0);
     await notifier.notify(finished);
     assert.equal(ntfy.requests.length, 1);
+  });
+
+  it("publishes an enabled first-layer event and drops a disabled almost-done one", async () => {
+    const events = { ...allOn(), "almost-done": false };
+    const notifier = new NtfyNotifier({ url: ntfy.url, topic: "t", events, logger: recordingLogger() });
+    await notifier.notify({ ...finished, type: "almost-done", fileName: "test-print-1.gcode", progress: 93, remainingSeconds: 590 });
+    assert.equal(ntfy.requests.length, 0);
+    await notifier.notify({ ...finished, type: "first-layer", fileName: "test-print-1.gcode", progress: 3 });
+    assert.equal(ntfy.requests.length, 1);
+    assert.deepEqual(ntfy.requests[0]?.json, {
+      topic: "t",
+      title: "First layer done",
+      message: "test-print-1.gcode finished its first layer.",
+      priority: 3,
+      tags: ["mag"],
+    });
   });
 
   it("retries an error answer with back-off and stops once delivered", async () => {
