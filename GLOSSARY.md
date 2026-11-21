@@ -23,3 +23,14 @@ _Avoid_: Alert, push
 One still image from the printer's camera, taken when an Event happens and attached to
 its Notification.
 _Avoid_: Snapshot, camera snapshot, frame, still
+
+**Reading**:
+The printer's measured values at one instant, recorded every ten seconds while the printer
+is online: temperatures and their targets, progress, layer, speed, fans, height, state,
+and light.
+_Avoid_: Sample, metric, data point, snapshot
+
+**Trace**:
+The Readings of one print job, from its first Reading until fifteen minutes after it
+ends. A Trace with a gap while the service was down is partial.
+_Avoid_: Curve, timeline, history
